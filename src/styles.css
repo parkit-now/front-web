@@ -1,7 +1,12 @@
 :root {
   font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
   color: #18212f;
-  background: radial-gradient(circle at top, #d5f6ff 0%, #f9f8f2 55%, #f3ebd5 100%);
+  background: radial-gradient(
+    circle at top,
+    #d5f6ff 0%,
+    #f9f8f2 55%,
+    #f3ebd5 100%
+  );
 }
 
 * {
