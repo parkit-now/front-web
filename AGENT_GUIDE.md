@@ -59,3 +59,9 @@ make sync-types-check
 - No tipar responses como `any`.
 - No duplicar tipos de API ya generados.
 - No mezclar logica de negocio compleja dentro de componentes visuales.
+
+## Estilo compartido (obligatorio)
+
+- Seguir [SHARED_STYLE_GUIDE.md](./SHARED_STYLE_GUIDE.md) para colores, formas, espaciados y jerarquia visual.
+- En pantallas de login: usar botones OAuth con icono de proveedor y sin texto tecnico de debug.
+- No introducir variantes visuales fuera de la guia sin actualizar el documento en los 3 repos.
