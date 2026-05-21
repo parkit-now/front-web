@@ -13,6 +13,12 @@ help: ## Mostrar comandos disponibles
 
 install: ## Instalar dependencias y activar pre-commit
 	@command -v bun >/dev/null 2>&1 || { echo "✗ Falta bun"; exit 1; }
+	@if ! command -v bunx >/dev/null 2>&1; then \
+		bun_bin="$$(command -v bun)"; \
+		bunx_bin="$$(dirname "$$bun_bin")/bunx"; \
+		echo "→ bunx ausente, creando symlink $$bunx_bin → $$bun_bin"; \
+		ln -sf "$$bun_bin" "$$bunx_bin" || { echo "✗ No se pudo crear $$bunx_bin (revisá permisos)"; exit 1; }; \
+	fi
 	@bun install
 	@git config core.hooksPath .githooks
 	@echo "✓ Dependencias instaladas + hook activado"
