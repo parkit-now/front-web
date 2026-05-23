@@ -18,8 +18,12 @@ function readResetTokenFromUrl(): string | null {
   return token && token.length > 0 ? token : null;
 }
 
-function clearResetTokenFromUrl(): void {
-  if (typeof window === 'undefined') return;
+// Capturamos el token UNA sola vez al cargar el módulo, antes de que React
+// monte el árbol. Esto evita que React.StrictMode (que hace double-mount en
+// dev) lo pierda al re-evaluar el state inicial con la URL ya limpia.
+const initialResetToken = readResetTokenFromUrl();
+if (initialResetToken && typeof window !== 'undefined') {
+  // Sacamos el token de la URL para que no quede en el history del browser.
   window.history.replaceState({}, '', '/');
 }
 
@@ -27,17 +31,10 @@ export function App() {
   const { showToast } = useToast();
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const initialResetToken = readResetTokenFromUrl();
   const [view, setView] = useState<View>(initialResetToken ? 'reset' : 'login');
   const [resetToken, setResetToken] = useState<string | null>(
     initialResetToken,
   );
-
-  useEffect(() => {
-    if (initialResetToken) {
-      clearResetTokenFromUrl();
-    }
-  }, [initialResetToken]);
 
   useEffect(() => {
     let isMounted = true;
@@ -64,7 +61,12 @@ export function App() {
     const unsubscribe = onSessionChange((nextSession) => {
       setSession(nextSession);
       if (!nextSession) {
-        setView('login');
+        // Si estamos en un flujo pre-login (reset/forgot), no lo pisamos
+        // — el callback se dispara también al subscribir con la sesión
+        // actual, y reset desde el link del mail llega sin sesión.
+        setView((current) =>
+          current === 'reset' || current === 'forgot' ? current : 'login',
+        );
       }
     });
 
