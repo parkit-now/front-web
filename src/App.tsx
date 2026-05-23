@@ -7,7 +7,7 @@ import { ResetPasswordScreen } from './features/auth/ResetPasswordScreen';
 import { SessionView } from './features/auth/SessionView';
 import { getErrorMessage } from './features/auth/errors';
 import { useToast } from './lib/notifications/ToastProvider';
-import { getSession, onSessionChange } from './lib/supabase/session';
+import { getSession, onSessionChange, signOut } from './lib/supabase/session';
 
 type View = 'login' | 'register' | 'forgot' | 'reset';
 
@@ -28,9 +28,7 @@ export function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const initialResetToken = readResetTokenFromUrl();
-  const [view, setView] = useState<View>(
-    initialResetToken ? 'reset' : 'login',
-  );
+  const [view, setView] = useState<View>(initialResetToken ? 'reset' : 'login');
   const [resetToken, setResetToken] = useState<string | null>(
     initialResetToken,
   );
@@ -88,6 +86,20 @@ export function App() {
 
         {loading ? (
           <p className="muted">Cargando sesión...</p>
+        ) : view === 'reset' && resetToken ? (
+          <ResetPasswordScreen
+            token={resetToken}
+            onSuccess={() => {
+              // El reset invalida la sesión vieja en términos de seguridad,
+              // pero los tokens ya emitidos siguen vivos hasta su TTL —
+              // forzamos signOut local para mandar al usuario a re-loguear
+              // con la contraseña nueva.
+              void signOut().finally(() => {
+                setResetToken(null);
+                setView('login');
+              });
+            }}
+          />
         ) : session ? (
           <SessionView session={session} />
         ) : view === 'register' ? (
@@ -99,14 +111,6 @@ export function App() {
         ) : view === 'forgot' ? (
           <ForgotPasswordScreen
             onBackToLogin={() => {
-              setView('login');
-            }}
-          />
-        ) : view === 'reset' && resetToken ? (
-          <ResetPasswordScreen
-            token={resetToken}
-            onSuccess={() => {
-              setResetToken(null);
               setView('login');
             }}
           />
