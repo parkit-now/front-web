@@ -44,3 +44,22 @@ export function logoutBackend(accessToken: string): Promise<void> {
     bearer: accessToken,
   });
 }
+
+export function requestPasswordReset(email: string): Promise<void> {
+  return apiRequest<void>({
+    method: 'POST',
+    path: '/auth/forgot-password',
+    body: { email },
+  });
+}
+
+export function confirmPasswordReset(
+  token: string,
+  password: string,
+): Promise<void> {
+  return apiRequest<void>({
+    method: 'POST',
+    path: '/auth/reset-password',
+    body: { token, password },
+  });
+}

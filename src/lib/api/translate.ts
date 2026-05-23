@@ -20,6 +20,8 @@ export type EndpointKey =
   | 'auth.register'
   | 'auth.refresh'
   | 'auth.logout'
+  | 'auth.forgotPassword'
+  | 'auth.resetPassword'
   | 'users.me';
 
 export type TranslateContext = {
@@ -46,6 +48,10 @@ const CODE_MESSAGES: Record<string, string> = {
   AUTH_REGISTER_FAILED:
     'No pudimos crear tu cuenta. Intentalo en unos segundos.',
   AUTH_LOGOUT_FAILED: 'No pudimos cerrar la sesión. Probá de nuevo.',
+  AUTH_RESET_TOKEN_INVALID:
+    'El link para recuperar tu contraseña venció o ya fue usado. Pedí uno nuevo.',
+  AUTH_RESET_PASSWORD_FAILED:
+    'No pudimos cambiar tu contraseña. Intentalo en unos segundos.',
 
   // Validacion (envoltorio — el detalle por campo se traduce con
   // translateValidationCode).

@@ -1,4 +1,4 @@
-export type AuthField = 'email' | 'password';
+export type AuthField = 'email' | 'password' | 'passwordConfirmation';
 export type FieldErrors = Partial<Record<AuthField, string>>;
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -23,6 +23,19 @@ export function validatePassword(
   }
   if (isNew && value.length < 8) {
     return 'Mínimo 8 caracteres';
+  }
+  return null;
+}
+
+export function validatePasswordConfirmation(
+  password: string,
+  confirmation: string,
+): string | null {
+  if (!confirmation) {
+    return 'Repetí la contraseña';
+  }
+  if (password !== confirmation) {
+    return 'Las contraseñas no coinciden';
   }
   return null;
 }
