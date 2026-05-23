@@ -47,8 +47,9 @@ env-use-prod: ## Activar entorno produccion (copia .env.production → .env)
 dev: env-use-local ## Levantar app apuntando al backend LOCAL
 	@bun run dev
 
-prod: env-use-prod ## Build de produccion apuntando al backend PROD
+prod: env-use-prod ## Build de prod + servir en preview con link clickeable
 	@bun run build
+	@bunx vite preview --host 127.0.0.1 --port 4173
 
 build: ## Build con el .env actual (sin tocar el entorno activo)
 	@bun run build
