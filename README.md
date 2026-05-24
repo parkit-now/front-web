@@ -40,7 +40,6 @@ En frontend no usamos DTOs de Nest. El equivalente son tipos TypeScript generado
 
 ```bash
 make sync-types
-make sync-types-check
 ```
 
 Regla: no escribir interfaces manuales para request/response si ya existen en OpenAPI.
@@ -68,7 +67,6 @@ make lint
 make typecheck
 make test
 make build
-make sync-types-check
 ```
 
 ## Comandos diarios

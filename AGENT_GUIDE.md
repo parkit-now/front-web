@@ -22,8 +22,7 @@ Entregar features de frontend web sin romper contratos API ni calidad base.
 ## Politica de contratos API
 
 - Fuente por defecto: `OPENAPI_URL=http://localhost:3000/api-json`.
-- Generacion: `make sync-types`.
-- Guardrail CI/local: `make sync-types-check`.
+- Generacion: `make sync-types` (requiere backend corriendo). Commitear `src/generated/api-types.ts`.
 - Tipos manuales permitidos SOLO para view-models internos de UI (no contratos HTTP).
 
 ## Donde escribir codigo
@@ -51,7 +50,6 @@ make lint
 make typecheck
 make test
 make build
-make sync-types-check
 ```
 
 ## Anti-patrones
