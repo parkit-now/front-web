@@ -71,7 +71,9 @@ export function ResetPasswordScreen({ token, onSuccess }: Props) {
             type="password"
             aria-label="Nueva contraseña"
             aria-invalid={errors.password ? true : undefined}
-            aria-describedby={errors.password ? 'reset-password-error' : undefined}
+            aria-describedby={
+              errors.password ? 'reset-password-error' : undefined
+            }
             autoComplete="new-password"
             value={password}
             onChange={(event) => {
