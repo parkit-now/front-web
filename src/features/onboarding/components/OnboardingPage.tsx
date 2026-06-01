@@ -4,10 +4,11 @@ import { useToast } from '../../../lib/notifications/ToastProvider';
 import { signOut } from '../../../lib/supabase/session';
 import { getErrorMessage } from '../../auth/errors';
 import { useOnboarding } from '../hooks/useOnboarding';
-import type { CompanyFormValues } from '../validation';
+import type {
+  CreateApplicationInput,
+  UpdateApplicationInput,
+} from '../services/onboarding';
 import { ApprovedView } from './ApprovedView';
-import { branchesToInput, type BranchDraft } from './BranchesStep';
-import { syntheticStoragePath } from './DocumentsStep';
 import { DraftWizard } from './DraftWizard';
 import { WelcomeScreen } from './WelcomeScreen';
 import '../Onboarding.css';
@@ -58,48 +59,37 @@ function PageShell({ children }: { children: React.ReactNode }) {
 
 export function OnboardingPage() {
   const {
-    state,
+    application,
     isLoading,
     isError,
     refetch,
-    createCompanyMutation,
+    createApplicationMutation,
     updateApplicationMutation,
-    addDocumentMutation,
+    uploadDocumentMutation,
     submitApplicationMutation,
   } = useOnboarding();
 
   const { showToast } = useToast();
 
-  // Controls whether to show WelcomeScreen or jump straight into the wizard
+  // Show the welcome screen before the wizard for first-time applicants.
   const [showWizard, setShowWizard] = useState(false);
+  // Names of documents uploaded during this session (immediate UI feedback).
+  const [uploadedNames, setUploadedNames] = useState<string[]>([]);
 
-  function handleCreateCompany(values: CompanyFormValues) {
-    createCompanyMutation.mutate({
-      legalName: values.legalName.trim(),
-      cuit: values.cuit,
-      email: values.email.trim(),
-      phone: values.phone.trim(),
-      address: values.address.trim(),
+  function handleCreate(input: CreateApplicationInput) {
+    createApplicationMutation.mutate(input, {
+      onSuccess: () => {
+        showToast({
+          message: 'Solicitud creada. Ya podés sumar documentación.',
+          kind: 'success',
+        });
+      },
     });
   }
 
-  function handleSaveApplication(
-    applicationId: string,
-    payload: { company: CompanyFormValues; branches: BranchDraft[] },
-  ) {
-    const declaredBranches = branchesToInput(payload.branches);
+  function handleSave(applicationId: string, input: UpdateApplicationInput) {
     updateApplicationMutation.mutate(
-      {
-        applicationId,
-        input: {
-          legalName: payload.company.legalName.trim(),
-          cuit: payload.company.cuit,
-          email: payload.company.email.trim(),
-          phone: payload.company.phone.trim() || undefined,
-          address: payload.company.address.trim() || undefined,
-          ...(declaredBranches.length > 0 ? { declaredBranches } : {}),
-        },
-      },
+      { applicationId, input },
       {
         onSuccess: () => {
           showToast({
@@ -111,11 +101,16 @@ export function OnboardingPage() {
     );
   }
 
-  function handleAddDocument(applicationId: string, name: string) {
-    addDocumentMutation.mutate({
-      applicationId,
-      input: { name, storagePath: syntheticStoragePath(name) },
-    });
+  function handleUploadDocument(applicationId: string, file: File) {
+    uploadDocumentMutation.mutate(
+      { applicationId, file },
+      {
+        onSuccess: () => {
+          setUploadedNames((prev) => [...prev, file.name]);
+          showToast({ message: 'Documento subido.', kind: 'success' });
+        },
+      },
+    );
   }
 
   function handleSubmit(applicationId: string) {
@@ -139,7 +134,9 @@ export function OnboardingPage() {
     );
   }
 
-  if (isError || !state) {
+  // An empty application list is NOT an error: it just means the applicant has
+  // not started onboarding yet. Only real failures land here.
+  if (isError) {
     return (
       <PageShell>
         <div className="onboarding-card">
@@ -161,39 +158,10 @@ export function OnboardingPage() {
     );
   }
 
-  const { company, application } = state;
+  const current = application ?? null;
 
-  // No company yet: show welcome screen or the wizard (step 1)
-  if (!company) {
-    if (!showWizard) {
-      return (
-        <PageShell>
-          <WelcomeScreen onStart={() => setShowWizard(true)} />
-        </PageShell>
-      );
-    }
-    return (
-      <PageShell>
-        <DraftWizard
-          company={null}
-          application={null}
-          rejected={false}
-          pendingReview={false}
-          creatingCompany={createCompanyMutation.isPending}
-          savingApplication={false}
-          addingDocument={false}
-          submitting={false}
-          onCreateCompany={handleCreateCompany}
-          onSaveApplication={() => {}}
-          onAddDocument={() => {}}
-          onSubmit={() => {}}
-        />
-      </PageShell>
-    );
-  }
-
-  // Company is already approved/active (edge case — router usually redirects).
-  if (company.status === 'active' || application?.status === 'approved') {
+  // Already approved (edge case — the router normally redirects to /app).
+  if (current?.status === 'approved') {
     return (
       <PageShell>
         <ApprovedView />
@@ -201,44 +169,37 @@ export function OnboardingPage() {
     );
   }
 
-  // Draft, rejected or pending_review: all are editable via the wizard.
-  if (application) {
+  // First-time applicant: offer the welcome screen before the wizard.
+  if (!current && !showWizard) {
     return (
       <PageShell>
-        <DraftWizard
-          company={company}
-          application={application}
-          rejected={application.status === 'rejected'}
-          pendingReview={application.status === 'pending_review'}
-          creatingCompany={false}
-          savingApplication={updateApplicationMutation.isPending}
-          addingDocument={addDocumentMutation.isPending}
-          submitting={submitApplicationMutation.isPending}
-          onCreateCompany={() => {}}
-          onSaveApplication={(applicationId, payload) =>
-            handleSaveApplication(applicationId, payload)
-          }
-          onAddDocument={(name) => handleAddDocument(application.id, name)}
-          onSubmit={() => handleSubmit(application.id)}
-        />
+        <WelcomeScreen onStart={() => setShowWizard(true)} />
       </PageShell>
     );
   }
 
-  // Company exists but no application record yet: nothing to edit.
+  // Single wizard instance for both create and edit, so its step state survives
+  // the null→created transition (the wizard then jumps to the documents step).
   return (
     <PageShell>
-      <div className="onboarding-card">
-        <div className="onboarding-banner banner-info">
-          <strong>Estamos preparando tu solicitud</strong>
-          Reintentá en unos segundos.
-        </div>
-        <div className="onboarding-actions">
-          <button type="button" className="secondary-button" onClick={refetch}>
-            Actualizar
-          </button>
-        </div>
-      </div>
+      <DraftWizard
+        application={current}
+        rejected={current?.status === 'rejected'}
+        pendingReview={current?.status === 'pending_review'}
+        creating={createApplicationMutation.isPending}
+        saving={updateApplicationMutation.isPending}
+        uploadingDocument={uploadDocumentMutation.isPending}
+        submitting={submitApplicationMutation.isPending}
+        uploadedNames={uploadedNames}
+        onCreate={handleCreate}
+        onSave={handleSave}
+        onUploadDocument={(file) => {
+          if (current) handleUploadDocument(current.id, file);
+        }}
+        onSubmit={() => {
+          if (current) handleSubmit(current.id);
+        }}
+      />
     </PageShell>
   );
 }

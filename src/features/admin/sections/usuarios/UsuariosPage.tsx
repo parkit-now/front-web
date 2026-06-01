@@ -58,31 +58,26 @@ export function UsuariosPage() {
         >
           <thead>
             <tr style={{ background: 'var(--bg-b)' }}>
-              {[
-                'Usuario',
-                'Rol',
-                'Empresa',
-                'Último acceso',
-                'Estado',
-                'Acción',
-              ].map((col) => (
-                <th
-                  key={col}
-                  style={{
-                    padding: '10px 16px',
-                    textAlign: 'left',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
-                    color: 'var(--text-3)',
-                    borderBottom: '1px solid var(--border-soft)',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {col}
-                </th>
-              ))}
+              {['Usuario', 'Rol', 'Último acceso', 'Estado', 'Acción'].map(
+                (col) => (
+                  <th
+                    key={col}
+                    style={{
+                      padding: '10px 16px',
+                      textAlign: 'left',
+                      fontSize: 11,
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                      color: 'var(--text-3)',
+                      borderBottom: '1px solid var(--border-soft)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {col}
+                  </th>
+                ),
+              )}
             </tr>
           </thead>
           <tbody>
@@ -142,13 +137,6 @@ export function UsuariosPage() {
                       {user.rol}
                     </span>
                   )}
-                </td>
-
-                {/* Empresa */}
-                <td style={{ padding: '12px 16px' }}>
-                  <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
-                    {user.empresa ?? '—'}
-                  </span>
                 </td>
 
                 {/* Último acceso */}

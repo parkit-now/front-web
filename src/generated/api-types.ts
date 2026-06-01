@@ -39,7 +39,7 @@ export interface paths {
         };
         /**
          * Get a single onboarding application with full review detail
-         * @description Returns the full detail an Ops reviewer needs to make a decision: the summary fields plus the company contact data, the declared branches (name, address and per-vehicle spot counts), the uploaded documents and, when already reviewed, the rejection reason and review timestamp.
+         * @description Returns the full detail an Ops reviewer needs to make a decision: the summary fields plus the declared entity data (name, address, legal data and per-vehicle spot counts), the uploaded documents and, when already reviewed, the rejection reason and review timestamp.
          *
          *     This is the screen the reviewer opens before approving or rejecting an application.
          */
@@ -62,16 +62,15 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Approve an onboarding application and provision the company
-         * @description Approves a submitted application and atomically provisions the tenant. In a single transaction it:
+         * Approve an onboarding application and provision the entity
+         * @description Approves a submitted application and atomically provisions the entity (tenant). In a single transaction it:
          *
-         *     - flips the company to `active`;
-         *     - materializes each declared branch as a real lot (tenant), with an initial `General` zone carrying the declared car/motorcycle/bicycle spot counts;
-         *     - grants the owner a membership on every created lot;
+         *     - materializes the declared entity as a real parking lot (tenant), with an initial `General` zone carrying the declared car/motorcycle/bicycle spot counts;
+         *     - grants the applicant an `owner` membership on the created entity;
          *     - creates the system payment methods (`mp_transfer` as default, `cash`), which are non-deletable but can be disabled;
-         *     - marks the application `approved` and records the audit trail.
+         *     - marks the application `approved` (linking the created `tenantId`) and records the audit trail.
          *
-         *     After the transaction commits, the owner is given access by setting their active tenant in Supabase Auth (best-effort, outside the DB transaction).
+         *     The entity-level role (`owner`) lives on the membership; the applicant global role stays `user`, so no JWT claim is changed.
          *
          *     **Only `pending_review` applications can be approved.** Returns the updated application summary.
          */
@@ -184,6 +183,8 @@ export interface paths {
         /**
          * Current user identity and entity memberships
          * @description Returns the authenticated caller: id, email, GLOBAL role (`admin | user`) and the list of entities (tenants) they belong to, each with the per-entity role (`owner | operator`).
+         *
+         *     This is how clients discover which lots a `user` can act on and whether they manage (`owner`) or only operate (`operator`) — the entity role is NOT carried in the JWT. Admins return an empty `memberships` array (they bypass membership).
          */
         get: operations["authMe"];
         put?: never;
@@ -227,9 +228,9 @@ export interface paths {
          * Register a new user and return a session
          * @description Creates a Supabase Auth user, the matching row in `public.users`, then signs the user in and returns the tokens.
          *
-         *     **Self-registrable roles:** `owner`, `operator`, `driver`. The `admin` role is rejected — platform admins are provisioned out-of-band.
+         *     **No role is accepted.** Every self-registered user gets the GLOBAL role `user`. Platform admins are provisioned out-of-band.
          *
-         *     **No tenant is attached at register.** A tenant equals a parking lot, and the new user has zero memberships. Owners create lots in a dedicated flow (one or many); operators are linked to lots via invitations; drivers and admins never have a tenant.
+         *     **No tenant is attached at register.** A tenant equals a parking lot, and the new user has zero memberships. Applicants gain an `owner` membership when their onboarding application is approved; operators are linked to lots via invitations.
          */
         post: operations["authRegister"];
         delete?: never;
@@ -254,182 +255,6 @@ export interface paths {
          *     The token is single-use and short-lived; once consumed it cannot be reused.
          */
         post: operations["authResetPassword"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/companies/{companyId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Update the company profile
-         * @description Edits the editable fields of an **approved** company profile (`legalName`, `email`, `phone`, `address`).
-         *
-         *     The `cuit` is immutable (it is the legal identity) and is never accepted here. Every change is written to the audit trail.
-         *
-         *     Requires the company to be `active` and the caller to be its owner (platform admins bypass the ownership check).
-         */
-        patch: operations["companiesUpdateProfile"];
-        trace?: never;
-    };
-    "/companies/{companyId}/audit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Read the company audit trail
-         * @description Returns the audit events recorded for the company (profile edits, branch and payment-method changes, etc.), most recent first.
-         *
-         *     Supports optional filtering by `severity` and capping the number of returned events with `limit` (defaults to 100).
-         *
-         *     Requires the company to be `active` and the caller to be its owner (platform admins bypass the ownership check).
-         */
-        get: operations["companiesListAudit"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/companies/{companyId}/branches": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List the company branches
-         * @description Returns every branch (parking lot / tenant) that belongs to the company, oldest first.
-         *
-         *     Each branch aggregates its spot counts from its zones: `carSpots`, `motorcycleSpots`, `bicycleSpots` and the derived `totalSpots`.
-         *
-         *     Requires the company to be `active` and the caller to be its owner (platform admins bypass the ownership check).
-         */
-        get: operations["companiesListBranches"];
-        put?: never;
-        /**
-         * Create a company branch
-         * @description Creates a new branch (parking lot / tenant) under the company and grants the owner access to it via a membership.
-         *
-         *     The branch starts with no zones, so all spot counts (`carSpots`, `motorcycleSpots`, `bicycleSpots`, `totalSpots`) are `0` until zones are configured. The creation is recorded in the audit trail.
-         *
-         *     Requires the company to be `active` and the caller to be its owner (platform admins bypass the ownership check).
-         */
-        post: operations["companiesCreateBranch"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/companies/{companyId}/branches/{tenantId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Update a company branch
-         * @description Edits a branch (parking lot / tenant): its `name`, `address`, and operational `status` (`active` or `maintenance`).
-         *
-         *     Spot counts are not editable here — they are aggregated from the zones of the branch. The change is recorded in the audit trail.
-         *
-         *     Requires the company to be `active` and the caller to be its owner (platform admins bypass the ownership check).
-         */
-        patch: operations["companiesUpdateBranch"];
-        trace?: never;
-    };
-    "/companies/{companyId}/payment-methods": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List the company payment methods
-         * @description Returns every payment method configured for the company, oldest first.
-         *
-         *     System methods (`mp_transfer`, `cash`) are flagged with `isSystem: true` — they can be enabled or disabled but never deleted.
-         *
-         *     Requires the company to be `active` and the caller to be its owner (platform admins bypass the ownership check).
-         */
-        get: operations["companiesListPaymentMethods"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/companies/{companyId}/payment-methods/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Enable or disable a company payment method
-         * @description Toggles a payment method on or off via the `enabled` flag. This is the only mutation allowed on a payment method.
-         *
-         *     System methods (`mp_transfer`, `cash`) can be disabled but never deleted. The change is recorded in the audit trail.
-         *
-         *     Requires the company to be `active` and the caller to be its owner (platform admins bypass the ownership check).
-         */
-        patch: operations["companiesTogglePaymentMethod"];
-        trace?: never;
-    };
-    "/companies/me": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get the authenticated owner's company profile
-         * @description Returns the company owned by the authenticated `owner`, regardless of its status (`pending`, `active`, or `suspended`).
-         *
-         *     Unlike the other endpoints, this route has **no status gate and no `CompanyOwnerGuard`**: the company is resolved directly from the bearer token (the owner can always read their own company, even while it is still pending approval or has been suspended).
-         *
-         *     Use this to bootstrap the owner portal — the returned `status` tells the client which experience to render.
-         */
-        get: operations["companiesGetMine"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -464,33 +289,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/onboarding/application/{id}": {
+    "/onboarding/applications": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List the applications of the authenticated user
+         * @description Returns every onboarding application created by the caller, newest first.
+         */
+        get: operations["onboardingListApplications"];
+        put?: never;
+        /**
+         * Create a draft onboarding application
+         * @description Creates a draft `OnboardingApplication` for the authenticated user declaring ONE entity (parking lot): `name`, `address`, `legalName`, `cuit`, `email`, `phone` and optional spot counts.
+         *
+         *     The application starts in `draft`. Subsequent steps attach documents and submit it for PARKIT Ops review.
+         */
+        post: operations["onboardingCreateApplication"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/onboarding/applications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one of the applications of the authenticated user
+         * @description Returns a single onboarding application owned by the caller.
+         */
+        get: operations["onboardingGetApplication"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
         /**
-         * Edit a draft or rejected application
-         * @description Updates the company data and/or the declared branches of an application that is still editable.
+         * Edit the declared entity of a draft or rejected application
+         * @description Patches the declared-entity data of an application that is still editable.
          *
-         *     **Editable states only:** `draft` and `rejected`. An application in `pending_review` or `approved` can no longer be edited and the request is rejected with a conflict. Editing a rejected application is how an owner fixes the issues raised by PARKIT Ops before resubmitting.
+         *     **Editable states only:** `draft` and `rejected`. An application in `pending_review` or `approved` can no longer be edited. Editing a rejected application is how an applicant fixes the issues raised by PARKIT Ops before resubmitting.
          *
-         *     All fields are optional (partial update). Company fields (`legalName`, `cuit`, `email`, `phone`, `address`) patch the underlying company; `declaredBranches` fully replaces the declared branch list. Each branch carries a `name` and `address`. On approval these declared branches are materialized as real lots.
-         *
-         *     Returns the updated onboarding state.
+         *     All fields are optional (partial update); the provided fields are merged into the declared entity.
          */
         patch: operations["onboardingUpdateApplication"];
         trace?: never;
     };
-    "/onboarding/application/{id}/documents": {
+    "/onboarding/applications/{id}/documents": {
         parameters: {
             query?: never;
             header?: never;
@@ -503,9 +356,7 @@ export interface paths {
          * Register document metadata for an application
          * @description Registers the metadata of a supporting document attached to the application.
          *
-         *     **The binary is uploaded out-of-band.** The client uploads the file directly to Supabase Storage; this endpoint only persists its metadata (`name`, `storagePath`, optional `mimeType`). The `storagePath` is the object key in storage.
-         *
-         *     The document is linked to the application and its company. Returns the created document record.
+         *     **The binary is uploaded out-of-band.** The client uploads the file directly to Supabase Storage; this endpoint only persists its metadata (`name`, `storagePath`, optional `mimeType`).
          */
         post: operations["onboardingAddDocument"];
         delete?: never;
@@ -514,7 +365,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/onboarding/application/{id}/submit": {
+    "/onboarding/applications/{id}/submit": {
         parameters: {
             query?: never;
             header?: never;
@@ -527,9 +378,7 @@ export interface paths {
          * Submit an application for review
          * @description Transitions the application from `draft` or `rejected` to `pending_review` and stamps `submittedAt`, handing it over to PARKIT Ops for review.
          *
-         *     **Preconditions:** the application must be in an editable state (`draft`/`rejected`) and declare at least one branch. Submitting an application with zero declared branches is rejected with a bad request (`ONBOARDING_NOT_SUBMITTABLE`); submitting one that is already in `pending_review`/`approved` is rejected with a conflict (`ONBOARDING_INVALID_STATE`).
-         *
-         *     Resubmitting a previously rejected application clears its `rejectionReason`. Returns the updated onboarding state.
+         *     Resubmitting a previously rejected application clears its `rejectionReason`.
          */
         post: operations["onboardingSubmit"];
         delete?: never;
@@ -538,31 +387,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/onboarding/company": {
+    "/tenants/{tenantId}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
-        put?: never;
         /**
-         * Create the company and open a draft application
-         * @description Step 1 of onboarding. Creates the Company (legal entity: `legalName`, `cuit`, `email`, `phone`, `address`) with `status=pending`, and opens a matching OnboardingApplication with `status=draft`.
+         * Get the entity profile
+         * @description Returns the profile of the `:tenantId` entity (parking lot): its contact/legal data, operational status and a summary of its configured payment methods.
          *
-         *     **One company per owner.** If the caller already owns a company, the request is rejected with a conflict — there is no second company to create.
-         *
-         *     The returned state contains the freshly created company and its empty draft application (zero declared branches, zero documents). Subsequent steps add branches/documents via `PATCH /onboarding/application/:id` and `POST /onboarding/application/:id/documents`.
+         *     Available to any member of the entity.
          */
-        post: operations["onboardingCreateCompany"];
+        get: operations["entitiesGetProfile"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update the entity profile
+         * @description Edits the editable fields of the entity profile (`name`, `legalName`, `cuit`, `email`, `phone`, `address`).
+         *
+         *     Every change is written to the audit trail. Requires the caller to be an `owner` of the entity (platform admins bypass the role check).
+         */
+        patch: operations["entitiesUpdateProfile"];
         trace?: never;
     };
-    "/onboarding/me": {
+    "/tenants/{tenantId}/audit": {
         parameters: {
             query?: never;
             header?: never;
@@ -570,16 +423,12 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get the authenticated owner's onboarding state
-         * @description Returns the company owned by the caller together with its latest onboarding application.
+         * Read the entity audit trail
+         * @description Returns the audit events recorded for the `:tenantId` entity (profile edits, payment-method changes, approval, etc.), most recent first.
          *
-         *     This is the entry point of the owner-facing onboarding flow. A parking-lot owner registers a single Company (legal entity), declares one or more branches, attaches document metadata, and submits the application for PARKIT Ops review.
-         *
-         *     Both `company` and `application` are `null` when the owner has not started onboarding yet (no company created). Use this to decide whether to render the create-company step or resume an existing application.
-         *
-         *     An application cycles `draft` → `pending_review` → `approved`/`rejected`. Rejected applications can be edited and resubmitted.
+         *     Supports optional filtering by `severity` and capping the number of returned events with `limit` (defaults to 100). Available to any member of the entity.
          */
-        get: operations["onboardingGetState"];
+        get: operations["entitiesListAudit"];
         put?: never;
         post?: never;
         delete?: never;
@@ -598,6 +447,103 @@ export interface paths {
         get: operations["EntriesController_findAll"];
         put?: never;
         post: operations["EntriesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/payment-methods": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the entity payment methods
+         * @description Returns every payment method configured for the `:tenantId` entity, oldest first.
+         *
+         *     System methods (`mp_transfer`, `cash`) are flagged with `isSystem: true` — they can be enabled or disabled but never deleted. Available to any member of the entity.
+         */
+        get: operations["entitiesListPaymentMethods"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/payment-methods/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Enable/disable or set-default a payment method
+         * @description Toggles a payment method via the `enabled` and/or `isDefault` flags.
+         *
+         *     System methods (`mp_transfer`, `cash`) can be disabled but never deleted. Setting `isDefault: true` clears the previous default. The change is recorded in the audit trail. Requires the caller to be an `owner` of the entity (platform admins bypass the role check).
+         */
+        patch: operations["entitiesTogglePaymentMethod"];
+        trace?: never;
+    };
+    "/tenants/{tenantId}/rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List rates in the active tenant */
+        get: operations["RatesController_findAll"];
+        put?: never;
+        /** Create a new rate in the active tenant */
+        post: operations["RatesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/rates/{rateId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Soft delete a rate using optimistic locking (expectedVersion) */
+        delete: operations["RatesController_remove"];
+        options?: never;
+        head?: never;
+        /** Update a rate using optimistic locking (expectedVersion) */
+        patch: operations["RatesController_update"];
+        trace?: never;
+    };
+    "/tenants/{tenantId}/rates/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pull incremental changes for offline sync */
+        get: operations["RatesController_pullChanges"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -690,15 +636,15 @@ export interface components {
     schemas: {
         ApplicationDetailDto: {
             /**
-             * @description Company postal address. `null` when not provided.
+             * @description Declared postal address. `null` when not provided.
              * @example Av. Corrientes 1234, CABA
              */
             address: string | null;
             /**
-             * @description Number of branches declared in the application.
-             * @example 2
+             * @description Email of the applicant user (no display name exists yet).
+             * @example applicant@example.com
              */
-            branchCount: number;
+            applicantEmail: string;
             /**
              * Format: date-time
              * @description When the application record was created (ISO-8601 UTC).
@@ -706,24 +652,24 @@ export interface components {
              */
             createdAt: string;
             /**
-             * @description Argentine tax id (CUIT) of the company.
-             * @example 30-71234567-9
+             * @description Declared Argentine tax id (CUIT).
+             * @example 30712345679
              */
             cuit: string;
-            /** @description Declared branches snapshot captured at submission time. Each entry carries a name, optional address and per-vehicle spot counts; these are materialized as real lots on approval. */
-            declaredBranches: {
+            /** @description Declared entity snapshot captured at submission time (name, address, legal data and per-vehicle spot counts). Materialized as a real parking lot on approval. */
+            declaredEntity: {
                 [key: string]: unknown;
-            }[];
+            };
             /**
              * @description Number of supporting documents uploaded by the applicant.
              * @example 3
              */
             docsCount: number;
             /** @description Supporting documents uploaded by the applicant. */
-            documents: components["schemas"]["CompanyDocumentDto"][];
+            documents: components["schemas"]["ApplicationDocumentDto"][];
             /**
-             * @description Company contact email declared in the application.
-             * @example contacto@estacionamientos.com
+             * @description Declared contact email of the entity.
+             * @example contacto@estacionamiento.com
              */
             email: string;
             /**
@@ -733,23 +679,23 @@ export interface components {
              */
             id: string;
             /**
-             * @description Registered legal name of the applicant company.
+             * @description Declared legal name of the entity.
              * @example Estacionamientos del Centro S.A.
              */
             legalName: string;
             /**
-             * @description Email of the company owner (no display name exists yet).
-             * @example owner@example.com
+             * @description Declared display name of the parking lot.
+             * @example Estacionamiento del Centro
              */
-            ownerEmail: string;
+            name: string;
             /**
-             * @description Company contact phone number. `null` when not provided.
+             * @description Declared contact phone number. `null` when not provided.
              * @example +54 11 5555-5555
              */
             phone: string | null;
             /**
              * @description Reviewer-provided reason set when the application was rejected. `null` unless `status` is `rejected`.
-             * @example Missing proof of property ownership for branch #2.
+             * @example Missing proof of property ownership.
              */
             rejectionReason: string | null;
             /**
@@ -766,141 +712,18 @@ export interface components {
             status: "pending" | "approved" | "rejected";
             /**
              * Format: date-time
-             * @description When the owner submitted the application for review (ISO-8601 UTC). `null` while still a draft.
+             * @description When the applicant submitted the application for review (ISO-8601 UTC). `null` while still a draft.
              * @example 2026-05-20T14:30:00.000Z
              */
             submittedAt: string | null;
-        };
-        ApplicationDto: {
-            /**
-             * @description Number of branches declared in the application.
-             * @example 2
-             */
-            branchCount: number;
-            /**
-             * Format: date-time
-             * @description When the application record was created (ISO-8601 UTC).
-             * @example 2026-05-18T09:15:00.000Z
-             */
-            createdAt: string;
-            /**
-             * @description Argentine tax id (CUIT) of the company.
-             * @example 30-71234567-9
-             */
-            cuit: string;
-            /**
-             * @description Number of supporting documents uploaded by the applicant.
-             * @example 3
-             */
-            docsCount: number;
-            /**
-             * @description Company contact email declared in the application.
-             * @example contacto@estacionamientos.com
-             */
-            email: string;
             /**
              * Format: uuid
-             * @description Onboarding application id.
-             * @example 3f1d2c4b-5e6a-7b8c-9d0e-1f2a3b4c5d6e
+             * @description Id of the entity (tenant) created on approval, or `null` until approved.
+             * @example 7c9e6679-7425-40de-944b-e07fc1f90ae7
              */
-            id: string;
-            /**
-             * @description Registered legal name of the applicant company.
-             * @example Estacionamientos del Centro S.A.
-             */
-            legalName: string;
-            /**
-             * @description Email of the company owner (no display name exists yet).
-             * @example owner@example.com
-             */
-            ownerEmail: string;
-            /**
-             * @description External review status. The internal `pending_review` state surfaces as `pending`; drafts never appear in the queue.
-             * @example pending
-             * @enum {string}
-             */
-            status: "pending" | "approved" | "rejected";
-            /**
-             * Format: date-time
-             * @description When the owner submitted the application for review (ISO-8601 UTC). `null` while still a draft.
-             * @example 2026-05-20T14:30:00.000Z
-             */
-            submittedAt: string | null;
+            tenantId: string | null;
         };
-        AuditEventDto: {
-            /** @description Recorded action, e.g. "company.approved" */
-            action: string;
-            /** @description Actor email (null when emitted by the system) */
-            actorName: string | null;
-            /** @description ISO-8601 UTC */
-            createdAt: string;
-            entityId: string | null;
-            entityType: string;
-            id: string;
-            /** @enum {string} */
-            severity: "info" | "warn" | "crit";
-        };
-        AuthSessionResponseDto: {
-            /** @description Tokens to use for subsequent calls. */
-            session: components["schemas"]["SessionDto"];
-            /** @description The authenticated user. */
-            user: components["schemas"]["UserDto"];
-        };
-        BranchDto: {
-            /**
-             * @description Street address of the branch, or null when not set.
-             * @example Av. Santa Fe 1234, Buenos Aires
-             */
-            address: string | null;
-            /**
-             * @description Bicycle spots aggregated from the zones of the branch.
-             * @example 10
-             */
-            bicycleSpots: number;
-            /**
-             * @description Car spots aggregated from the zones of the branch.
-             * @example 90
-             */
-            carSpots: number;
-            /**
-             * Format: uuid
-             * @description Branch (tenant) identifier.
-             * @example 8f2b1c4e-3d2a-4f1b-9c0e-1a2b3c4d5e6f
-             */
-            id: string;
-            /**
-             * @description Operational metric (out of scope): always empty in configuration.
-             * @example
-             */
-            managerName: string;
-            /**
-             * @description Motorcycle spots aggregated from the zones of the branch.
-             * @example 20
-             */
-            motorcycleSpots: number;
-            /**
-             * @description Display name of the branch (parking lot).
-             * @example Palermo Lot
-             */
-            name: string;
-            /**
-             * @description Operational metric (out of scope): always 0 in configuration.
-             * @example 0
-             */
-            occupancyPct: number;
-            /**
-             * @description Operational status of the branch.
-             * @example active
-             * @enum {string}
-             */
-            status: "active" | "maintenance";
-            /**
-             * @description Total parking spots, aggregated across all zones (car + motorcycle + bicycle).
-             * @example 120
-             */
-            totalSpots: number;
-        };
-        CompanyDocumentDto: {
+        ApplicationDocumentDto: {
             /**
              * @description ISO-8601 UTC timestamp of creation.
              * @example 2026-05-19T11:05:00.000Z
@@ -924,77 +747,132 @@ export interface components {
             name: string;
             /**
              * @description Object key of the binary in Supabase Storage.
-             * @example companies/3f2504e0/docs/habilitacion.pdf
+             * @example applications/3f2504e0/docs/habilitacion.pdf
              */
             storagePath: string;
         };
-        CompanyProfileDto: {
+        ApplicationDto: {
             /**
-             * @description Legal address, or `null` if not provided.
-             * @example Av. Corrientes 1234, CABA
+             * @description Email of the applicant user (no display name exists yet).
+             * @example applicant@example.com
              */
-            address: string | null;
+            applicantEmail: string;
             /**
-             * @description ISO-8601 UTC timestamp of creation.
-             * @example 2026-05-19T11:00:00.000Z
+             * Format: date-time
+             * @description When the application record was created (ISO-8601 UTC).
+             * @example 2026-05-18T09:15:00.000Z
              */
             createdAt: string;
             /**
-             * @description CUIT (Argentine tax id), 11 digits.
-             * @example 30123456789
+             * @description Declared Argentine tax id (CUIT).
+             * @example 30712345679
              */
             cuit: string;
             /**
-             * Format: email
-             * @description Contact email of the company.
+             * @description Number of supporting documents uploaded by the applicant.
+             * @example 3
+             */
+            docsCount: number;
+            /**
+             * @description Declared contact email of the entity.
              * @example contacto@estacionamiento.com
              */
             email: string;
             /**
              * Format: uuid
-             * @description Company id (UUID).
-             * @example 3f2504e0-4f89-41d3-9a0c-0305e82c3301
+             * @description Onboarding application id.
+             * @example 3f1d2c4b-5e6a-7b8c-9d0e-1f2a3b4c5d6e
              */
             id: string;
+            /**
+             * @description Declared legal name of the entity.
+             * @example Estacionamientos del Centro S.A.
+             */
+            legalName: string;
+            /**
+             * @description Declared display name of the parking lot.
+             * @example Estacionamiento del Centro
+             */
+            name: string;
+            /**
+             * @description External review status. The internal `pending_review` state surfaces as `pending`; drafts never appear in the queue.
+             * @example pending
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "rejected";
+            /**
+             * Format: date-time
+             * @description When the applicant submitted the application for review (ISO-8601 UTC). `null` while still a draft.
+             * @example 2026-05-20T14:30:00.000Z
+             */
+            submittedAt: string | null;
+        };
+        AuditEventDto: {
+            /** @description Recorded action, e.g. "entity.approved" */
+            action: string;
+            /** @description Actor email (null when emitted by the system) */
+            actorName: string | null;
+            /** @description ISO-8601 UTC */
+            createdAt: string;
+            entityId: string | null;
+            entityType: string;
+            id: string;
+            /** @enum {string} */
+            severity: "info" | "warn" | "crit";
+        };
+        AuthSessionResponseDto: {
+            /** @description Tokens to use for subsequent calls. */
+            session: components["schemas"]["SessionDto"];
+            /** @description The authenticated user. */
+            user: components["schemas"]["UserDto"];
+        };
+        ConnectVehicleDto: Record<string, never>;
+        CreateApplicationDto: {
+            /**
+             * @description Address of the parking lot.
+             * @example Av. Corrientes 1234, CABA
+             */
+            address: string;
+            /**
+             * @description Declared bicycle spots (materialized into the initial zone).
+             * @example 10
+             */
+            bicycleSpots?: number;
+            /**
+             * @description Declared car spots (materialized into the initial zone).
+             * @example 80
+             */
+            carSpots?: number;
+            /**
+             * @description CUIT, 11 digits
+             * @example 30123456789
+             */
+            cuit: string;
+            /**
+             * Format: email
+             * @description Contact email of the entity.
+             * @example contacto@estacionamiento.com
+             */
+            email: string;
             /**
              * @description Registered legal name of the entity.
              * @example Estacionamientos del Centro S.A.
              */
             legalName: string;
             /**
-             * @description Contact phone, or `null` if not provided.
-             * @example +541145678900
+             * @description Declared motorcycle spots (materialized into the initial zone).
+             * @example 20
              */
-            phone: string | null;
+            motorcycleSpots?: number;
             /**
-             * @description Company status. Starts as `pending` during onboarding; becomes `active` once approved.
-             * @example pending
-             * @enum {string}
-             */
-            status: "pending" | "active" | "suspended";
-        };
-        ConnectVehicleDto: Record<string, never>;
-        CreateBranchDto: {
-            /**
-             * @description Street address of the branch.
-             * @example Av. Santa Fe 1234, Buenos Aires
-             */
-            address?: string;
-            /**
-             * @description Display name of the new branch (parking lot).
-             * @example Palermo Lot
+             * @description Display name of the parking lot.
+             * @example Estacionamiento del Centro
              */
             name: string;
-        };
-        CreateCompanyOnboardingDto: {
-            address: string;
             /**
-             * @description CUIT, 11 digits
-             * @example 30123456789
+             * @description Contact phone of the entity.
+             * @example +541145678900
              */
-            cuit: string;
-            email: string;
-            legalName: string;
             phone: string;
         };
         CreateEntryDto: {
@@ -1004,6 +882,31 @@ export interface components {
             leftAt: string;
         };
         CreateEntryVehicleRelationInputDto: Record<string, never>;
+        CreateRateDto: {
+            /**
+             * @description Precio de la fraccion en ARS.
+             * @example 300
+             */
+            fractionPriceArs: number;
+            /**
+             * @description Precio de la hora en ARS.
+             * @example 3600
+             */
+            hourPriceArs: number;
+            /**
+             * Format: uuid
+             * @description Client-generated UUIDv7 for offline-first sync.
+             * @example 018f44f7-9a96-7f75-9e9c-44ed9432fc12
+             */
+            id: string;
+            /** @example DIA AUTO */
+            name: string;
+            /**
+             * @description Precio de la estadia en ARS.
+             * @example 8000
+             */
+            stayPriceArs: number;
+        };
         CreateVehicleDto: Record<string, never>;
         CreateZoneDto: {
             /**
@@ -1030,9 +933,57 @@ export interface components {
              */
             name: string;
         };
-        DeclaredBranchInputDto: {
-            address: string;
+        EntityProfileDto: {
+            /**
+             * @description Address, or `null` if not provided.
+             * @example Av. Corrientes 1234, CABA
+             */
+            address: string | null;
+            /**
+             * @description ISO-8601 UTC timestamp of creation.
+             * @example 2026-05-19T11:00:00.000Z
+             */
+            createdAt: string;
+            /**
+             * @description CUIT (Argentine tax id), or `null` if not provided.
+             * @example 30123456789
+             */
+            cuit: string | null;
+            /**
+             * Format: email
+             * @description Contact email, or `null` if not provided.
+             * @example contacto@estacionamiento.com
+             */
+            email: string | null;
+            /**
+             * Format: uuid
+             * @description Entity (tenant) id (UUID).
+             * @example 3f2504e0-4f89-41d3-9a0c-0305e82c3301
+             */
+            id: string;
+            /**
+             * @description Registered legal name, or `null` if not provided.
+             * @example Estacionamientos del Centro S.A.
+             */
+            legalName: string | null;
+            /**
+             * @description Display name of the entity (parking lot).
+             * @example Estacionamiento del Centro
+             */
             name: string;
+            /** @description Payment methods configured for this entity. */
+            paymentMethods: components["schemas"]["PaymentMethodSummaryDto"][];
+            /**
+             * @description Contact phone, or `null` if not provided.
+             * @example +541145678900
+             */
+            phone: string | null;
+            /**
+             * @description Operational status of the entity.
+             * @example active
+             * @enum {string}
+             */
+            status: "active" | "maintenance";
         };
         ForgotPasswordDto: {
             /**
@@ -1131,23 +1082,19 @@ export interface components {
              */
             role: "admin" | "user";
         };
+        Object: Record<string, never>;
         OnboardingApplicationDto: {
             /**
              * @description ISO-8601 UTC timestamp of creation.
              * @example 2026-05-19T11:00:00.000Z
              */
             createdAt: string;
-            /**
-             * @description Number of declared branches in this application.
-             * @example 2
-             */
-            declaredBranchCount: number;
-            /** @description Declared branches snapshot (before approval). Each entry carries `name`, optional `address`, and spot counts (`carSpots`/`motorcycleSpots`/`bicycleSpots`). On approval each becomes a real lot. */
-            declaredBranches: {
+            /** @description Declared entity snapshot: `name`, `address`, `legalName`, `cuit`, `email`, `phone` and spot counts. On approval it is materialized as a real parking lot (tenant). */
+            declaredEntity: {
                 [key: string]: unknown;
-            }[];
+            };
             /**
-             * @description Number of document metadata records attached to the company.
+             * @description Number of document metadata records attached to the application.
              * @example 3
              */
             docsCount: number;
@@ -1178,16 +1125,16 @@ export interface components {
              * @example 2026-05-20T14:32:00.000Z
              */
             submittedAt: string | null;
-        };
-        OnboardingStateDto: {
-            /** @description The latest onboarding application of the company, or `null` when none exists. */
-            application: components["schemas"]["OnboardingApplicationDto"] | null;
-            /** @description The company owned by the caller, or `null` when onboarding has not started. */
-            company: components["schemas"]["CompanyProfileDto"] | null;
+            /**
+             * Format: uuid
+             * @description Id of the entity (tenant) created on approval, or `null` until approved.
+             * @example 7c9e6679-7425-40de-944b-e07fc1f90ae7
+             */
+            tenantId: string | null;
         };
         PaymentMethodSummaryDto: {
             /**
-             * @description Whether the method is currently enabled for the company.
+             * @description Whether the method is currently enabled for the entity.
              * @example true
              */
             enabled: boolean;
@@ -1198,7 +1145,7 @@ export interface components {
              */
             id: string;
             /**
-             * @description Whether this is the default payment method of the company.
+             * @description Whether this is the default payment method of the entity.
              * @example false
              */
             isDefault: boolean;
@@ -1245,6 +1192,30 @@ export interface components {
              * @example Conflict
              */
             title: string;
+        };
+        RateChangesResponseDto: {
+            items: components["schemas"]["RateDto"][];
+            /** @description Highest sync sequence included in this page. */
+            maxSeq: number;
+        };
+        RateDto: {
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            deletedAt: string | null;
+            fractionPriceArs: number;
+            hourPriceArs: number;
+            /** Format: uuid */
+            id: string;
+            isActive: boolean;
+            name: string;
+            stayPriceArs: number;
+            syncSeq: number;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: date-time */
+            updatedAt: string;
+            version: number;
         };
         RefreshDto: {
             /**
@@ -1317,57 +1288,117 @@ export interface components {
              * @description Whether the payment method should be enabled (true) or disabled (false).
              * @example true
              */
-            enabled: boolean;
+            enabled?: boolean;
+            /**
+             * @description Whether this method becomes the default for the entity.
+             * @example true
+             */
+            isDefault?: boolean;
         };
         UpdateApplicationDto: {
-            address?: string;
-            /** @example 30123456789 */
-            cuit?: string;
-            declaredBranches?: components["schemas"]["DeclaredBranchInputDto"][];
-            email?: string;
-            legalName?: string;
-            phone?: string;
-        };
-        UpdateBranchDto: {
             /**
-             * @description New street address of the branch.
-             * @example Av. Santa Fe 1234, Buenos Aires
+             * @description Address of the parking lot.
+             * @example Av. Corrientes 1234, CABA
              */
             address?: string;
             /**
-             * @description New display name of the branch.
-             * @example Palermo Lot
+             * @description Declared bicycle spots (materialized into the initial zone).
+             * @example 10
+             */
+            bicycleSpots?: number;
+            /**
+             * @description Declared car spots (materialized into the initial zone).
+             * @example 80
+             */
+            carSpots?: number;
+            /**
+             * @description CUIT, 11 digits
+             * @example 30123456789
+             */
+            cuit?: string;
+            /**
+             * Format: email
+             * @description Contact email of the entity.
+             * @example contacto@estacionamiento.com
+             */
+            email?: string;
+            /**
+             * @description Registered legal name of the entity.
+             * @example Estacionamientos del Centro S.A.
+             */
+            legalName?: string;
+            /**
+             * @description Declared motorcycle spots (materialized into the initial zone).
+             * @example 20
+             */
+            motorcycleSpots?: number;
+            /**
+             * @description Display name of the parking lot.
+             * @example Estacionamiento del Centro
              */
             name?: string;
             /**
-             * @description New operational status of the branch.
-             * @example maintenance
-             * @enum {string}
+             * @description Contact phone of the entity.
+             * @example +541145678900
              */
-            status?: "active" | "maintenance";
+            phone?: string;
         };
-        UpdateCompanyProfileDto: {
+        UpdateEntityProfileDto: {
             /**
-             * @description New address of the company.
+             * @description New address of the entity.
              * @example Av. Corrientes 1000, Buenos Aires
              */
             address?: string;
             /**
+             * @description New CUIT (Argentine tax id), 11 digits.
+             * @example 30123456789
+             */
+            cuit?: string;
+            /**
              * Format: email
-             * @description New contact email of the company.
+             * @description New contact email of the entity.
              * @example contact@parkit.com
              */
             email?: string;
             /**
-             * @description New legal name of the company.
-             * @example Parkit Holdings S.A.
+             * @description New legal name of the entity.
+             * @example Estacionamientos del Centro S.A.
              */
             legalName?: string;
             /**
-             * @description New contact phone number of the company.
+             * @description New display name of the entity.
+             * @example Estacionamiento del Centro
+             */
+            name?: string;
+            /**
+             * @description New contact phone number of the entity.
              * @example +54 11 5555-1234
              */
             phone?: string;
+        };
+        UpdateRateDto: {
+            /**
+             * @description Precio de la fraccion en ARS.
+             * @example 325
+             */
+            fractionPriceArs?: number;
+            /**
+             * @description Precio de la hora en ARS.
+             * @example 3900
+             */
+            hourPriceArs?: number;
+            /**
+             * @description Permite activar/desactivar una tarifa.
+             * @example true
+             */
+            isActive?: boolean;
+            /** @example NOCHE AUTO */
+            name?: string;
+            /**
+             * @description Precio de la estadia en ARS.
+             * @example 9000
+             */
+            stayPriceArs?: number;
         };
         UpdateZoneDto: {
             /**
@@ -1910,456 +1941,6 @@ export interface operations {
             };
         };
     };
-    companiesUpdateProfile: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description ID of the company to update. Must be owned by the caller. */
-                companyId: unknown;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateCompanyProfileDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompanyProfileDto"];
-                };
-            };
-            /** @description Invalid payload (validation failed). */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
-                };
-            };
-            /** @description Missing, malformed, or expired bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description The caller is not the company owner (COMPANY_NOT_OWNER), or the company is not active yet (COMPANY_NOT_ACTIVE) or is suspended (COMPANY_SUSPENDED). */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description No company matches the given id (COMPANY_NOT_FOUND). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    companiesListAudit: {
-        parameters: {
-            query?: {
-                /** @description Maximum number of audit events to return. */
-                limit?: number;
-                /** @description Filter events by severity. Returns all severities when omitted. */
-                severity?: "info" | "warn" | "crit";
-            };
-            header?: never;
-            path: {
-                /** @description ID of the company whose audit trail is read. Must be owned by the caller. */
-                companyId: unknown;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuditEventDto"][];
-                };
-            };
-            /** @description Invalid query parameters (validation failed). */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
-                };
-            };
-            /** @description Missing, malformed, or expired bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description The caller is not the company owner (COMPANY_NOT_OWNER), or the company is not active yet (COMPANY_NOT_ACTIVE) or is suspended (COMPANY_SUSPENDED). */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description No company matches the given id (COMPANY_NOT_FOUND). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    companiesListBranches: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description ID of the company whose branches are listed. Must be owned by the caller. */
-                companyId: unknown;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BranchDto"][];
-                };
-            };
-            /** @description Missing, malformed, or expired bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description The caller is not the company owner (COMPANY_NOT_OWNER), or the company is not active yet (COMPANY_NOT_ACTIVE) or is suspended (COMPANY_SUSPENDED). */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description No company matches the given id (COMPANY_NOT_FOUND). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    companiesCreateBranch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description ID of the company the branch is created under. Must be owned by the caller. */
-                companyId: unknown;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateBranchDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BranchDto"];
-                };
-            };
-            /** @description Invalid payload (validation failed). */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
-                };
-            };
-            /** @description Missing, malformed, or expired bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description The caller is not the company owner (COMPANY_NOT_OWNER), or the company is not active yet (COMPANY_NOT_ACTIVE) or is suspended (COMPANY_SUSPENDED). */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description No company matches the given id (COMPANY_NOT_FOUND). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    companiesUpdateBranch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description ID of the company that owns the branch. Must be owned by the caller. */
-                companyId: unknown;
-                /** @description ID of the branch (tenant) to update. Must belong to the company. */
-                tenantId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateBranchDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BranchDto"];
-                };
-            };
-            /** @description Invalid payload (validation failed). */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
-                };
-            };
-            /** @description Missing, malformed, or expired bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description The caller is not the company owner (COMPANY_NOT_OWNER), or the company is not active yet (COMPANY_NOT_ACTIVE) or is suspended (COMPANY_SUSPENDED). */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description No company matches the given id (COMPANY_NOT_FOUND) or no branch matches the given id in this company (BRANCH_NOT_FOUND). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    companiesListPaymentMethods: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description ID of the company whose payment methods are listed. Must be owned by the caller. */
-                companyId: unknown;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaymentMethodSummaryDto"][];
-                };
-            };
-            /** @description Missing, malformed, or expired bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description The caller is not the company owner (COMPANY_NOT_OWNER), or the company is not active yet (COMPANY_NOT_ACTIVE) or is suspended (COMPANY_SUSPENDED). */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description No company matches the given id (COMPANY_NOT_FOUND). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    companiesTogglePaymentMethod: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description ID of the company that owns the payment method. Must be owned by the caller. */
-                companyId: unknown;
-                /** @description ID of the payment method to toggle. Must belong to the company. */
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TogglePaymentMethodDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PaymentMethodSummaryDto"];
-                };
-            };
-            /** @description Invalid payload (validation failed). */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
-                };
-            };
-            /** @description Missing, malformed, or expired bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description The caller is not the company owner (COMPANY_NOT_OWNER), or the company is not active yet (COMPANY_NOT_ACTIVE) or is suspended (COMPANY_SUSPENDED). */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description No company matches the given id (COMPANY_NOT_FOUND) or no payment method matches the given id in this company (PAYMENT_METHOD_NOT_FOUND). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    companiesGetMine: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CompanyProfileDto"];
-                };
-            };
-            /** @description Missing, malformed, or expired bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description The authenticated owner has no company (COMPANY_NOT_FOUND). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
     healthCheck: {
         parameters: {
             query?: never;
@@ -2389,6 +1970,124 @@ export interface operations {
             };
         };
     };
+    onboardingListApplications: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingApplicationDto"][];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    onboardingCreateApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateApplicationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingApplicationDto"];
+                };
+            };
+            /** @description Invalid payload (validation: missing fields, malformed CUIT/email, etc.). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    onboardingGetApplication: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The onboarding application id (UUID). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingApplicationDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The caller is not the applicant (`ENTITY_NOT_OWNER`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description No application exists for the given id (`ONBOARDING_APPLICATION_NOT_FOUND`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
     onboardingUpdateApplication: {
         parameters: {
             query?: never;
@@ -2410,10 +2109,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OnboardingStateDto"];
+                    "application/json": components["schemas"]["OnboardingApplicationDto"];
                 };
             };
-            /** @description Invalid payload (validation: malformed CUIT/email, missing required branch fields, etc.). */
+            /** @description Invalid payload (validation failed). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2431,7 +2130,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
-            /** @description The caller is not an `owner`, or does not own this application (`COMPANY_NOT_OWNER`). */
+            /** @description The caller is not the applicant (`ENTITY_NOT_OWNER`). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2449,7 +2148,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
-            /** @description The application is not in an editable state (`ONBOARDING_INVALID_STATE`); only `draft`/`rejected` applications can be edited. */
+            /** @description The application is not in an editable state (`ONBOARDING_INVALID_STATE`). */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2481,7 +2180,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CompanyDocumentDto"];
+                    "application/json": components["schemas"]["ApplicationDocumentDto"];
                 };
             };
             /** @description Invalid payload (validation: missing `name`/`storagePath`). */
@@ -2502,7 +2201,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
-            /** @description The caller is not an `owner`, or does not own this application (`COMPANY_NOT_OWNER`). */
+            /** @description The caller is not the applicant (`ENTITY_NOT_OWNER`). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2539,16 +2238,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OnboardingStateDto"];
-                };
-            };
-            /** @description The application declares no branches and cannot be submitted (`ONBOARDING_NOT_SUBMITTABLE`). */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                    "application/json": components["schemas"]["OnboardingApplicationDto"];
                 };
             };
             /** @description Missing, malformed, or expired bearer token. */
@@ -2560,7 +2250,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
-            /** @description The caller is not an `owner`, or does not own this application (`COMPANY_NOT_OWNER`). */
+            /** @description The caller is not the applicant (`ENTITY_NOT_OWNER`). */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2578,7 +2268,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
-            /** @description The application is not in a submittable state (`ONBOARDING_INVALID_STATE`); only `draft`/`rejected` applications can be submitted. */
+            /** @description The application is not in a submittable state (`ONBOARDING_INVALID_STATE`). */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2589,28 +2279,80 @@ export interface operations {
             };
         };
     };
-    onboardingCreateCompany: {
+    entitiesGetProfile: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateCompanyOnboardingDto"];
-            };
-        };
+        requestBody?: never;
         responses: {
-            201: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OnboardingStateDto"];
+                    "application/json": components["schemas"]["EntityProfileDto"];
                 };
             };
-            /** @description Invalid payload (validation: missing fields, malformed CUIT/email, etc.). */
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The caller is authenticated but is not a member of the `:tenantId` entity. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description No entity matches the given id (ENTITY_NOT_FOUND). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    entitiesUpdateProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateEntityProfileDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityProfileDto"];
+                };
+            };
+            /** @description Invalid payload (validation failed). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2628,7 +2370,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
-            /** @description The caller is authenticated but is not an `owner`. */
+            /** @description The caller is authenticated but is not a member of the `:tenantId` entity. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2637,8 +2379,8 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
-            /** @description The owner already has a company (`COMPANY_ALREADY_EXISTS`). Only one company per owner is allowed. */
-            409: {
+            /** @description No entity matches the given id (ENTITY_NOT_FOUND). */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2648,11 +2390,19 @@ export interface operations {
             };
         };
     };
-    onboardingGetState: {
+    entitiesListAudit: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Maximum number of audit events to return. */
+                limit?: number;
+                /** @description Filter events by severity. Returns all severities when omitted. */
+                severity?: "info" | "warn" | "crit";
+            };
             header?: never;
-            path?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2662,7 +2412,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["OnboardingStateDto"];
+                    "application/json": components["schemas"]["AuditEventDto"][];
+                };
+            };
+            /** @description Invalid query parameters (validation failed). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
                 };
             };
             /** @description Missing, malformed, or expired bearer token. */
@@ -2674,7 +2433,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
-            /** @description The caller is authenticated but is not an `owner`. */
+            /** @description The caller is authenticated but is not a member of the `:tenantId` entity. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -2726,6 +2485,248 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    entitiesListPaymentMethods: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodSummaryDto"][];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The caller is authenticated but is not a member of the `:tenantId` entity. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    entitiesTogglePaymentMethod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID of the payment method to toggle. */
+                id: string;
+                /** @description ID of the entity (parking lot / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TogglePaymentMethodDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentMethodSummaryDto"];
+                };
+            };
+            /** @description Invalid payload (validation failed). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The caller is authenticated but is not a member of the `:tenantId` entity. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description No payment method matches the given id in this entity (PAYMENT_METHOD_NOT_FOUND). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    RatesController_findAll: {
+        parameters: {
+            query?: {
+                /** @description Include soft-deleted rates in the response. */
+                includeDeleted?: boolean;
+                /** @description Include disabled rates in the response. */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path: {
+                /** @description The ID of the tenant (parking lot) */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateDto"][];
+                };
+            };
+        };
+    };
+    RatesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the tenant (parking lot) */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateRateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateDto"];
+                };
+            };
+        };
+    };
+    RatesController_remove: {
+        parameters: {
+            query: {
+                /** @description Expected current version of the row. Used for optimistic locking. */
+                expectedVersion: number;
+            };
+            header?: never;
+            path: {
+                rateId: string;
+                /** @description The ID of the tenant (parking lot) */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateDto"];
+                };
+            };
+        };
+    };
+    RatesController_update: {
+        parameters: {
+            query: {
+                /** @description Expected current version of the row. Used for optimistic locking. */
+                expectedVersion: number;
+            };
+            header?: never;
+            path: {
+                rateId: string;
+                /** @description The ID of the tenant (parking lot) */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateDto"];
+                };
+            };
+        };
+    };
+    RatesController_pullChanges: {
+        parameters: {
+            query?: {
+                /** @description Return rows with syncSeq greater than this value. */
+                afterSeq?: components["schemas"]["Object"];
+                /** @description Include deleted rows in the changes feed. */
+                includeDeleted?: boolean;
+                /** @description Max items per page. */
+                limit?: components["schemas"]["Object"];
+            };
+            header?: never;
+            path: {
+                /** @description The ID of the tenant (parking lot) */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RateChangesResponseDto"];
+                };
             };
         };
     };

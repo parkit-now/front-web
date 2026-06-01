@@ -11,23 +11,22 @@ export function WelcomeScreen({ onStart }: Props) {
         </div>
         <h2>¡Bienvenido a Parkit!</h2>
         <p className="welcome-subtitle">
-          Registrá tu empresa en pocos pasos para empezar a gestionar tu
-          estacionamiento.
+          Registrá tu estacionamiento en pocos pasos para empezar a gestionarlo.
         </p>
       </div>
       <div className="welcome-steps">
         <div className="welcome-step">
           <span className="welcome-step-number">1</span>
           <div>
-            <strong>Datos de tu empresa</strong>
-            <p>Razón social, CUIT, contacto y domicilio.</p>
+            <strong>Datos de la sucursal</strong>
+            <p>Nombre, domicilio y plazas del estacionamiento.</p>
           </div>
         </div>
         <div className="welcome-step">
           <span className="welcome-step-number">2</span>
           <div>
-            <strong>Tus sucursales</strong>
-            <p>Nombre y domicilio de cada estacionamiento.</p>
+            <strong>Datos de contacto</strong>
+            <p>Razón social, CUIT, email y teléfono del titular.</p>
           </div>
         </div>
         <div className="welcome-step">

@@ -1,19 +1,41 @@
 import type { components } from '../../../generated/api-types';
 import { apiRequest } from '../../../lib/api/client';
 import { getSession } from '../../../lib/supabase/session';
+import { uploadApplicationDocument } from '../../../lib/supabase/storage';
 
-export type OnboardingState = components['schemas']['OnboardingStateDto'];
-export type CompanyProfile = components['schemas']['CompanyProfileDto'];
-export type ApplicationView = components['schemas']['OnboardingApplicationDto'];
-export type CompanyDocument = components['schemas']['CompanyDocumentDto'];
-export type CreateCompanyInput =
-  components['schemas']['CreateCompanyOnboardingDto'];
+export type Application = components['schemas']['OnboardingApplicationDto'];
+export type ApplicationDocument =
+  components['schemas']['ApplicationDocumentDto'];
+export type CreateApplicationInput =
+  components['schemas']['CreateApplicationDto'];
 export type UpdateApplicationInput =
   components['schemas']['UpdateApplicationDto'];
-export type DeclaredBranchInput =
-  components['schemas']['DeclaredBranchInputDto'];
-export type RegisterDocumentInput =
-  components['schemas']['RegisterDocumentDto'];
+
+/**
+ * Typed view of `Application.declaredEntity`, the opaque JSON snapshot the
+ * applicant declares before approval. Every field is optional because a draft
+ * may be partially filled.
+ */
+export type DeclaredEntity = {
+  name?: string;
+  address?: string;
+  legalName?: string;
+  cuit?: string;
+  email?: string;
+  phone?: string;
+  carSpots?: number;
+  motorcycleSpots?: number;
+  bicycleSpots?: number;
+};
+
+/** Reads `declaredEntity` as a typed object (empty when absent). */
+export function readDeclaredEntity(
+  application: Application | null,
+): DeclaredEntity {
+  const raw = application?.declaredEntity;
+  if (!raw || typeof raw !== 'object') return {};
+  return raw;
+}
 
 async function bearer(): Promise<string> {
   const session = await getSession();
@@ -23,60 +45,73 @@ async function bearer(): Promise<string> {
   return session.access_token;
 }
 
-/** GET /onboarding/me — company + latest application for the current user. */
-export async function getOnboardingState(): Promise<OnboardingState> {
-  return apiRequest<OnboardingState>({
+/**
+ * GET /onboarding/applications — the user's applications, newest first. Returns
+ * the latest one (the entity declares a single parking lot) or `null` when the
+ * user has never started onboarding. An empty list is NOT an error.
+ */
+export async function getLatestApplication(): Promise<Application | null> {
+  const list = await apiRequest<Application[]>({
     method: 'GET',
-    path: '/onboarding/me',
+    path: '/onboarding/applications',
     bearer: await bearer(),
   });
+  if (list.length === 0) return null;
+  return [...list].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 }
 
-/** POST /onboarding/company — create the company (promotes a driver to owner). */
-export async function createCompany(
-  input: CreateCompanyInput,
-): Promise<OnboardingState> {
-  return apiRequest<OnboardingState>({
+/** POST /onboarding/applications — create the draft application for one lot. */
+export async function createApplication(
+  input: CreateApplicationInput,
+): Promise<Application> {
+  return apiRequest<Application>({
     method: 'POST',
-    path: '/onboarding/company',
+    path: '/onboarding/applications',
     body: input,
     bearer: await bearer(),
   });
 }
 
-/** PATCH /onboarding/application/:id — edit company data and/or branches. */
+/** PATCH /onboarding/applications/:id — edit a draft/rejected application. */
 export async function updateApplication(
   applicationId: string,
   input: UpdateApplicationInput,
-): Promise<OnboardingState> {
-  return apiRequest<OnboardingState>({
+): Promise<Application> {
+  return apiRequest<Application>({
     method: 'PATCH',
-    path: `/onboarding/application/${applicationId}`,
+    path: `/onboarding/applications/${applicationId}`,
     body: input,
     bearer: await bearer(),
   });
 }
 
-/** POST /onboarding/application/:id/documents — register document metadata. */
-export async function addDocument(
+/**
+ * Uploads the binary to Supabase Storage and then registers its metadata via
+ * POST /onboarding/applications/:id/documents.
+ */
+export async function uploadAndRegisterDocument(
   applicationId: string,
-  input: RegisterDocumentInput,
-): Promise<CompanyDocument> {
-  return apiRequest<CompanyDocument>({
+  file: File,
+): Promise<ApplicationDocument> {
+  const { storagePath, mimeType, name } = await uploadApplicationDocument(
+    applicationId,
+    file,
+  );
+  return apiRequest<ApplicationDocument>({
     method: 'POST',
-    path: `/onboarding/application/${applicationId}/documents`,
-    body: input,
+    path: `/onboarding/applications/${applicationId}/documents`,
+    body: { name, storagePath, ...(mimeType ? { mimeType } : {}) },
     bearer: await bearer(),
   });
 }
 
-/** POST /onboarding/application/:id/submit — send for review (→ pending_review). */
+/** POST /onboarding/applications/:id/submit — send for review (→ pending_review). */
 export async function submitApplication(
   applicationId: string,
-): Promise<OnboardingState> {
-  return apiRequest<OnboardingState>({
+): Promise<Application> {
+  return apiRequest<Application>({
     method: 'POST',
-    path: `/onboarding/application/${applicationId}/submit`,
+    path: `/onboarding/applications/${applicationId}/submit`,
     bearer: await bearer(),
   });
 }

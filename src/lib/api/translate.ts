@@ -23,11 +23,15 @@ export type EndpointKey =
   | 'auth.forgotPassword'
   | 'auth.resetPassword'
   | 'auth.me'
-  | 'onboarding.me'
-  | 'onboarding.createCompany'
+  | 'onboarding.list'
+  | 'onboarding.createApplication'
   | 'onboarding.updateApplication'
   | 'onboarding.addDocument'
-  | 'onboarding.submit';
+  | 'onboarding.submit'
+  | 'admin.applications.list'
+  | 'admin.applications.detail'
+  | 'admin.applications.approve'
+  | 'admin.applications.reject';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;
@@ -58,12 +62,12 @@ const CODE_MESSAGES: Record<string, string> = {
   AUTH_RESET_PASSWORD_FAILED:
     'No pudimos cambiar tu contraseña. Intentalo en unos segundos.',
 
-  // Onboarding
+  // Onboarding (parking-lot applications)
   ONBOARDING_NOT_SUBMITTABLE:
-    'Agregá al menos una sucursal antes de enviar la solicitud.',
-  ONBOARDING_ALREADY_SUBMITTED: 'Tu solicitud ya fue enviada para revisión.',
-  ONBOARDING_COMPANY_EXISTS: 'Ya registraste una empresa con esta cuenta.',
-  COMPANY_CUIT_TAKEN: 'Ya existe una empresa registrada con ese CUIT.',
+    'Completá los datos requeridos antes de enviar la solicitud.',
+  ONBOARDING_INVALID_STATE:
+    'La solicitud no se puede modificar en su estado actual.',
+  ONBOARDING_APPLICATION_NOT_FOUND: 'No encontramos la solicitud.',
 
   // Entidad (tenant) — acceso por membership.
   ENTITY_NOT_FOUND: 'No encontramos el estacionamiento.',

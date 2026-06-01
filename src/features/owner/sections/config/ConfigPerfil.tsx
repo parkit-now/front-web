@@ -49,7 +49,7 @@ export function ConfigPerfil() {
           color: 'var(--text-1)',
         }}
       >
-        Perfil de empresa
+        Perfil del estacionamiento
       </h2>
 
       <div

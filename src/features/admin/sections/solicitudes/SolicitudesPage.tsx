@@ -1,67 +1,84 @@
-import { useState } from 'react';
-import { SOLICITUDES } from '../../../../mock/admin';
-import type { Solicitud } from '../../../../types/api';
+import { useEffect, useState } from 'react';
 import { Button } from '../../../../shared/components/ui/Button';
+import { Modal } from '../../../../shared/components/ui/Modal';
 import {
   IconCheck,
   IconClose,
   IconInbox,
 } from '../../../../shared/components/icons';
-import { useToast } from '../../../../lib/notifications/ToastProvider';
+import {
+  useApplicationActions,
+  useApplicationDetail,
+  useApplicationsList,
+} from '../../hooks/useApplications';
+import { readDeclaredEntity } from '../../services/applications';
 
-const VALIDATION_ITEMS = [
-  'CUIT verificado en AFIP',
-  'Documentación societaria completa',
-  'Email corporativo confirmado',
-  'Sin antecedentes en base negativa',
-];
-
-function formatCount(n: number): number {
-  return n;
+function formatDate(value: string | null): string {
+  if (!value) return '—';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '—';
+  return parsed.toLocaleDateString('es-AR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
+const labelStyle: React.CSSProperties = {
+  margin: '0 0 2px',
+  fontSize: 11,
+  color: 'var(--text-3)',
+  fontWeight: 500,
+};
+const valueStyle: React.CSSProperties = {
+  margin: 0,
+  fontSize: 13,
+  color: 'var(--text-1)',
+  fontWeight: 500,
+};
+
 export function SolicitudesPage() {
-  const { showToast } = useToast();
-  const [items, setItems] = useState<Solicitud[]>(
-    SOLICITUDES.filter((s) => s.estado === 'pending'),
-  );
-  const [selectedId, setSelectedId] = useState<string | null>(
-    items[0]?.id ?? null,
-  );
-  const [fadingId, setFadingId] = useState<string | null>(null);
-  const [processing, setProcessing] = useState(false);
+  const listQuery = useApplicationsList('pending');
+  const items = listQuery.data ?? [];
 
-  const selected = items.find((s) => s.id === selectedId) ?? null;
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const detailQuery = useApplicationDetail(selectedId);
+  const { approveMutation, rejectMutation } = useApplicationActions();
 
-  async function handleAction(action: 'approve' | 'reject') {
+  const [rejectOpen, setRejectOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+
+  // Keep a valid selection as the queue changes (initial load, approve/reject).
+  useEffect(() => {
+    if (items.length === 0) {
+      if (selectedId !== null) setSelectedId(null);
+      return;
+    }
+    if (!selectedId || !items.some((it) => it.id === selectedId)) {
+      setSelectedId(items[0].id);
+    }
+  }, [items, selectedId]);
+
+  const detail = detailQuery.data ?? null;
+  const declared = readDeclaredEntity(detail);
+  const processing = approveMutation.isPending || rejectMutation.isPending;
+
+  function handleApprove() {
     if (!selectedId || processing) return;
-    setProcessing(true);
+    approveMutation.mutate(selectedId);
+  }
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    // Fade out the item
-    setFadingId(selectedId);
-
-    // After fade transition, remove and auto-select next
-    setTimeout(() => {
-      setItems((prev) => {
-        const idx = prev.findIndex((s) => s.id === selectedId);
-        const next = prev[idx + 1] ?? prev[idx - 1] ?? null;
-        setSelectedId(next ? next.id : null);
-        return prev.filter((s) => s.id !== selectedId);
-      });
-      setFadingId(null);
-      setProcessing(false);
-    }, 300);
-
-    showToast({
-      message:
-        action === 'approve'
-          ? 'Alta aprobada correctamente.'
-          : 'Solicitud rechazada.',
-      kind: action === 'approve' ? 'success' : 'info',
-    });
+  function handleConfirmReject() {
+    if (!selectedId || rejectReason.trim().length === 0) return;
+    rejectMutation.mutate(
+      { id: selectedId, reason: rejectReason.trim() },
+      {
+        onSuccess: () => {
+          setRejectOpen(false);
+          setRejectReason('');
+        },
+      },
+    );
   }
 
   return (
@@ -87,7 +104,6 @@ export function SolicitudesPage() {
           borderRight: '1px solid var(--border-soft)',
         }}
       >
-        {/* List header */}
         <div
           style={{
             padding: '16px 20px',
@@ -123,13 +139,28 @@ export function SolicitudesPage() {
               justifyContent: 'center',
             }}
           >
-            {formatCount(items.length)}
+            {items.length}
           </span>
         </div>
 
-        {/* Solicitud list */}
         <div style={{ flex: 1, overflowY: 'auto' }}>
-          {items.length === 0 ? (
+          {listQuery.isLoading ? (
+            <p style={{ padding: 20, color: 'var(--text-2)', fontSize: 14 }}>
+              Cargando solicitudes...
+            </p>
+          ) : listQuery.isError ? (
+            <div style={{ padding: 20 }}>
+              <p style={{ color: 'var(--text-2)', fontSize: 14 }}>
+                No pudimos cargar las solicitudes.
+              </p>
+              <Button
+                variant="secondary"
+                onClick={() => void listQuery.refetch()}
+              >
+                Reintentar
+              </Button>
+            </div>
+          ) : items.length === 0 ? (
             <div
               style={{
                 padding: 32,
@@ -155,7 +186,6 @@ export function SolicitudesPage() {
           ) : (
             items.map((item) => {
               const isActive = item.id === selectedId;
-              const isFading = item.id === fadingId;
               return (
                 <button
                   key={item.id}
@@ -174,10 +204,7 @@ export function SolicitudesPage() {
                       : '4px solid transparent',
                     paddingLeft: isActive ? 16 : 20,
                     background: isActive ? 'var(--brand-soft)' : 'transparent',
-                    transition:
-                      'opacity 300ms ease, transform 300ms ease, background 120ms',
-                    opacity: isFading ? 0 : 1,
-                    transform: isFading ? 'translateX(-16px)' : 'translateX(0)',
+                    transition: 'background 120ms',
                   }}
                 >
                   <p
@@ -191,7 +218,7 @@ export function SolicitudesPage() {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {item.empresa_nombre}
+                    {item.name}
                   </p>
                   <p
                     style={{
@@ -203,12 +230,12 @@ export function SolicitudesPage() {
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {item.dueno_nombre}
+                    {item.applicantEmail}
                   </p>
                   <p
                     style={{ margin: 0, fontSize: 11, color: 'var(--text-3)' }}
                   >
-                    {item.recibido_label} · {item.docs_count} docs
+                    {formatDate(item.submittedAt)} · {item.docsCount} docs
                   </p>
                 </button>
               );
@@ -227,9 +254,12 @@ export function SolicitudesPage() {
           overflowY: 'auto',
         }}
       >
-        {selected ? (
+        {selectedId && detailQuery.isLoading ? (
+          <p style={{ padding: 28, color: 'var(--text-2)', fontSize: 14 }}>
+            Cargando detalle...
+          </p>
+        ) : detail ? (
           <>
-            {/* Detail header */}
             <div
               style={{
                 padding: '20px 28px',
@@ -259,7 +289,7 @@ export function SolicitudesPage() {
                     flexShrink: 0,
                   }}
                 >
-                  {selected.empresa_nombre[0]}
+                  {detail.name.charAt(0)}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <h3
@@ -270,7 +300,7 @@ export function SolicitudesPage() {
                       color: 'var(--text-1)',
                     }}
                   >
-                    {selected.empresa_nombre}
+                    {detail.name}
                   </h3>
                   <p
                     style={{
@@ -279,13 +309,12 @@ export function SolicitudesPage() {
                       color: 'var(--text-3)',
                     }}
                   >
-                    {selected.id} · Recibido: {selected.recibido_label}
+                    Enviada: {formatDate(detail.submittedAt)}
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Detail body */}
             <div
               style={{
                 flex: 1,
@@ -295,7 +324,7 @@ export function SolicitudesPage() {
                 gap: 24,
               }}
             >
-              {/* Company info */}
+              {/* Sucursal + contacto */}
               <section>
                 <p
                   style={{
@@ -307,7 +336,7 @@ export function SolicitudesPage() {
                     color: 'var(--text-3)',
                   }}
                 >
-                  Información de la empresa
+                  Datos de la sucursal
                 </p>
                 <div
                   style={{
@@ -317,36 +346,21 @@ export function SolicitudesPage() {
                   }}
                 >
                   {[
-                    ['Dueño / Representante', selected.dueno_nombre],
-                    ['Email de contacto', selected.email],
-                    ['CUIT', selected.cuit],
+                    ['Solicitante', detail.applicantEmail],
+                    ['Razón social', detail.legalName],
+                    ['Email de contacto', detail.email],
+                    ['CUIT', detail.cuit],
+                    ['Domicilio', detail.address ?? '—'],
+                    ['Teléfono', detail.phone ?? '—'],
                     [
-                      'Sucursales declaradas',
-                      String(selected.sucursales_declaradas),
+                      'Plazas declaradas',
+                      `${declared.carSpots ?? 0} autos · ${declared.motorcycleSpots ?? 0} motos · ${declared.bicycleSpots ?? 0} bicis`,
                     ],
-                    ['Documentos adjuntos', `${selected.docs_count} archivos`],
+                    ['Documentos adjuntos', `${detail.docsCount} archivos`],
                   ].map(([label, value]) => (
                     <div key={label}>
-                      <p
-                        style={{
-                          margin: '0 0 2px',
-                          fontSize: 11,
-                          color: 'var(--text-3)',
-                          fontWeight: 500,
-                        }}
-                      >
-                        {label}
-                      </p>
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: 13,
-                          color: 'var(--text-1)',
-                          fontWeight: 500,
-                        }}
-                      >
-                        {value}
-                      </p>
+                      <p style={labelStyle}>{label}</p>
+                      <p style={valueStyle}>{value}</p>
                     </div>
                   ))}
                 </div>
@@ -354,7 +368,7 @@ export function SolicitudesPage() {
 
               <div className="pk-divider" />
 
-              {/* Validation checklist */}
+              {/* Documentos */}
               <section>
                 <p
                   style={{
@@ -366,45 +380,52 @@ export function SolicitudesPage() {
                     color: 'var(--text-3)',
                   }}
                 >
-                  Validación automática
+                  Documentación adjunta
                 </p>
-                <div
-                  style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
-                >
-                  {VALIDATION_ITEMS.map((item) => (
-                    <div
-                      key={item}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                      }}
-                    >
-                      <span
+                {detail.documents.length === 0 ? (
+                  <p
+                    style={{ margin: 0, fontSize: 13, color: 'var(--text-2)' }}
+                  >
+                    El solicitante no adjuntó documentos.
+                  </p>
+                ) : (
+                  <div
+                    style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+                  >
+                    {detail.documents.map((doc) => (
+                      <div
+                        key={doc.id}
                         style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: '50%',
-                          background: 'var(--ok-bg)',
-                          color: 'var(--ok-text)',
                           display: 'flex',
                           alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
+                          gap: 10,
                         }}
                       >
-                        <IconCheck size={12} />
-                      </span>
-                      <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
-                        {item}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                        <span
+                          style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: '50%',
+                            background: 'var(--ok-bg)',
+                            color: 'var(--ok-text)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <IconCheck size={12} />
+                        </span>
+                        <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
+                          {doc.name}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </section>
             </div>
 
-            {/* Actions footer */}
             <div
               style={{
                 padding: '16px 28px',
@@ -417,18 +438,17 @@ export function SolicitudesPage() {
               <Button
                 variant="danger"
                 icon={<IconClose size={15} />}
-                loading={processing}
                 disabled={processing}
-                onClick={() => void handleAction('reject')}
+                onClick={() => setRejectOpen(true)}
               >
                 Rechazar
               </Button>
               <Button
                 variant="primary"
                 icon={<IconCheck size={15} />}
-                loading={processing}
+                loading={approveMutation.isPending}
                 disabled={processing}
-                onClick={() => void handleAction('approve')}
+                onClick={handleApprove}
               >
                 Aprobar alta
               </Button>
@@ -453,6 +473,59 @@ export function SolicitudesPage() {
           </div>
         )}
       </div>
+
+      {/* Reject reason modal */}
+      <Modal
+        open={rejectOpen}
+        onClose={() => setRejectOpen(false)}
+        title="Rechazar solicitud"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setRejectOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              loading={rejectMutation.isPending}
+              disabled={rejectReason.trim().length === 0}
+              onClick={handleConfirmReject}
+            >
+              Rechazar
+            </Button>
+          </>
+        }
+      >
+        <label
+          htmlFor="reject-reason"
+          style={{
+            display: 'block',
+            marginBottom: 8,
+            fontSize: 13,
+            color: 'var(--text-2)',
+          }}
+        >
+          Indicá el motivo del rechazo. El solicitante podrá corregir y volver a
+          enviar.
+        </label>
+        <textarea
+          id="reject-reason"
+          value={rejectReason}
+          onChange={(e) => setRejectReason(e.target.value)}
+          rows={4}
+          placeholder="Ej.: el CUIT no coincide con la razón social declarada."
+          style={{
+            width: '100%',
+            resize: 'vertical',
+            padding: '10px 12px',
+            borderRadius: 'var(--r-md)',
+            border: '1px solid var(--border-soft)',
+            fontSize: 14,
+            fontFamily: 'inherit',
+            color: 'var(--text-1)',
+            background: 'var(--bg-a)',
+          }}
+        />
+      </Modal>
     </div>
   );
 }

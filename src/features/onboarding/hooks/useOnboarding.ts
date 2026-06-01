@@ -7,63 +7,57 @@ import {
 import { useCallback } from 'react';
 import { translateApiError } from '../../../lib/api/translate';
 import { useToast } from '../../../lib/notifications/ToastProvider';
-import { refreshCurrentSession } from '../../../lib/supabase/session';
 import {
-  addDocument,
-  createCompany,
-  getOnboardingState,
+  createApplication,
+  getLatestApplication,
   submitApplication,
   updateApplication,
-  type CreateCompanyInput,
-  type CompanyDocument,
-  type OnboardingState,
-  type RegisterDocumentInput,
+  uploadAndRegisterDocument,
+  type Application,
+  type ApplicationDocument,
+  type CreateApplicationInput,
   type UpdateApplicationInput,
 } from '../services/onboarding';
 
-const ONBOARDING_QUERY_KEY = ['onboarding', 'me'] as const;
+const ONBOARDING_QUERY_KEY = ['onboarding', 'applications'] as const;
 
 type UpdateApplicationArgs = {
   applicationId: string;
   input: UpdateApplicationInput;
 };
 
-type AddDocumentArgs = {
+type UploadDocumentArgs = {
   applicationId: string;
-  input: RegisterDocumentInput;
+  file: File;
 };
 
 export type UseOnboardingResult = {
-  state: OnboardingState | undefined;
+  application: Application | null | undefined;
   isLoading: boolean;
   isFetching: boolean;
   isError: boolean;
   refetch: () => void;
-  createCompanyMutation: UseMutationResult<
-    OnboardingState,
+  createApplicationMutation: UseMutationResult<
+    Application,
     unknown,
-    CreateCompanyInput
+    CreateApplicationInput
   >;
   updateApplicationMutation: UseMutationResult<
-    OnboardingState,
+    Application,
     unknown,
     UpdateApplicationArgs
   >;
-  addDocumentMutation: UseMutationResult<
-    CompanyDocument,
+  uploadDocumentMutation: UseMutationResult<
+    ApplicationDocument,
     unknown,
-    AddDocumentArgs
+    UploadDocumentArgs
   >;
-  submitApplicationMutation: UseMutationResult<
-    OnboardingState,
-    unknown,
-    string
-  >;
+  submitApplicationMutation: UseMutationResult<Application, unknown, string>;
 };
 
 /**
- * Wraps the onboarding query and the four mutations behind a single hook.
- * Every mutation invalidates `['onboarding','me']` on success and surfaces a
+ * Wraps the onboarding query and its mutations behind a single hook. Every
+ * mutation invalidates `['onboarding','applications']` on success and surfaces a
  * translated toast on error, so the components stay declarative.
  */
 export function useOnboarding(): UseOnboardingResult {
@@ -76,25 +70,18 @@ export function useOnboarding(): UseOnboardingResult {
 
   const query = useQuery({
     queryKey: ONBOARDING_QUERY_KEY,
-    queryFn: getOnboardingState,
+    queryFn: getLatestApplication,
   });
 
-  const createCompanyMutation = useMutation({
-    mutationFn: (input: CreateCompanyInput) => createCompany(input),
-    onSuccess: async () => {
-      // The backend promoted the driver to owner: refresh the JWT so the role
-      // claim updates. Best-effort — ignore failures, the wizard still advances.
-      try {
-        await refreshCurrentSession();
-      } catch {
-        // Ignore: a stale role claim does not block the draft steps.
-      }
+  const createApplicationMutation = useMutation({
+    mutationFn: (input: CreateApplicationInput) => createApplication(input),
+    onSuccess: () => {
       invalidate();
     },
     onError: (error) => {
       showToast({
         message: translateApiError(error, {
-          endpoint: 'onboarding.createCompany',
+          endpoint: 'onboarding.createApplication',
         }),
         kind: 'error',
       });
@@ -117,9 +104,9 @@ export function useOnboarding(): UseOnboardingResult {
     },
   });
 
-  const addDocumentMutation = useMutation({
-    mutationFn: ({ applicationId, input }: AddDocumentArgs) =>
-      addDocument(applicationId, input),
+  const uploadDocumentMutation = useMutation({
+    mutationFn: ({ applicationId, file }: UploadDocumentArgs) =>
+      uploadAndRegisterDocument(applicationId, file),
     onSuccess: () => {
       invalidate();
     },
@@ -147,16 +134,16 @@ export function useOnboarding(): UseOnboardingResult {
   });
 
   return {
-    state: query.data,
+    application: query.data,
     isLoading: query.isLoading,
     isFetching: query.isFetching,
     isError: query.isError,
     refetch: () => {
       void query.refetch();
     },
-    createCompanyMutation,
+    createApplicationMutation,
     updateApplicationMutation,
-    addDocumentMutation,
+    uploadDocumentMutation,
     submitApplicationMutation,
   };
 }

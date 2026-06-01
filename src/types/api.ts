@@ -7,7 +7,6 @@ export type UserRole = 'owner' | 'admin' | 'supervisor' | 'operator';
 export type SucursalEstado = 'active' | 'maintenance';
 export type TransactionEstado = 'ok' | 'failed' | 'cancelled';
 export type AuditSeveridad = 'info' | 'warn' | 'crit';
-export type SolicitudEstado = 'pending' | 'approved' | 'rejected';
 
 export interface Sucursal {
   id: string;
@@ -98,24 +97,11 @@ export interface MedioPago {
   es_default: boolean;
 }
 
-export interface Solicitud {
-  id: string;
-  empresa_nombre: string;
-  dueno_nombre: string;
-  email: string;
-  cuit: string;
-  sucursales_declaradas: number;
-  docs_count: number;
-  estado: SolicitudEstado;
-  recibido_label: string;
-}
-
 export interface UsuarioAdmin {
   id: string;
   nombre: string;
   email: string;
   rol: string;
-  empresa: string | null;
   es_interno: boolean;
   ultimo_acceso_label: string;
   estado: 'active' | 'suspended';

@@ -1,157 +1,195 @@
-import { useState, useEffect } from 'react';
-import type { ApplicationView, CompanyProfile } from '../services/onboarding';
+import { useEffect, useState } from 'react';
+import type {
+  Application,
+  CreateApplicationInput,
+  UpdateApplicationInput,
+} from '../services/onboarding';
+import { readDeclaredEntity } from '../services/onboarding';
 import {
   normalizeCuit,
-  validateCompanyForm,
-  type CompanyFieldErrors,
-  type CompanyFormValues,
+  parseSpots,
+  validateContactForm,
+  validateSucursalForm,
+  type ContactFieldErrors,
+  type ContactFormValues,
+  type SucursalFieldErrors,
+  type SucursalFormValues,
 } from '../validation';
-import {
-  BranchesStep,
-  branchesToInput,
-  emptyBranch,
-  type BranchDraft,
-} from './BranchesStep';
 import { DocumentsStep } from './DocumentsStep';
-
-type SaveAllPayload = { company: CompanyFormValues; branches: BranchDraft[] };
+import { SucursalStep } from './SucursalStep';
 
 type Props = {
-  company: CompanyProfile | null;
-  application: ApplicationView | null;
+  application: Application | null;
   rejected: boolean;
   pendingReview: boolean;
-  creatingCompany: boolean;
-  savingApplication: boolean;
-  addingDocument: boolean;
+  creating: boolean;
+  saving: boolean;
+  uploadingDocument: boolean;
   submitting: boolean;
-  onCreateCompany: (values: CompanyFormValues) => void;
-  onSaveApplication: (applicationId: string, payload: SaveAllPayload) => void;
-  onAddDocument: (name: string) => void;
+  uploadedNames: string[];
+  onCreate: (input: CreateApplicationInput) => void;
+  onSave: (applicationId: string, input: UpdateApplicationInput) => void;
+  onUploadDocument: (file: File) => void;
   onSubmit: () => void;
 };
 
 /**
- * Three-step wizard shown while the application is in draft (or rejected),
- * or while creating the company for the first time.
+ * Three-step wizard to register a single parking lot:
+ *   1. Sucursal (name, address, spot counts)
+ *   2. Contacto (legal name, CUIT, email, phone)
+ *   3. Documentación (optional uploads)
+ *
+ * The application is created (POST) once steps 1 and 2 are complete, since the
+ * backend requires every contact field; later edits use PATCH.
  */
 export function DraftWizard({
-  company,
   application,
   rejected,
   pendingReview,
-  creatingCompany,
-  savingApplication,
-  addingDocument,
+  creating,
+  saving,
+  uploadingDocument,
   submitting,
-  onCreateCompany,
-  onSaveApplication,
-  onAddDocument,
+  uploadedNames,
+  onCreate,
+  onSave,
+  onUploadDocument,
   onSubmit,
 }: Props) {
+  const declared = readDeclaredEntity(application);
+
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
 
-  const [companyValues, setCompanyValues] = useState<CompanyFormValues>(() =>
-    company
-      ? {
-          legalName: company.legalName,
-          cuit: company.cuit,
-          email: company.email,
-          phone: company.phone ?? '',
-          address: company.address ?? '',
-        }
-      : { legalName: '', cuit: '', email: '', phone: '', address: '' },
-  );
-  const [companyErrors, setCompanyErrors] = useState<CompanyFieldErrors>({});
+  const [sucursal, setSucursal] = useState<SucursalFormValues>(() => ({
+    name: declared.name ?? '',
+    address: declared.address ?? '',
+    carSpots: declared.carSpots != null ? String(declared.carSpots) : '',
+    motorcycleSpots:
+      declared.motorcycleSpots != null ? String(declared.motorcycleSpots) : '',
+    bicycleSpots:
+      declared.bicycleSpots != null ? String(declared.bicycleSpots) : '',
+  }));
+  const [sucursalErrors, setSucursalErrors] = useState<SucursalFieldErrors>({});
 
-  const [branches, setBranches] = useState<BranchDraft[]>(() =>
-    application && application.declaredBranchCount > 0 ? [] : [emptyBranch()],
-  );
+  const [contact, setContact] = useState<ContactFormValues>(() => ({
+    legalName: declared.legalName ?? '',
+    cuit: declared.cuit ?? '',
+    email: declared.email ?? '',
+    phone: declared.phone ?? '',
+  }));
+  const [contactErrors, setContactErrors] = useState<ContactFieldErrors>({});
 
-  // Track whether company existed at mount so we can detect the transition
-  const [hasCompany, setHasCompany] = useState(!!company);
-
-  // When the company is created (POST), advance to step 2 automatically
+  // When the application is created (POST), jump to the documents step.
+  const [hadApplication, setHadApplication] = useState(!!application);
   useEffect(() => {
-    if (company && !hasCompany) {
-      setHasCompany(true);
-      setCurrentStep(2);
+    if (application && !hadApplication) {
+      setHadApplication(true);
+      setCurrentStep(3);
     }
-  }, [company]); // intentionally only tracking `company` — detecting the null→non-null transition
+  }, [application, hadApplication]);
 
-  const busy = creatingCompany || savingApplication || submitting;
-  const validBranches = branchesToInput(branches);
-  const canSubmit =
-    !busy &&
-    !addingDocument &&
-    (validBranches.length > 0 || (application?.declaredBranchCount ?? 0) > 0);
+  const busy = creating || saving || submitting;
+  const canSubmit = !!application && !busy && !uploadingDocument;
 
-  function updateCompany(field: keyof CompanyFormValues, value: string) {
-    setCompanyValues((prev) => ({ ...prev, [field]: value }));
-    if (companyErrors[field]) {
-      setCompanyErrors((prev) => ({ ...prev, [field]: undefined }));
+  function updateSucursal(field: keyof SucursalFormValues, value: string) {
+    setSucursal((prev) => ({ ...prev, [field]: value }));
+    if (field in sucursalErrors) {
+      setSucursalErrors((prev) => ({ ...prev, [field]: undefined }));
     }
   }
 
-  // ── Step 1 → 2 ──────────────────────────────────────────────────────────────
-  function handleNextFromStep1() {
-    const errors = validateCompanyForm(companyValues);
-    if (Object.keys(errors).length > 0) {
-      setCompanyErrors(errors);
-      return;
+  function updateContact(field: keyof ContactFormValues, value: string) {
+    setContact((prev) => ({ ...prev, [field]: value }));
+    if (contactErrors[field]) {
+      setContactErrors((prev) => ({ ...prev, [field]: undefined }));
     }
-    setCompanyErrors({});
-    const normalized: CompanyFormValues = {
-      ...companyValues,
-      cuit: normalizeCuit(companyValues.cuit),
+  }
+
+  /** Full declared-entity payload, used for both POST (create) and PATCH (save). */
+  function buildPayload(): CreateApplicationInput {
+    const carSpots = parseSpots(sucursal.carSpots);
+    const motorcycleSpots = parseSpots(sucursal.motorcycleSpots);
+    const bicycleSpots = parseSpots(sucursal.bicycleSpots);
+    return {
+      name: sucursal.name.trim(),
+      address: sucursal.address.trim(),
+      legalName: contact.legalName.trim(),
+      cuit: normalizeCuit(contact.cuit),
+      email: contact.email.trim(),
+      phone: contact.phone.trim(),
+      ...(carSpots != null ? { carSpots } : {}),
+      ...(motorcycleSpots != null ? { motorcycleSpots } : {}),
+      ...(bicycleSpots != null ? { bicycleSpots } : {}),
     };
-    if (!company) {
-      // POST — the useEffect above will advance once company appears
-      onCreateCompany(normalized);
-    } else if (application) {
-      onSaveApplication(application.id, { company: normalized, branches });
-      setCurrentStep(2);
-    } else {
-      setCurrentStep(2);
-    }
   }
 
-  // ── Step 2 → 3 ──────────────────────────────────────────────────────────────
-  const [step2Error, setStep2Error] = useState<string | null>(null);
-
-  function handleNextFromStep2() {
-    const valid = branchesToInput(branches);
-    if (valid.length === 0) {
-      setStep2Error('Agregá al menos una sucursal con nombre y domicilio.');
+  // ── Step 1 → 2 ───────────────────────────────────────────────────────────
+  function handleNextFromStep1() {
+    const errors = validateSucursalForm(sucursal);
+    if (Object.keys(errors).length > 0) {
+      setSucursalErrors(errors);
       return;
     }
-    setStep2Error(null);
-    if (application) {
-      onSaveApplication(application.id, { company: companyValues, branches });
-    }
-    setCurrentStep(3);
+    setSucursalErrors({});
+    setCurrentStep(2);
   }
 
-  // ── Save without advancing ───────────────────────────────────────────────────
+  // ── Step 2 → 3 ───────────────────────────────────────────────────────────
+  function handleNextFromStep2() {
+    const errors = validateContactForm(contact);
+    if (Object.keys(errors).length > 0) {
+      setContactErrors(errors);
+      return;
+    }
+    setContactErrors({});
+    if (!application) {
+      // POST — the effect above advances to step 3 once the application appears.
+      onCreate(buildPayload());
+    } else {
+      onSave(application.id, buildPayload());
+      setCurrentStep(3);
+    }
+  }
+
+  // ── Save without advancing (only when an application exists) ───────────────
   function handleSaveOnly() {
     if (!application) return;
     if (currentStep === 1) {
-      const errors = validateCompanyForm(companyValues);
+      const errors = validateSucursalForm(sucursal);
       if (Object.keys(errors).length > 0) {
-        setCompanyErrors(errors);
+        setSucursalErrors(errors);
         return;
       }
-      setCompanyErrors({});
+      setSucursalErrors({});
     }
-    onSaveApplication(application.id, { company: companyValues, branches });
+    if (currentStep === 2) {
+      const errors = validateContactForm(contact);
+      if (Object.keys(errors).length > 0) {
+        setContactErrors(errors);
+        return;
+      }
+      setContactErrors({});
+    }
+    onSave(application.id, buildPayload());
   }
 
-  // ── Stepper ──────────────────────────────────────────────────────────────────
   const steps = [
-    { step: 1 as const, label: 'Empresa' },
-    { step: 2 as const, label: 'Sucursales' },
+    { step: 1 as const, label: 'Sucursal' },
+    { step: 2 as const, label: 'Contacto' },
     { step: 3 as const, label: 'Documentación' },
   ];
+
+  const saveButton =
+    application !== null ? (
+      <button
+        type="button"
+        className="secondary-button"
+        onClick={handleSaveOnly}
+        disabled={busy}
+      >
+        {saving ? 'Guardando...' : 'Guardar cambios'}
+      </button>
+    ) : null;
 
   return (
     <div className="onboarding-card">
@@ -199,115 +237,18 @@ export function DraftWizard({
         })}
       </div>
 
-      {/* ── Paso 1: Empresa ── */}
+      {/* ── Paso 1: Sucursal ── */}
       {currentStep === 1 && (
-        <div className="onboarding-section">
-          <h3>Datos de la empresa</h3>
-          <p className="section-hint">
-            Completá los datos de tu empresa para avanzar con el registro.
-          </p>
-          <div className="onboarding-grid">
-            <div className="onboarding-field full-width">
-              <label htmlFor="wizard-legalName">Razón social</label>
-              <input
-                id="wizard-legalName"
-                type="text"
-                value={companyValues.legalName}
-                onChange={(e) => updateCompany('legalName', e.target.value)}
-                placeholder="Estacionamientos del Centro S.A."
-                disabled={busy}
-                className={companyErrors.legalName ? 'input-error' : undefined}
-                aria-invalid={companyErrors.legalName ? true : undefined}
-              />
-              {companyErrors.legalName ? (
-                <p className="field-error">{companyErrors.legalName}</p>
-              ) : null}
-            </div>
-
-            <div className="onboarding-field">
-              <label htmlFor="wizard-cuit">CUIT</label>
-              <input
-                id="wizard-cuit"
-                type="text"
-                inputMode="numeric"
-                value={companyValues.cuit}
-                onChange={(e) => updateCompany('cuit', e.target.value)}
-                placeholder="30123456789"
-                disabled={busy}
-                className={companyErrors.cuit ? 'input-error' : undefined}
-                aria-invalid={companyErrors.cuit ? true : undefined}
-              />
-              {companyErrors.cuit ? (
-                <p className="field-error">{companyErrors.cuit}</p>
-              ) : null}
-            </div>
-
-            <div className="onboarding-field">
-              <label htmlFor="wizard-email">Email de contacto</label>
-              <input
-                id="wizard-email"
-                type="email"
-                value={companyValues.email}
-                onChange={(e) => updateCompany('email', e.target.value)}
-                placeholder="contacto@estacionamiento.com"
-                disabled={busy}
-                className={companyErrors.email ? 'input-error' : undefined}
-                aria-invalid={companyErrors.email ? true : undefined}
-              />
-              {companyErrors.email ? (
-                <p className="field-error">{companyErrors.email}</p>
-              ) : null}
-            </div>
-
-            <div className="onboarding-field">
-              <label htmlFor="wizard-phone">Teléfono</label>
-              <input
-                id="wizard-phone"
-                type="tel"
-                value={companyValues.phone}
-                onChange={(e) => updateCompany('phone', e.target.value)}
-                placeholder="+54 11 4567 8900"
-                disabled={busy}
-                className={companyErrors.phone ? 'input-error' : undefined}
-                aria-invalid={companyErrors.phone ? true : undefined}
-              />
-              {companyErrors.phone ? (
-                <p className="field-error">{companyErrors.phone}</p>
-              ) : null}
-            </div>
-
-            <div className="onboarding-field">
-              <label htmlFor="wizard-address">Domicilio</label>
-              <input
-                id="wizard-address"
-                type="text"
-                value={companyValues.address}
-                onChange={(e) => updateCompany('address', e.target.value)}
-                placeholder="Av. Corrientes 1234, CABA"
-                disabled={busy}
-                className={companyErrors.address ? 'input-error' : undefined}
-                aria-invalid={companyErrors.address ? true : undefined}
-              />
-              {companyErrors.address ? (
-                <p className="field-error">{companyErrors.address}</p>
-              ) : null}
-            </div>
-          </div>
-
+        <>
+          <SucursalStep
+            values={sucursal}
+            errors={sucursalErrors}
+            disabled={busy}
+            onChange={updateSucursal}
+          />
           <div className="onboarding-actions">
             <div className="action-left" />
-            <div className="action-center">
-              {application ? (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={handleSaveOnly}
-                  disabled={busy}
-                >
-                  {savingApplication ? 'Guardando...' : 'Guardar cambios'}
-                </button>
-              ) : null}
-            </div>
+            <div className="action-center">{saveButton}</div>
             <div className="action-right">
               <button
                 type="button"
@@ -315,32 +256,91 @@ export function DraftWizard({
                 onClick={handleNextFromStep1}
                 disabled={busy}
               >
-                {creatingCompany ? 'Creando...' : 'Siguiente →'}
+                Siguiente →
               </button>
             </div>
           </div>
-        </div>
+        </>
       )}
 
-      {/* ── Paso 2: Sucursales ── */}
+      {/* ── Paso 2: Contacto ── */}
       {currentStep === 2 && (
-        <>
-          <div className="onboarding-section">
-            <h3>Sucursales</h3>
-            <p className="section-hint">
-              Declarar al menos una sucursal con nombre y domicilio.
-            </p>
+        <div className="onboarding-section">
+          <h3>Datos de contacto</h3>
+          <p className="section-hint">
+            Datos legales y de contacto del titular del estacionamiento.
+          </p>
+          <div className="onboarding-grid">
+            <div className="onboarding-field full-width">
+              <label htmlFor="contact-legalName">Razón social</label>
+              <input
+                id="contact-legalName"
+                type="text"
+                value={contact.legalName}
+                onChange={(e) => updateContact('legalName', e.target.value)}
+                placeholder="Estacionamientos del Centro S.A."
+                disabled={busy}
+                className={contactErrors.legalName ? 'input-error' : undefined}
+                aria-invalid={contactErrors.legalName ? true : undefined}
+              />
+              {contactErrors.legalName ? (
+                <p className="field-error">{contactErrors.legalName}</p>
+              ) : null}
+            </div>
+
+            <div className="onboarding-field">
+              <label htmlFor="contact-cuit">CUIT</label>
+              <input
+                id="contact-cuit"
+                type="text"
+                inputMode="numeric"
+                value={contact.cuit}
+                onChange={(e) => updateContact('cuit', e.target.value)}
+                placeholder="30123456789"
+                disabled={busy}
+                className={contactErrors.cuit ? 'input-error' : undefined}
+                aria-invalid={contactErrors.cuit ? true : undefined}
+              />
+              {contactErrors.cuit ? (
+                <p className="field-error">{contactErrors.cuit}</p>
+              ) : null}
+            </div>
+
+            <div className="onboarding-field">
+              <label htmlFor="contact-email">Email de contacto</label>
+              <input
+                id="contact-email"
+                type="email"
+                value={contact.email}
+                onChange={(e) => updateContact('email', e.target.value)}
+                placeholder="contacto@estacionamiento.com"
+                disabled={busy}
+                className={contactErrors.email ? 'input-error' : undefined}
+                aria-invalid={contactErrors.email ? true : undefined}
+              />
+              {contactErrors.email ? (
+                <p className="field-error">{contactErrors.email}</p>
+              ) : null}
+            </div>
+
+            <div className="onboarding-field">
+              <label htmlFor="contact-phone">Teléfono</label>
+              <input
+                id="contact-phone"
+                type="tel"
+                value={contact.phone}
+                onChange={(e) => updateContact('phone', e.target.value)}
+                placeholder="+54 11 4567 8900"
+                disabled={busy}
+                className={contactErrors.phone ? 'input-error' : undefined}
+                aria-invalid={contactErrors.phone ? true : undefined}
+              />
+              {contactErrors.phone ? (
+                <p className="field-error">{contactErrors.phone}</p>
+              ) : null}
+            </div>
           </div>
-          <BranchesStep
-            branches={branches}
-            disabled={busy}
-            onChange={setBranches}
-          />
-          {step2Error ? (
-            <p className="field-error" style={{ paddingLeft: '4px' }}>
-              {step2Error}
-            </p>
-          ) : null}
+
           <div className="onboarding-actions">
             <div className="action-left">
               <button
@@ -352,18 +352,7 @@ export function DraftWizard({
                 ← Anterior
               </button>
             </div>
-            <div className="action-center">
-              {application ? (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={handleSaveOnly}
-                  disabled={busy}
-                >
-                  {savingApplication ? 'Guardando...' : 'Guardar cambios'}
-                </button>
-              ) : null}
-            </div>
+            <div className="action-center">{saveButton}</div>
             <div className="action-right">
               <button
                 type="button"
@@ -371,11 +360,11 @@ export function DraftWizard({
                 onClick={handleNextFromStep2}
                 disabled={busy}
               >
-                Siguiente →
+                {creating ? 'Creando...' : 'Siguiente →'}
               </button>
             </div>
           </div>
-        </>
+        </div>
       )}
 
       {/* ── Paso 3: Documentación ── */}
@@ -383,9 +372,10 @@ export function DraftWizard({
         <>
           <DocumentsStep
             docsCount={application?.docsCount ?? 0}
-            pending={addingDocument}
+            uploadedNames={uploadedNames}
+            uploading={uploadingDocument}
             disabled={busy}
-            onAdd={onAddDocument}
+            onUpload={onUploadDocument}
           />
           <div className="onboarding-actions">
             <div className="action-left">
@@ -398,29 +388,13 @@ export function DraftWizard({
                 ← Anterior
               </button>
             </div>
-            <div className="action-center">
-              {application ? (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={handleSaveOnly}
-                  disabled={busy}
-                >
-                  {savingApplication ? 'Guardando...' : 'Guardar cambios'}
-                </button>
-              ) : null}
-            </div>
+            <div className="action-center">{saveButton}</div>
             <div className="action-right">
               <button
                 type="button"
                 className="nav-button nav-button--primary"
                 onClick={onSubmit}
                 disabled={!canSubmit}
-                title={
-                  canSubmit
-                    ? undefined
-                    : 'Agregá al menos una sucursal para poder enviar la solicitud.'
-                }
               >
                 {submitting
                   ? 'Enviando...'
@@ -430,13 +404,6 @@ export function DraftWizard({
               </button>
             </div>
           </div>
-          {validBranches.length === 0 &&
-          (application?.declaredBranchCount ?? 0) === 0 ? (
-            <p className="section-hint" style={{ paddingLeft: '4px' }}>
-              Agregá al menos una sucursal y guardá los cambios para poder
-              enviar la solicitud.
-            </p>
-          ) : null}
         </>
       )}
     </div>

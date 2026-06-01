@@ -1,36 +1,32 @@
-import { useState } from 'react';
+import { useRef } from 'react';
 
 type Props = {
   docsCount: number;
-  pending: boolean;
+  /** Names of the documents uploaded during this session (for immediate feedback). */
+  uploadedNames: string[];
+  uploading: boolean;
   disabled: boolean;
-  onAdd: (name: string) => void;
+  onUpload: (file: File) => void;
 };
 
-/** Turns a document name into a synthetic storage path (upload is out of scope). */
-export function syntheticStoragePath(name: string): string {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return `pending/${slug || 'documento'}`;
-}
-
 /**
- * Documents are optional. Real binary upload to storage is out of scope, so we
- * only register metadata (name + synthetic storagePath).
+ * Step 3: optional supporting documents. The binary is uploaded to Supabase
+ * Storage and only its metadata is registered on the backend.
  */
-export function DocumentsStep({ docsCount, pending, disabled, onAdd }: Props) {
-  const [name, setName] = useState('');
+export function DocumentsStep({
+  docsCount,
+  uploadedNames,
+  uploading,
+  disabled,
+  onUpload,
+}: Props) {
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  function handleAdd() {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    onAdd(trimmed);
-    setName('');
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    // Reset so selecting the same file again re-triggers onChange.
+    event.target.value = '';
+    if (file) onUpload(file);
   }
 
   return (
@@ -38,7 +34,7 @@ export function DocumentsStep({ docsCount, pending, disabled, onAdd }: Props) {
       <h3>Documentación (opcional)</h3>
       <p className="section-hint">
         Podés sumar documentos de respaldo (habilitación, escritura, etc.). No
-        es obligatorio para enviar la solicitud.
+        es obligatorio para enviar la solicitud. Formatos: PDF, PNG o JPG.
       </p>
 
       {docsCount > 0 ? (
@@ -51,30 +47,32 @@ export function DocumentsStep({ docsCount, pending, disabled, onAdd }: Props) {
                 : 'documentos registrados'}
             </span>
           </li>
+          {uploadedNames.map((name, index) => (
+            <li className="doc-item" key={`${name}-${index}`}>
+              <span className="doc-name">{name}</span>
+            </li>
+          ))}
         </ul>
       ) : (
-        <p className="muted">Todavía no registraste documentos.</p>
+        <p className="muted">Todavía no subiste documentos.</p>
       )}
 
       <div className="doc-add-row">
-        <div className="onboarding-field">
-          <label htmlFor="doc-name">Nombre del documento</label>
-          <input
-            id="doc-name"
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Habilitación municipal.pdf"
-            disabled={disabled || pending}
-          />
-        </div>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="application/pdf,image/png,image/jpeg"
+          onChange={handleFileChange}
+          disabled={disabled || uploading}
+          style={{ display: 'none' }}
+        />
         <button
           type="button"
           className="secondary-button"
-          onClick={handleAdd}
-          disabled={disabled || pending || name.trim().length === 0}
+          onClick={() => inputRef.current?.click()}
+          disabled={disabled || uploading}
         >
-          {pending ? 'Agregando...' : 'Agregar'}
+          {uploading ? 'Subiendo...' : 'Subir documento'}
         </button>
       </div>
     </div>

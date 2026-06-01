@@ -3,16 +3,16 @@ import { Outlet, useNavigate } from 'react-router-dom';
 import type { Session } from '@supabase/supabase-js';
 import { getSession, signOut } from '../../../lib/supabase/session';
 import { useToast } from '../../../lib/notifications/ToastProvider';
-import { SOLICITUDES } from '../../../mock/admin';
+import { useApplicationsList } from '../hooks/useApplications';
 import { AdminSidebar } from './AdminSidebar';
 import { AdminTopBar } from './AdminTopBar';
-
-const pendingCount = SOLICITUDES.filter((s) => s.estado === 'pending').length;
 
 export function AdminPortal() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [session, setSession] = useState<Session | null>(null);
+  const pendingApplications = useApplicationsList('pending');
+  const pendingCount = pendingApplications.data?.length ?? 0;
 
   useEffect(() => {
     getSession()
