@@ -20,7 +20,10 @@ function resolveRedirectUrl(): string | undefined {
   }
 
   if (typeof window !== 'undefined') {
-    return window.location.origin;
+    // Land the OAuth callback on /login: AuthPage detects the session from the
+    // URL hash and redirects by role. Must be allow-listed in
+    // supabase/config.toml (additional_redirect_urls).
+    return `${window.location.origin}/login`;
   }
 
   return undefined;
@@ -49,6 +52,80 @@ export async function getSession(): Promise<Session | null> {
   } = await supabase.auth.getSession();
 
   return session;
+}
+
+/** App roles. Mirrors the backend `UserRole` enum. */
+export type AppRole = 'admin' | 'owner' | 'operator' | 'driver';
+
+/** Base64url-decodes a JWT payload. Returns null if the token is malformed. */
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const json = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
+        .join(''),
+    );
+    return JSON.parse(json) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reads the app role from the JWT (`app_metadata.role`). The Supabase custom
+ * access token hook injects it into the token on every mint (email AND OAuth),
+ * so the client routes by role with no extra request.
+ *
+ * The role lives in the JWT claims, NOT in the stored user record
+ * (`raw_app_meta_data`): OAuth users are auto-provisioned without it, so
+ * `session.user.app_metadata.role` is empty for them. We therefore read the
+ * decoded access token first and fall back to the user metadata. Returns null
+ * for legacy tokens issued before the claim existed.
+ */
+export function getRoleFromSession(session: Session | null): AppRole | null {
+  if (!session) return null;
+
+  const fromJwt = (
+    decodeJwtPayload(session.access_token)?.app_metadata as
+      | { role?: unknown }
+      | undefined
+  )?.role;
+  const fromUser = (session.user.app_metadata as { role?: unknown } | undefined)
+    ?.role;
+  const role = fromJwt ?? fromUser;
+
+  return role === 'admin' ||
+    role === 'owner' ||
+    role === 'operator' ||
+    role === 'driver'
+    ? role
+    : null;
+}
+
+/**
+ * Default landing path per role:
+ *   - admin    → Ops portal.
+ *   - owner    → owner portal (loaders bounce to /onboarding if the company is
+ *                not active yet).
+ *   - operator → owner/operations portal.
+ *   - driver   → parking-lot registration (onboarding) wizard.
+ */
+export function homePathForRole(role: AppRole | null): string {
+  switch (role) {
+    case 'admin':
+      return '/ops';
+    case 'driver':
+      return '/onboarding';
+    case 'owner':
+    case 'operator':
+      return '/app';
+    default:
+      return '/app';
+  }
 }
 
 export function onSessionChange(
