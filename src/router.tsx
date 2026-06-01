@@ -1,10 +1,5 @@
 import { createBrowserRouter, redirect } from 'react-router-dom';
-import {
-  getRoleFromSession,
-  getSession,
-  homePathForRole,
-} from './lib/supabase/session';
-import { getOnboardingState } from './features/onboarding/services/onboarding';
+import { fetchMe, getSession, homePathForMe } from './lib/supabase/session';
 import { LandingPage } from './features/landing/components/LandingPage';
 import { AuthPage } from './features/auth/AuthPage';
 import { OnboardingPage } from './features/onboarding/components/OnboardingPage';
@@ -21,29 +16,21 @@ import { InventoryPage } from './features/admin/sections/inventory/InventoryPage
 import { OwnerPortal } from './features/owner/components/OwnerPortal';
 import { AdminPortal } from './features/admin/components/AdminPortal';
 
-/** Whether the owner's company is approved (full portal access). */
-async function companyIsActive(): Promise<boolean> {
-  try {
-    const state = await getOnboardingState();
-    return state.company?.status === 'active';
-  } catch {
-    return false;
-  }
-}
-
-/** Owner portal: owners with an active company and operators. */
+/**
+ * Owner/operations portal: a `user` who belongs to at least one entity (an
+ * `owner` membership granted on approval, or an `operator` membership via
+ * invitation). Admins go to Ops; a user with no memberships still needs to
+ * onboard.
+ */
 async function appLoader() {
   const session = await getSession();
   if (!session) return redirect('/login');
 
-  const role = getRoleFromSession(session);
-  if (role === 'admin') return redirect('/ops');
-  if (role === 'driver') return redirect('/onboarding');
-  // An owner whose company is still pending/suspended belongs in onboarding.
-  if (role === 'owner' && !(await companyIsActive())) {
-    return redirect('/onboarding');
-  }
-  return null;
+  const me = await fetchMe(session);
+  if (!me) return redirect('/login');
+
+  const home = homePathForMe(me);
+  return home === '/app' ? null : redirect(home);
 }
 
 /** Ops portal: admins only. */
@@ -51,22 +38,23 @@ async function opsLoader() {
   const session = await getSession();
   if (!session) return redirect('/login');
 
-  const role = getRoleFromSession(session);
-  if (role !== 'admin') return redirect(homePathForRole(role));
-  return null;
+  const me = await fetchMe(session);
+  if (!me) return redirect('/login');
+
+  const home = homePathForMe(me);
+  return home === '/ops' ? null : redirect(home);
 }
 
-/** Onboarding wizard: owners/drivers without an active company. */
+/** Onboarding wizard: a `user` with no memberships yet. */
 async function onboardingLoader() {
   const session = await getSession();
   if (!session) return redirect('/login');
 
-  const role = getRoleFromSession(session);
-  if (role === 'admin') return redirect('/ops');
-  if (role === 'operator') return redirect('/app');
-  // Owners with an already-approved company go straight to the portal.
-  if (await companyIsActive()) return redirect('/app');
-  return null;
+  const me = await fetchMe(session);
+  if (!me) return redirect('/login');
+
+  const home = homePathForMe(me);
+  return home === '/onboarding' ? null : redirect(home);
 }
 
 export const router = createBrowserRouter([
