@@ -22,7 +22,16 @@ export type EndpointKey =
   | 'auth.logout'
   | 'auth.forgotPassword'
   | 'auth.resetPassword'
-  | 'users.me';
+  | 'auth.me'
+  | 'onboarding.list'
+  | 'onboarding.createApplication'
+  | 'onboarding.updateApplication'
+  | 'onboarding.addDocument'
+  | 'onboarding.submit'
+  | 'admin.applications.list'
+  | 'admin.applications.detail'
+  | 'admin.applications.approve'
+  | 'admin.applications.reject';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;
@@ -52,6 +61,21 @@ const CODE_MESSAGES: Record<string, string> = {
     'El link para recuperar tu contraseña venció o ya fue usado. Pedí uno nuevo.',
   AUTH_RESET_PASSWORD_FAILED:
     'No pudimos cambiar tu contraseña. Intentalo en unos segundos.',
+
+  // Onboarding (parking-lot applications)
+  ONBOARDING_NOT_SUBMITTABLE:
+    'Completá los datos requeridos antes de enviar la solicitud.',
+  ONBOARDING_INVALID_STATE:
+    'La solicitud no se puede modificar en su estado actual.',
+  ONBOARDING_APPLICATION_NOT_FOUND: 'No encontramos la solicitud.',
+
+  // Entidad (tenant) — acceso por membership.
+  ENTITY_NOT_FOUND: 'No encontramos el estacionamiento.',
+  ENTITY_NOT_OWNER: 'Solo el propietario puede realizar esta acción.',
+  ENTITY_NOT_ACTIVE: 'Este estacionamiento todavía no está activo.',
+  ENTITY_NO_ACCESS: 'No tenés acceso a este estacionamiento.',
+  ENTITY_INSUFFICIENT_ROLE:
+    'No tenés permisos suficientes para esta acción en este estacionamiento.',
 
   // Validacion (envoltorio — el detalle por campo se traduce con
   // translateValidationCode).
@@ -85,7 +109,6 @@ const CONTEXT_MESSAGES: Record<string, string> = {
   'auth.register:409': 'Ya existe una cuenta con ese email.',
   'auth.refresh:401': 'Tu sesión expiró. Volvé a iniciar sesión.',
   'auth.logout:401': 'Tu sesión ya no es válida.',
-  'users.me:401': 'Tu sesión expiró. Volvé a iniciar sesión.',
 };
 
 // Fallback final por HTTP status.

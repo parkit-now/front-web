@@ -1,0 +1,525 @@
+/* Scoped styles for the parking-lot registration (onboarding) wizard.
+   Reuses the shared tokens declared in src/styles.css. */
+
+.onboarding-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  gap: var(--space-3);
+}
+
+.onboarding-shell {
+  width: min(720px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.onboarding-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.onboarding-topbar .signout-button {
+  width: auto;
+  margin-top: 0;
+  padding: 0 16px;
+  min-height: 40px;
+}
+
+.onboarding-card {
+  width: 100%;
+  padding: var(--space-4);
+  border-radius: var(--radius-card);
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.onboarding-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.onboarding-section:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+
+.onboarding-section h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.onboarding-section .section-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.onboarding-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.onboarding-grid .full-width {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 540px) {
+  .onboarding-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.onboarding-field {
+  display: grid;
+  gap: 6px;
+}
+
+.onboarding-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.onboarding-field input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text);
+  font-size: 15px;
+  font-family: inherit;
+}
+
+.onboarding-field input:focus {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 1px;
+  border-color: var(--color-brand);
+}
+
+.onboarding-field input.input-error {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-bg);
+}
+
+.branch-row {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: #fbfdff;
+}
+
+.branch-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.branch-row-header strong {
+  font-size: 14px;
+}
+
+.branch-spots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+@media (max-width: 540px) {
+  .branch-spots {
+    grid-template-columns: 1fr;
+  }
+}
+
+.doc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.doc-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f5f8ff;
+  color: #1d2939;
+  font-size: 14px;
+}
+
+.doc-item .doc-name {
+  flex: 1;
+  word-break: break-word;
+}
+
+.doc-add-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-end;
+}
+
+.doc-add-row .onboarding-field {
+  flex: 1;
+}
+
+.onboarding-banner {
+  border-radius: var(--radius-control);
+  padding: var(--space-3);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.onboarding-banner.banner-warning {
+  border: 1px solid var(--color-danger-border);
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+}
+
+.onboarding-banner.banner-info {
+  border: 1px solid #b4d2ff;
+  background: #eef4ff;
+  color: var(--color-brand-strong);
+}
+
+.onboarding-banner.banner-success {
+  border: 1px solid #abefc6;
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.onboarding-banner strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.onboarding-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+@media (max-width: 540px) {
+  .onboarding-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f5f8ff;
+}
+
+.summary-item .summary-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+}
+
+.summary-item .summary-value {
+  font-size: 15px;
+  color: var(--color-text);
+  word-break: break-word;
+}
+
+.onboarding-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.action-left,
+.action-center,
+.action-right {
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.action-center {
+  justify-content: center;
+}
+
+.action-right {
+  justify-content: flex-end;
+}
+
+/* Navigation buttons (prev/next) — smaller than full action buttons */
+.nav-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  min-height: 36px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: none;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
+}
+
+.nav-button:hover {
+  background: #f9fbff;
+  border-color: #b4c4da;
+}
+
+.nav-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nav-button--primary {
+  background: var(--color-primary, #2563eb);
+  border-color: var(--color-primary, #2563eb);
+  color: #fff;
+}
+
+.nav-button--primary:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.secondary-button {
+  min-height: 44px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 16px;
+}
+
+.secondary-button:hover {
+  border-color: #b4c4da;
+  background: #f9fbff;
+}
+
+.secondary-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.danger-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-danger-text);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.danger-link:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ───── Welcome screen ───── */
+.welcome-screen {
+  text-align: center;
+  gap: var(--space-4);
+}
+
+.welcome-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.welcome-header .brand-badge {
+  width: 56px;
+  height: 56px;
+  font-size: 1.5rem;
+  border-radius: 14px;
+}
+
+.welcome-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.welcome-subtitle {
+  color: var(--color-muted);
+  margin: 0;
+  max-width: 480px;
+}
+
+.welcome-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  text-align: left;
+}
+
+.welcome-step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface, #f8f9fa);
+  border-radius: var(--radius-base);
+  border: 1px solid var(--color-border);
+}
+
+.welcome-step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  background: var(--color-primary, #2563eb);
+  color: white;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.875rem;
+}
+
+.welcome-step p {
+  margin: 2px 0 0;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+/* ───── Stepper ───── */
+.onboarding-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: var(--space-2);
+}
+
+.onboarding-stepper::before {
+  display: none;
+}
+
+.stepper-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  padding: 10px 0;
+  background: none;
+  border: none;
+  border-bottom: 3px solid var(--color-border);
+  cursor: not-allowed;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+  text-align: left;
+}
+
+.stepper-step--active {
+  border-bottom-color: var(--color-primary, #2563eb);
+  color: var(--color-primary, #2563eb);
+  font-weight: 600;
+  cursor: default;
+}
+
+.stepper-step--done {
+  border-bottom-color: var(--color-success, #16a34a);
+  color: var(--color-success, #16a34a);
+  cursor: pointer;
+}
+
+.stepper-step--done:hover {
+  border-bottom-color: var(--color-primary, #2563eb);
+  color: var(--color-primary, #2563eb);
+}
+
+.stepper-step-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.stepper-step--active .stepper-step-num {
+  background: var(--color-primary, #2563eb);
+  border-color: var(--color-primary, #2563eb);
+  color: white;
+}
+
+.stepper-step--done .stepper-step-num {
+  background: var(--color-success, #16a34a);
+  border-color: var(--color-success, #16a34a);
+  color: white;
+}
+
+/* ───── Botón agregar sucursal ───── */
+.add-branch-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0 20px;
+  min-height: 44px;
+  border-radius: var(--radius-control);
+  border: 2px dashed var(--color-primary, #2563eb);
+  background: none;
+  color: var(--color-primary, #2563eb);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-top: var(--space-1);
+}
+
+.add-branch-btn:hover {
+  background: #eef4ff;
+}
+
+.add-branch-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

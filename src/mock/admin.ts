@@ -1,0 +1,58 @@
+import type { UsuarioAdmin } from '../types/api';
+
+export const USUARIOS_ADMIN: UsuarioAdmin[] = [
+  {
+    id: '1',
+    nombre: 'Roberto Dominguez',
+    email: 'rdominguez@parkingcentral.com',
+    rol: 'Dueño',
+    es_interno: false,
+    ultimo_acceso_label: 'Hace 2 h',
+    estado: 'active',
+  },
+  {
+    id: '2',
+    nombre: 'Lucas Stancanelli',
+    email: 'lucas@cochpremium.com',
+    rol: 'Dueño',
+    es_interno: false,
+    ultimo_acceso_label: 'Hace 5 h',
+    estado: 'active',
+  },
+  {
+    id: '3',
+    nombre: 'Mariano Reyes',
+    email: 'm.reyes@parkit.com',
+    rol: 'Operador',
+    es_interno: false,
+    ultimo_acceso_label: 'Hace 12 min',
+    estado: 'active',
+  },
+  {
+    id: '4',
+    nombre: 'admin_01',
+    email: 'admin_01@parkit.com',
+    rol: 'Sistema',
+    es_interno: true,
+    ultimo_acceso_label: 'Activo',
+    estado: 'active',
+  },
+  {
+    id: '5',
+    nombre: 'admin_03',
+    email: 'admin_03@parkit.com',
+    rol: 'Sistema',
+    es_interno: true,
+    ultimo_acceso_label: 'Hace 30 min',
+    estado: 'active',
+  },
+  {
+    id: '6',
+    nombre: 'Inés Lapuente',
+    email: 'ilapuente@estnorte.com.ar',
+    rol: 'Dueño',
+    es_interno: false,
+    ultimo_acceso_label: 'Hace 1 día',
+    estado: 'suspended',
+  },
+];

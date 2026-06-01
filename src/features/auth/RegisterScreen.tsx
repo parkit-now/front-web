@@ -1,12 +1,21 @@
 import { useState, type FormEvent } from 'react';
 import { useToast } from '../../lib/notifications/ToastProvider';
-import { registerWithEmail } from '../../lib/supabase/session';
-import { mapAuthError } from './errors';
+import {
+  registerWithEmail,
+  signInWithProvider,
+} from '../../lib/supabase/session';
+import { getErrorMessage, mapAuthError } from './errors';
+import { ProviderIcon, type SocialProvider } from './ProviderIcon';
 import {
   validateEmail,
   validatePassword,
   type FieldErrors,
 } from './validation';
+
+const OAUTH_OPTIONS: { provider: SocialProvider; label: string }[] = [
+  { provider: 'google', label: 'Google' },
+  { provider: 'github', label: 'GitHub' },
+];
 
 type Props = {
   onSwitchToLogin: () => void;
@@ -17,7 +26,10 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
-  const [pending, setPending] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState(false);
+  const [pendingProvider, setPendingProvider] = useState<SocialProvider | null>(
+    null,
+  );
 
   async function handleSubmit(
     event: FormEvent<HTMLFormElement>,
@@ -33,7 +45,7 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
       return;
     }
     setErrors({});
-    setPending(true);
+    setPendingEmail(true);
     try {
       await registerWithEmail(email, password);
     } catch (error) {
@@ -45,13 +57,46 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
         showToast({ message: mapped.toastMessage, kind: 'error' });
       }
     } finally {
-      setPending(false);
+      setPendingEmail(false);
     }
   }
+
+  async function handleProvider(provider: SocialProvider) {
+    setPendingProvider(provider);
+    try {
+      await signInWithProvider(provider);
+    } catch (error) {
+      showToast({ message: getErrorMessage(error), kind: 'error' });
+      setPendingProvider(null);
+    }
+  }
+
+  const anyPending = pendingEmail || pendingProvider !== null;
 
   return (
     <>
       <h2>Crear cuenta</h2>
+
+      <div className="oauth-list">
+        {OAUTH_OPTIONS.map((option) => (
+          <button
+            key={option.provider}
+            type="button"
+            className="oauth-button"
+            onClick={() => {
+              void handleProvider(option.provider);
+            }}
+            disabled={anyPending}
+          >
+            <ProviderIcon provider={option.provider} />
+            <span className="sr-only">{option.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="auth-divider" role="presentation">
+        <span>o registrate con email</span>
+      </div>
 
       <form
         className="auth-form"
@@ -110,8 +155,8 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
           ) : null}
         </div>
 
-        <button type="submit" className="primary-button" disabled={pending}>
-          {pending ? 'Creando cuenta...' : 'Crear cuenta'}
+        <button type="submit" className="primary-button" disabled={anyPending}>
+          {pendingEmail ? 'Creando cuenta...' : 'Crear cuenta'}
         </button>
       </form>
 
@@ -121,7 +166,7 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
           type="button"
           className="link-button"
           onClick={onSwitchToLogin}
-          disabled={pending}
+          disabled={anyPending}
         >
           Ingresar
         </button>
