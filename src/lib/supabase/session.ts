@@ -1,9 +1,11 @@
 import { type Provider, type Session } from '@supabase/supabase-js';
 import {
+  getMe,
   logoutBackend,
   loginWithPassword,
   refreshSessionTokens,
   registerWithPassword,
+  type MeResponseDto,
   type SessionDto,
 } from '../api/auth';
 import { supabase } from './client';
@@ -54,8 +56,13 @@ export async function getSession(): Promise<Session | null> {
   return session;
 }
 
-/** App roles. Mirrors the backend `UserRole` enum. */
-export type AppRole = 'admin' | 'owner' | 'operator' | 'driver';
+/**
+ * Global platform role carried in the JWT (`app_metadata.role`). The
+ * owner/operator distinction is NOT a global role anymore: it lives on the
+ * user↔entity membership (see `MeResponseDto.memberships`) and is resolved via
+ * `GET /auth/me`.
+ */
+export type AppRole = 'admin' | 'user';
 
 /** Base64url-decodes a JWT payload. Returns null if the token is malformed. */
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
@@ -98,34 +105,62 @@ export function getRoleFromSession(session: Session | null): AppRole | null {
     ?.role;
   const role = fromJwt ?? fromUser;
 
-  return role === 'admin' ||
-    role === 'owner' ||
-    role === 'operator' ||
-    role === 'driver'
-    ? role
-    : null;
+  return role === 'admin' || role === 'user' ? role : null;
 }
 
 /**
- * Default landing path per role:
- *   - admin    → Ops portal.
- *   - owner    → owner portal (loaders bounce to /onboarding if the company is
- *                not active yet).
- *   - operator → owner/operations portal.
- *   - driver   → parking-lot registration (onboarding) wizard.
+ * Default landing path from the GLOBAL role alone.
+ *   - admin → Ops portal.
+ *   - user  → app portal as a safe default. The real destination for a `user`
+ *             depends on memberships and must be resolved with
+ *             `resolveHomePath` / `/auth/me`; this synchronous helper is only a
+ *             fallback when memberships are not available yet.
  */
 export function homePathForRole(role: AppRole | null): string {
   switch (role) {
     case 'admin':
       return '/ops';
-    case 'driver':
-      return '/onboarding';
-    case 'owner':
-    case 'operator':
-      return '/app';
     default:
       return '/app';
   }
+}
+
+/**
+ * Resolves the landing path from the caller's global role AND entity
+ * memberships (`GET /auth/me`):
+ *   - admin                          → `/ops`.
+ *   - user with an `owner` membership → `/app` (owner portal).
+ *   - user with only `operator`       → `/app` (operations view).
+ *   - user with no memberships        → `/onboarding`.
+ */
+export function homePathForMe(me: MeResponseDto): string {
+  if (me.role === 'admin') return '/ops';
+  if (me.memberships.length === 0) return '/onboarding';
+  return '/app';
+}
+
+/** Fetches `/auth/me` with the session bearer; null when unauthenticated. */
+export async function fetchMe(
+  session: Session | null,
+): Promise<MeResponseDto | null> {
+  const accessToken = session?.access_token;
+  if (!accessToken) return null;
+  return getMe(accessToken);
+}
+
+/**
+ * Resolves the landing path for the current session, querying `/auth/me` when
+ * the global role is `user` (admins route to `/ops` without the extra call).
+ */
+export async function resolveHomePath(
+  session: Session | null,
+): Promise<string> {
+  if (!session) return '/login';
+  const role = getRoleFromSession(session);
+  if (role === 'admin') return '/ops';
+  const me = await fetchMe(session);
+  if (!me) return '/login';
+  return homePathForMe(me);
 }
 
 export function onSessionChange(
@@ -167,11 +202,7 @@ export async function registerWithEmail(
   email: string,
   password: string,
 ): Promise<Session> {
-  const result = await registerWithPassword({
-    email,
-    password,
-    role: 'driver',
-  });
+  const result = await registerWithPassword({ email, password });
   return applyBackendSession(result.session);
 }
 

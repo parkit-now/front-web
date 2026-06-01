@@ -8,9 +8,8 @@ import { ResetPasswordScreen } from './ResetPasswordScreen';
 import { getErrorMessage } from './errors';
 import { useToast } from '../../lib/notifications/ToastProvider';
 import {
-  getRoleFromSession,
   getSession,
-  homePathForRole,
+  resolveHomePath,
   onSessionChange,
   signOut,
 } from '../../lib/supabase/session';
@@ -55,9 +54,8 @@ export function AuthPage() {
         if (isMounted) {
           setSession(currentSession);
           if (currentSession) {
-            void navigate(homePathForRole(getRoleFromSession(currentSession)), {
-              replace: true,
-            });
+            const home = await resolveHomePath(currentSession);
+            if (isMounted) void navigate(home, { replace: true });
           }
         }
       } catch (error) {
@@ -74,8 +72,8 @@ export function AuthPage() {
     const unsubscribe = onSessionChange((nextSession) => {
       setSession(nextSession);
       if (nextSession) {
-        void navigate(homePathForRole(getRoleFromSession(nextSession)), {
-          replace: true,
+        void resolveHomePath(nextSession).then((home) => {
+          if (isMounted) void navigate(home, { replace: true });
         });
       } else {
         setView((current) =>

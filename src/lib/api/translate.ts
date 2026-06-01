@@ -23,6 +23,7 @@ export type EndpointKey =
   | 'auth.forgotPassword'
   | 'auth.resetPassword'
   | 'users.me'
+  | 'auth.me'
   | 'onboarding.me'
   | 'onboarding.createCompany'
   | 'onboarding.updateApplication'
@@ -64,6 +65,14 @@ const CODE_MESSAGES: Record<string, string> = {
   ONBOARDING_ALREADY_SUBMITTED: 'Tu solicitud ya fue enviada para revisión.',
   ONBOARDING_COMPANY_EXISTS: 'Ya registraste una empresa con esta cuenta.',
   COMPANY_CUIT_TAKEN: 'Ya existe una empresa registrada con ese CUIT.',
+
+  // Entidad (tenant) — acceso por membership.
+  ENTITY_NOT_FOUND: 'No encontramos el estacionamiento.',
+  ENTITY_NOT_OWNER: 'Solo el propietario puede realizar esta acción.',
+  ENTITY_NOT_ACTIVE: 'Este estacionamiento todavía no está activo.',
+  ENTITY_NO_ACCESS: 'No tenés acceso a este estacionamiento.',
+  ENTITY_INSUFFICIENT_ROLE:
+    'No tenés permisos suficientes para esta acción en este estacionamiento.',
 
   // Validacion (envoltorio — el detalle por campo se traduce con
   // translateValidationCode).
