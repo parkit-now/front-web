@@ -22,7 +22,12 @@ export type EndpointKey =
   | 'auth.logout'
   | 'auth.forgotPassword'
   | 'auth.resetPassword'
-  | 'users.me';
+  | 'users.me'
+  | 'onboarding.me'
+  | 'onboarding.createCompany'
+  | 'onboarding.updateApplication'
+  | 'onboarding.addDocument'
+  | 'onboarding.submit';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;
@@ -52,6 +57,13 @@ const CODE_MESSAGES: Record<string, string> = {
     'El link para recuperar tu contraseña venció o ya fue usado. Pedí uno nuevo.',
   AUTH_RESET_PASSWORD_FAILED:
     'No pudimos cambiar tu contraseña. Intentalo en unos segundos.',
+
+  // Onboarding
+  ONBOARDING_NOT_SUBMITTABLE:
+    'Agregá al menos una sucursal antes de enviar la solicitud.',
+  ONBOARDING_ALREADY_SUBMITTED: 'Tu solicitud ya fue enviada para revisión.',
+  ONBOARDING_COMPANY_EXISTS: 'Ya registraste una empresa con esta cuenta.',
+  COMPANY_CUIT_TAKEN: 'Ya existe una empresa registrada con ese CUIT.',
 
   // Validacion (envoltorio — el detalle por campo se traduce con
   // translateValidationCode).
