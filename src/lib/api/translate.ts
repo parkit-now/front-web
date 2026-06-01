@@ -22,7 +22,6 @@ export type EndpointKey =
   | 'auth.logout'
   | 'auth.forgotPassword'
   | 'auth.resetPassword'
-  | 'users.me'
   | 'auth.me'
   | 'onboarding.me'
   | 'onboarding.createCompany'
@@ -106,7 +105,6 @@ const CONTEXT_MESSAGES: Record<string, string> = {
   'auth.register:409': 'Ya existe una cuenta con ese email.',
   'auth.refresh:401': 'Tu sesión expiró. Volvé a iniciar sesión.',
   'auth.logout:401': 'Tu sesión ya no es válida.',
-  'users.me:401': 'Tu sesión expiró. Volvé a iniciar sesión.',
 };
 
 // Fallback final por HTTP status.
