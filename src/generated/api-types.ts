@@ -174,6 +174,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Current user identity and entity memberships
+         * @description Returns the authenticated caller: id, email, GLOBAL role (`admin | user`) and the list of entities (tenants) they belong to, each with the per-entity role (`owner | operator`).
+         */
+        get: operations["authMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/refresh": {
         parameters: {
             query?: never;
@@ -1110,6 +1130,33 @@ export interface components {
              */
             password: string;
         };
+        MeMembershipDto: {
+            /**
+             * @description Per-entity role of the caller in this tenant.
+             * @enum {string}
+             */
+            role: "owner" | "operator";
+            /**
+             * Format: uuid
+             * @description Entity (tenant) id.
+             */
+            tenantId: string;
+            /** @description Entity (tenant) display name. */
+            tenantName: string;
+        };
+        MeResponseDto: {
+            /** Format: email */
+            email: string;
+            /** Format: uuid */
+            id: string;
+            /** @description Entities the caller belongs to, with their per-entity role. */
+            memberships: components["schemas"]["MeMembershipDto"][];
+            /**
+             * @description GLOBAL platform role (`admin | user`).
+             * @enum {string}
+             */
+            role: "admin" | "user";
+        };
         OnboardingApplicationDto: {
             /**
              * @description ISO-8601 UTC timestamp of creation.
@@ -1250,12 +1297,6 @@ export interface components {
              * @example CorrectHorseBatteryStaple1!
              */
             password: string;
-            /**
-             * @description Role to assign to the new user. `admin` is rejected — platform admins are provisioned manually.
-             * @example driver
-             * @enum {string}
-             */
-            role: "owner" | "operator" | "driver";
         };
         RejectApplicationDto: {
             /**
@@ -1380,7 +1421,7 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             /** @enum {string} */
-            role: "admin" | "owner" | "operator" | "driver";
+            role: "admin" | "user";
         };
         ValidationFieldErrorDto: {
             /**
@@ -1752,6 +1793,34 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    authMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponseDto"];
+                };
             };
             /** @description Missing, malformed, or expired bearer token. */
             401: {
