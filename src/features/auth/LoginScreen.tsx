@@ -18,8 +18,8 @@ type OAuthOption = {
 };
 
 const OAUTH_OPTIONS: OAuthOption[] = [
-  { provider: 'google', label: 'Continuar con Google' },
-  { provider: 'github', label: 'Continuar con GitHub' },
+  { provider: 'google', label: 'Google' },
+  { provider: 'github', label: 'GitHub' },
 ];
 
 type Props = {
@@ -82,6 +82,27 @@ export function LoginScreen({ onSwitchToRegister, onForgotPassword }: Props) {
   return (
     <>
       <h2>Iniciar sesión</h2>
+
+      <div className="oauth-list">
+        {OAUTH_OPTIONS.map((option) => (
+          <button
+            key={option.provider}
+            type="button"
+            className="oauth-button"
+            onClick={() => {
+              void handleProvider(option.provider);
+            }}
+            disabled={anyPending}
+          >
+            <ProviderIcon provider={option.provider} />
+            <span className="sr-only">{option.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="auth-divider" role="presentation">
+        <span>o continuá con email</span>
+      </div>
 
       <form
         className="auth-form"
@@ -167,31 +188,6 @@ export function LoginScreen({ onSwitchToRegister, onForgotPassword }: Props) {
           Crear una
         </button>
       </p>
-
-      <div className="auth-divider" role="presentation">
-        <span>o</span>
-      </div>
-
-      <div className="oauth-list">
-        {OAUTH_OPTIONS.map((option) => (
-          <button
-            key={option.provider}
-            type="button"
-            className="oauth-button"
-            onClick={() => {
-              void handleProvider(option.provider);
-            }}
-            disabled={anyPending}
-          >
-            <ProviderIcon provider={option.provider} />
-            <span>
-              {pendingProvider === option.provider
-                ? 'Redirigiendo...'
-                : option.label}
-            </span>
-          </button>
-        ))}
-      </div>
     </>
   );
 }
