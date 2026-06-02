@@ -32,7 +32,19 @@ export type EndpointKey =
   | 'admin.applications.detail'
   | 'admin.applications.approve'
   | 'admin.applications.reject'
-  | 'admin.applications.document';
+  | 'admin.applications.document'
+  | 'admin.parkings.list'
+  | 'admin.parkings.get'
+  | 'admin.parkings.create'
+  | 'admin.parkings.update'
+  | 'admin.parkings.delete'
+  | 'admin.users.list'
+  | 'admin.users.detail'
+  | 'admin.users.updateRole'
+  | 'admin.users.delete'
+  | 'admin.users.addMembership'
+  | 'admin.users.updateMembership'
+  | 'admin.users.removeMembership';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;
@@ -74,6 +86,17 @@ const CODE_MESSAGES: Record<string, string> = {
   // Storage (Supabase)
   STORAGE_SIGNED_URL_FAILED:
     'No pudimos abrir el documento. Intentalo de nuevo.',
+
+  // Admin · estacionamientos (gestión desde el panel Ops).
+  PARKING_NOT_FOUND: 'No encontramos el estacionamiento.',
+
+  // Admin · usuarios.
+  USER_NOT_FOUND: 'No encontramos el usuario.',
+  USER_DELETE_FAILED: 'No pudimos eliminar el usuario. Intentalo de nuevo.',
+  MEMBERSHIP_ALREADY_EXISTS:
+    'El usuario ya está vinculado a ese estacionamiento.',
+  MEMBERSHIP_NOT_FOUND:
+    'El usuario no tiene un rol asignado en ese estacionamiento.',
 
   // Entidad (tenant) — acceso por membership.
   ENTITY_NOT_FOUND: 'No encontramos el estacionamiento.',

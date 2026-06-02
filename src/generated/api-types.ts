@@ -129,6 +129,143 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/parkings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List parking lots (paginated, searchable)
+         * @description Returns a page of parking lots ordered by name. Supports a case-insensitive `search` matched against the name and address.
+         *
+         *     This single endpoint powers both the admin inventory table and the parking autocomplete used when linking a user to a lot (`POST /admin/users/:id/memberships`).
+         */
+        get: operations["adminParkingsList"];
+        put?: never;
+        /**
+         * Create a parking lot with basic data
+         * @description Creates a parking lot (tenant) with its basic data and no owner attached. Ownership/operator roles are granted afterwards via memberships.
+         */
+        post: operations["adminParkingsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/parkings/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a single parking lot */
+        get: operations["adminParkingsGet"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a parking lot
+         * @description Permanently deletes the parking lot. Dependent data (memberships, zones, rates, entries and payment methods) is removed by cascade.
+         */
+        delete: operations["adminParkingsDelete"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit a parking lot
+         * @description Updates the parking-lot basic data. Include `status` to move the lot in or out of `maintenance`.
+         */
+        patch: operations["adminParkingsUpdate"];
+        trace?: never;
+    };
+    "/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List platform users (paginated, searchable)
+         * @description Returns a page of users ordered by name. Supports a case-insensitive `search` matched against the user name and email.
+         */
+        get: operations["adminUsersList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a user with their parking memberships
+         * @description Returns the user identity plus the list of parking lots they are linked to and the role held at each one.
+         */
+        get: operations["adminUsersGet"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete a user completely
+         * @description Permanently deletes the user from Supabase Auth; the platform record and parking memberships are removed by cascade. The account can no longer authenticate.
+         */
+        delete: operations["adminUsersDelete"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a user's global role
+         * @description Updates the GLOBAL platform role (`admin | user`). Per-parking roles are managed via the membership endpoints; email/name are owned by Supabase Auth.
+         */
+        patch: operations["adminUsersUpdateRole"];
+        trace?: never;
+    };
+    "/admin/users/{id}/memberships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link a user to a parking lot with a role
+         * @description Grants the user a membership at a parking lot with the given role (`owner` or `operator`).
+         */
+        post: operations["adminUsersAddMembership"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/users/{id}/memberships/{parkingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unlink a user from a parking lot */
+        delete: operations["adminUsersRemoveMembership"];
+        options?: never;
+        head?: never;
+        /** Change a user's role at a parking lot */
+        patch: operations["adminUsersUpdateMembership"];
+        trace?: never;
+    };
     "/auth/forgot-password": {
         parameters: {
             query?: never;
@@ -658,6 +795,68 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AdminUserDetailDto: {
+            /**
+             * Format: date-time
+             * @description Provisioning timestamp.
+             */
+            createdAt: string;
+            /** @description Login email (unique). */
+            email: string;
+            /**
+             * Format: uuid
+             * @description User id (uuid, from Auth).
+             */
+            id: string;
+            memberships: components["schemas"]["AdminUserMembershipDto"][];
+            /** @description Display name mirrored from Supabase Auth, if any. */
+            name: string | null;
+            /**
+             * @description Global platform role: `admin` or `user`.
+             * @enum {string}
+             */
+            role: "admin" | "user";
+        };
+        AdminUserDto: {
+            /**
+             * Format: date-time
+             * @description Provisioning timestamp.
+             */
+            createdAt: string;
+            /** @description Login email (unique). */
+            email: string;
+            /**
+             * Format: uuid
+             * @description User id (uuid, from Auth).
+             */
+            id: string;
+            /** @description Display name mirrored from Supabase Auth, if any. */
+            name: string | null;
+            /**
+             * @description Global platform role: `admin` or `user`.
+             * @enum {string}
+             */
+            role: "admin" | "user";
+        };
+        AdminUserMembershipDto: {
+            /**
+             * Format: date-time
+             * @description When the membership was granted.
+             */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Parking lot id (uuid).
+             */
+            parkingId: string;
+            /** @description Parking lot display name. */
+            parkingName: string;
+            /**
+             * @description Role held at this parking lot: `owner` or `operator`.
+             * @enum {string}
+             */
+            role: "owner" | "operator";
+        };
         ApplicationDetailDto: {
             /**
              * @description Declared postal address. `null` when not provided.
@@ -906,6 +1105,38 @@ export interface components {
             leftAt: string;
         };
         CreateEntryVehicleRelationInputDto: Record<string, never>;
+        CreateMembershipDto: {
+            /**
+             * Format: uuid
+             * @description Parking lot the user is being linked to.
+             */
+            parkingId: string;
+            /**
+             * @description Role to grant at this parking lot: `owner` or `operator`.
+             * @enum {string}
+             */
+            role: "owner" | "operator";
+        };
+        CreateParkingDto: {
+            /** @description Street address. */
+            address?: string;
+            /** @description Tax id (CUIT). */
+            cuit?: string;
+            /** @description Contact email. */
+            email?: string;
+            /** @description Registered legal/company name. */
+            legalName?: string;
+            /** @description Display name of the parking lot. */
+            name: string;
+            /** @description Contact phone. */
+            phone?: string;
+            /**
+             * @description Initial operational status. Defaults to `active`.
+             * @default active
+             * @enum {string}
+             */
+            status: "active" | "maintenance";
+        };
         CreateRateDto: {
             /**
              * @description Precio de la fraccion en ARS.
@@ -1168,6 +1399,71 @@ export interface components {
              */
             tenantId: string | null;
         };
+        PaginatedParkingsDto: {
+            items: components["schemas"]["ParkingDto"][];
+            /**
+             * @description Current 1-based page.
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description Items per page.
+             * @example 20
+             */
+            pageSize: number;
+            /**
+             * @description Total number of parking lots matching the query.
+             * @example 42
+             */
+            total: number;
+        };
+        PaginatedUsersDto: {
+            items: components["schemas"]["AdminUserDto"][];
+            /**
+             * @description Current 1-based page.
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description Items per page.
+             * @example 20
+             */
+            pageSize: number;
+            /**
+             * @description Total number of users matching the query.
+             * @example 128
+             */
+            total: number;
+        };
+        ParkingDto: {
+            /** @description Street address, if any. */
+            address: string | null;
+            /**
+             * Format: date-time
+             * @description Creation timestamp.
+             */
+            createdAt: string;
+            /** @description Tax id (CUIT), if any. */
+            cuit: string | null;
+            /** @description Contact email, if any. */
+            email: string | null;
+            /**
+             * Format: uuid
+             * @description Parking lot id (uuid).
+             */
+            id: string;
+            /** @description Registered legal/company name, if any. */
+            legalName: string | null;
+            /** @description Display name of the parking lot. */
+            name: string;
+            /** @description Contact phone, if any. */
+            phone: string | null;
+            /**
+             * @description Operational status: `active` or `maintenance`.
+             * @enum {string}
+             */
+            status: "active" | "maintenance";
+        };
         PaymentMethodSummaryDto: {
             /**
              * @description Whether the method is currently enabled for the entity.
@@ -1331,6 +1627,13 @@ export interface components {
              */
             isDefault?: boolean;
         };
+        UpdateAdminUserDto: {
+            /**
+             * @description New global platform role.
+             * @enum {string}
+             */
+            role: "admin" | "user";
+        };
         UpdateApplicationDto: {
             /**
              * @description Address of the parking lot.
@@ -1411,6 +1714,33 @@ export interface components {
              * @example +54 11 5555-1234
              */
             phone?: string;
+        };
+        UpdateMembershipDto: {
+            /**
+             * @description New role at this parking lot: `owner` or `operator`.
+             * @enum {string}
+             */
+            role: "owner" | "operator";
+        };
+        UpdateParkingDto: {
+            /** @description Street address. */
+            address?: string;
+            /** @description Tax id (CUIT). */
+            cuit?: string;
+            /** @description Contact email. */
+            email?: string;
+            /** @description Registered legal/company name. */
+            legalName?: string;
+            /** @description Display name of the parking lot. */
+            name?: string;
+            /** @description Contact phone. */
+            phone?: string;
+            /**
+             * @description Initial operational status. Defaults to `active`.
+             * @default active
+             * @enum {string}
+             */
+            status: "active" | "maintenance";
         };
         UpdateRateDto: {
             /**
@@ -1812,6 +2142,665 @@ export interface operations {
             };
             /** @description Application is not in `pending_review` (already approved/rejected or still a draft) and cannot be reviewed (`ONBOARDING_INVALID_STATE`). */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    adminParkingsList: {
+        parameters: {
+            query?: {
+                /** @description 1-based page number. */
+                page?: number;
+                /** @description Number of items per page (capped at 100). */
+                pageSize?: number;
+                /** @description Case-insensitive search matched against the parking name and address. Powers both the inventory table and the membership autocomplete. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedParkingsDto"];
+                };
+            };
+            /** @description Invalid pagination/search query. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Authenticated caller does not hold the `admin` role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    adminParkingsCreate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateParkingDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParkingDto"];
+                };
+            };
+            /** @description Invalid payload (e.g. missing `name`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Authenticated caller does not hold the `admin` role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    adminParkingsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parking lot id (uuid). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParkingDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Authenticated caller does not hold the `admin` role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description No parking lot exists for the given id (`PARKING_NOT_FOUND`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    adminParkingsDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parking lot id (uuid). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Parking lot deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Authenticated caller does not hold the `admin` role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description No parking lot exists for the given id (`PARKING_NOT_FOUND`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    adminParkingsUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parking lot id (uuid). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateParkingDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParkingDto"];
+                };
+            };
+            /** @description Invalid payload. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Authenticated caller does not hold the `admin` role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description No parking lot exists for the given id (`PARKING_NOT_FOUND`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    adminUsersList: {
+        parameters: {
+            query?: {
+                /** @description 1-based page number. */
+                page?: number;
+                /** @description Number of items per page (capped at 100). */
+                pageSize?: number;
+                /** @description Case-insensitive search matched against the user name and email. */
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedUsersDto"];
+                };
+            };
+            /** @description Invalid pagination/search query. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Authenticated caller does not hold the `admin` role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    adminUsersGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User id (uuid). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserDetailDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Authenticated caller does not hold the `admin` role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description No user exists for the given id (`USER_NOT_FOUND`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    adminUsersDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User id (uuid). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description User deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Authenticated caller does not hold the `admin` role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description No user exists for the given id (`USER_NOT_FOUND`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    adminUsersUpdateRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User id (uuid). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAdminUserDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserDto"];
+                };
+            };
+            /** @description Invalid payload (e.g. unknown role). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Authenticated caller does not hold the `admin` role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description No user exists for the given id (`USER_NOT_FOUND`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    adminUsersAddMembership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User id (uuid). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMembershipDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserMembershipDto"];
+                };
+            };
+            /** @description Invalid payload. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Authenticated caller does not hold the `admin` role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The user (`USER_NOT_FOUND`) or the parking lot (`PARKING_NOT_FOUND`) does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The user already has a membership at this parking lot (`MEMBERSHIP_ALREADY_EXISTS`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    adminUsersRemoveMembership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User id (uuid). */
+                id: string;
+                /** @description Parking lot id (uuid). */
+                parkingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Membership removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Authenticated caller does not hold the `admin` role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The user has no membership at the given parking lot (`MEMBERSHIP_NOT_FOUND`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    adminUsersUpdateMembership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description User id (uuid). */
+                id: string;
+                /** @description Parking lot id (uuid). */
+                parkingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMembershipDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserMembershipDto"];
+                };
+            };
+            /** @description Invalid payload. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Authenticated caller does not hold the `admin` role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The user has no membership at the given parking lot (`MEMBERSHIP_NOT_FOUND`). */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
