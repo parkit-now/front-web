@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import type { Bay, BayType } from '../../../../types/api';
 import { normalizePatente } from '../../../../shared/utils/fmt';
 import { VehicleCard } from './VehicleCard';
-import { ZoneTabs } from './ZoneTabs';
 import { BayDrawer } from './BayDrawer';
 import { EmptyState } from '../../../../shared/components/ui/EmptyState';
 import { IconSearch, IconCar } from '../../../../shared/components/icons';
@@ -15,7 +14,6 @@ type StatusFilter = 'all' | 'overdue' | 'reserved';
 type TypeFilter = 'all' | BayType;
 
 export function LiveMonitor({ bays }: LiveMonitorProps) {
-  const [activeZone, setActiveZone] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
@@ -27,9 +25,6 @@ export function LiveMonitor({ bays }: LiveMonitorProps) {
   const filteredBays = useMemo(() => {
     let result = bays.filter((b) => b.status !== 'vacant');
 
-    if (activeZone !== 'all') {
-      result = result.filter((b) => b.zona === activeZone);
-    }
     if (statusFilter === 'overdue') {
       result = result.filter((b) => b.status === 'overdue');
     } else if (statusFilter === 'reserved') {
@@ -55,25 +50,11 @@ export function LiveMonitor({ bays }: LiveMonitorProps) {
     });
 
     return result;
-  }, [bays, activeZone, statusFilter, typeFilter, searchQuery]);
+  }, [bays, statusFilter, typeFilter, searchQuery]);
 
-  const overdueBaysZone = bays.filter(
-    (b) =>
-      b.status === 'overdue' && (activeZone === 'all' || b.zona === activeZone),
-  );
-  const reservedBaysZone = bays.filter(
-    (b) =>
-      b.status === 'reserved' &&
-      (activeZone === 'all' || b.zona === activeZone),
-  );
+  const overdueCount = overdueBays.length;
+  const reservedCount = bays.filter((b) => b.status === 'reserved').length;
   const freeBays = bays.filter((b) => b.status === 'vacant').length;
-
-  function handleZoneChange(zone: string) {
-    setActiveZone(zone);
-    setSearchQuery('');
-    setStatusFilter('all');
-    setTypeFilter('all');
-  }
 
   return (
     <>
@@ -151,12 +132,6 @@ export function LiveMonitor({ bays }: LiveMonitorProps) {
         </div>
 
         <div style={{ padding: '16px 20px 0' }}>
-          <ZoneTabs
-            bays={bays}
-            activeZone={activeZone}
-            onZoneChange={handleZoneChange}
-          />
-
           {/* Search + status filters */}
           <div
             style={{
@@ -208,8 +183,8 @@ export function LiveMonitor({ bays }: LiveMonitorProps) {
                 {f === 'all'
                   ? 'Todos'
                   : f === 'overdue'
-                    ? `Excedidos (${overdueBaysZone.length})`
-                    : `Con reserva (${reservedBaysZone.length})`}
+                    ? `Excedidos (${overdueCount})`
+                    : `Con reserva (${reservedCount})`}
               </button>
             ))}
           </div>
@@ -258,7 +233,7 @@ export function LiveMonitor({ bays }: LiveMonitorProps) {
               title={
                 searchQuery
                   ? `No encontramos vehículos con patente "${searchQuery}"`
-                  : 'No hay vehículos en esta zona'
+                  : 'No hay vehículos para este filtro'
               }
               description={
                 searchQuery ? 'Revisá la patente o borrá el filtro' : undefined

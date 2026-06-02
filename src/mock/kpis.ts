@@ -68,8 +68,41 @@ const KPI_BY_SUCURSAL: Record<string, KpiSnapshot> = {
   },
 };
 
-const DEFAULT_KPI: KpiSnapshot = KPI_BY_SUCURSAL['palermo'];
+// Stable hash so an arbitrary lot id (e.g. a real tenant UUID) yields its own
+// reproducible snapshot instead of every lot sharing one mock.
+function hashId(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) {
+    h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  return h;
+}
+
+function buildKpiSnapshot(sucursalId: string): KpiSnapshot {
+  const h = hashId(sucursalId);
+  const total = 80 + (h % 240); // 80..319 spots
+  const ocupacion_pct = 40 + (h % 56); // 40..95 %
+  const ocupadas = Math.round((total * ocupacion_pct) / 100);
+  const ingresos_dia = 80_000 + (h % 350) * 1000;
+  const ingresos_mes = ingresos_dia * 26;
+  const base = 18 + (h % 20);
+  const sparkline_data = Array.from(
+    { length: 16 },
+    (_, i) => base + ((h >> i) % 12) + i,
+  );
+  return {
+    sucursal_id: sucursalId,
+    ocupacion_pct,
+    ocupadas,
+    total,
+    ingresos_dia,
+    ingresos_dia_delta_pct: (h % 21) - 10, // -10..10 %
+    ingresos_mes,
+    ingresos_mes_proyectado: Math.round(ingresos_mes * 1.15),
+    sparkline_data,
+  };
+}
 
 export function getKpisBySucursal(sucursalId: string): KpiSnapshot {
-  return KPI_BY_SUCURSAL[sucursalId] ?? DEFAULT_KPI;
+  return KPI_BY_SUCURSAL[sucursalId] ?? buildKpiSnapshot(sucursalId);
 }

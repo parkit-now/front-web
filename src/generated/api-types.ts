@@ -65,7 +65,7 @@ export interface paths {
          * Approve an onboarding application and provision the entity
          * @description Approves a submitted application and atomically provisions the entity (tenant). In a single transaction it:
          *
-         *     - materializes the declared entity as a real parking lot (tenant), with an initial `General` zone carrying the declared car/motorcycle/bicycle spot counts;
+         *     - materializes the declared entity as a real parking lot (tenant), storing the declared car/motorcycle/bicycle spot counts in its settings capacity;
          *     - grants the applicant an `owner` membership on the created entity;
          *     - creates the system payment methods (`mp_transfer` as default, `cash`), which are non-deletable but can be disabled;
          *     - marks the application `approved` (linking the created `tenantId`) and records the audit trail.
@@ -168,7 +168,7 @@ export interface paths {
         post?: never;
         /**
          * Delete a parking lot
-         * @description Permanently deletes the parking lot. Dependent data (memberships, zones, rates, entries and payment methods) is removed by cascade.
+         * @description Permanently deletes the parking lot. Dependent data (memberships, rates, entries and payment methods) is removed by cascade.
          */
         delete: operations["adminParkingsDelete"];
         options?: never;
@@ -548,6 +548,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tenants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the caller's entities (parking lots)
+         * @description Returns the entities (tenants / parking lots) the authenticated caller belongs to, each with the per-entity role (`owner | operator`), ordered by name.
+         *
+         *     This powers the lot switcher: the owner panel calls `GET /tenants?role=owner` to list only the lots they manage. Use `GET /tenants/:tenantId` for the full profile of the active lot.
+         *
+         *     Admins bypass membership and therefore have no memberships here — they get an empty list.
+         */
+        get: operations["tenantsListMine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tenants/{tenantId}": {
         parameters: {
             query?: never;
@@ -569,9 +593,9 @@ export interface paths {
         head?: never;
         /**
          * Update the entity profile
-         * @description Edits the editable fields of the entity profile (`name`, `legalName`, `cuit`, `email`, `phone`, `address`).
+         * @description Edits the editable fields of the entity profile (`name`, `legalName`, `cuit`, `email`, `phone`, `address`, `status`) and its per-vehicle-type spot `capacity`.
          *
-         *     Every change is written to the audit trail. Requires the caller to be an `owner` of the entity (platform admins bypass the role check).
+         *     Use `status: maintenance` to take the lot offline. `capacity` is merged: only the supplied vehicle types change. Every change is written to the audit trail. Requires the caller to be an `owner` of the entity (platform admins bypass the role check).
          */
         patch: operations["entitiesUpdateProfile"];
         trace?: never;
@@ -709,70 +733,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/tenants/{tenantId}/zones": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List the zones of a parking lot
-         * @description Returns every zone configured for the `:tenantId` parking lot, ordered by creation date.
-         *
-         *     A **zone** groups parking spot counts by vehicle type (`carSpots`, `motorcycleSpots`, `bicycleSpots`) inside a single parking lot. It models configuration only — the individual operational spot is out of scope here.
-         *
-         *     **Tenant isolation:** the response only contains zones of parking lots the caller belongs to; zones of other lots are never returned.
-         */
-        get: operations["zonesList"];
-        put?: never;
-        /**
-         * Create a zone in a parking lot
-         * @description Creates a new zone in the `:tenantId` parking lot with its per-vehicle-type spot counts (`carSpots`, `motorcycleSpots`, `bicycleSpots`). Any count omitted from the payload defaults to `0`.
-         *
-         *     A **zone** is configuration only: it declares how many spots of each vehicle type the lot offers, not the individual operational spots.
-         *
-         *     **Tenant isolation:** the zone is bound to the `:tenantId` the caller is operating on; the tenant is injected automatically and is never part of the request body.
-         */
-        post: operations["zonesCreate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/tenants/{tenantId}/zones/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /**
-         * Delete a zone of a parking lot
-         * @description Deletes a zone from the `:tenantId` parking lot and returns the `id` of the removed zone.
-         *
-         *     A **zone** is configuration only — removing it drops the per-vehicle-type spot counts it grouped, without touching individual operational spots.
-         *
-         *     **Tenant isolation:** only zones belonging to a parking lot the caller is a member of can be deleted; zones of other lots are reported as not found.
-         */
-        delete: operations["zonesRemove"];
-        options?: never;
-        head?: never;
-        /**
-         * Update a zone of a parking lot
-         * @description Partially updates a zone of the `:tenantId` parking lot. Only the provided fields are changed; the `name` and the per-vehicle-type spot counts (`carSpots`, `motorcycleSpots`, `bicycleSpots`) can be adjusted.
-         *
-         *     A **zone** is configuration only — it groups spot counts by vehicle type and does not model individual operational spots.
-         *
-         *     **Tenant isolation:** only zones belonging to a parking lot the caller is a member of can be updated; zones of other lots are reported as not found.
-         */
-        patch: operations["zonesUpdate"];
         trace?: never;
     };
     "/vehicles": {
@@ -1057,12 +1017,12 @@ export interface components {
              */
             address: string;
             /**
-             * @description Declared bicycle spots (materialized into the initial zone).
+             * @description Declared bicycle spots (stored in the tenant settings capacity).
              * @example 10
              */
             bicycleSpots?: number;
             /**
-             * @description Declared car spots (materialized into the initial zone).
+             * @description Declared car spots (stored in the tenant settings capacity).
              * @example 80
              */
             carSpots?: number;
@@ -1083,7 +1043,7 @@ export interface components {
              */
             legalName: string;
             /**
-             * @description Declared motorcycle spots (materialized into the initial zone).
+             * @description Declared motorcycle spots (stored in the tenant settings capacity).
              * @example 20
              */
             motorcycleSpots?: number;
@@ -1163,31 +1123,6 @@ export interface components {
             stayPriceArs: number;
         };
         CreateVehicleDto: Record<string, never>;
-        CreateZoneDto: {
-            /**
-             * @description Number of bicycle spots configured for this zone.
-             * @default 0
-             * @example 6
-             */
-            bicycleSpots: number;
-            /**
-             * @description Number of car spots configured for this zone.
-             * @default 0
-             * @example 40
-             */
-            carSpots: number;
-            /**
-             * @description Number of motorcycle spots configured for this zone.
-             * @default 0
-             * @example 10
-             */
-            motorcycleSpots: number;
-            /**
-             * @description Human-readable name of the zone within the parking lot.
-             * @example Ground floor
-             */
-            name: string;
-        };
         DocumentSignedUrlDto: {
             /**
              * @description Seconds the signed URL remains valid.
@@ -1200,12 +1135,31 @@ export interface components {
              */
             url: string;
         };
+        EntityCapacityDto: {
+            /**
+             * @description Number of bicycle spots.
+             * @example 10
+             */
+            bicycleSpots: number;
+            /**
+             * @description Number of car spots.
+             * @example 80
+             */
+            carSpots: number;
+            /**
+             * @description Number of motorcycle spots.
+             * @example 20
+             */
+            motorcycleSpots: number;
+        };
         EntityProfileDto: {
             /**
              * @description Address, or `null` if not provided.
              * @example Av. Corrientes 1234, CABA
              */
             address: string | null;
+            /** @description Per-vehicle-type spot capacity of the lot. Defaults to zeros when not configured. */
+            capacity: components["schemas"]["EntityCapacityDto"];
             /**
              * @description ISO-8601 UTC timestamp of creation.
              * @example 2026-05-19T11:00:00.000Z
@@ -1251,6 +1205,27 @@ export interface components {
              * @enum {string}
              */
             status: "active" | "maintenance";
+        };
+        EntitySummaryDto: {
+            /** @description Street address of the entity, or `null` if not provided. */
+            address: string | null;
+            /** @description Display name of the entity (parking lot). */
+            name: string;
+            /**
+             * @description Per-entity role of the caller in this tenant.
+             * @enum {string}
+             */
+            role: "owner" | "operator";
+            /**
+             * @description Operational status of the entity.
+             * @enum {string}
+             */
+            status: "active" | "maintenance";
+            /**
+             * Format: uuid
+             * @description Entity (tenant) id.
+             */
+            tenantId: string;
         };
         ForgotPasswordDto: {
             /**
@@ -1641,12 +1616,12 @@ export interface components {
              */
             address?: string;
             /**
-             * @description Declared bicycle spots (materialized into the initial zone).
+             * @description Declared bicycle spots (stored in the tenant settings capacity).
              * @example 10
              */
             bicycleSpots?: number;
             /**
-             * @description Declared car spots (materialized into the initial zone).
+             * @description Declared car spots (stored in the tenant settings capacity).
              * @example 80
              */
             carSpots?: number;
@@ -1667,7 +1642,7 @@ export interface components {
              */
             legalName?: string;
             /**
-             * @description Declared motorcycle spots (materialized into the initial zone).
+             * @description Declared motorcycle spots (stored in the tenant settings capacity).
              * @example 20
              */
             motorcycleSpots?: number;
@@ -1682,12 +1657,31 @@ export interface components {
              */
             phone?: string;
         };
+        UpdateEntityCapacityDto: {
+            /**
+             * @description Number of bicycle spots.
+             * @example 10
+             */
+            bicycleSpots?: number;
+            /**
+             * @description Number of car spots.
+             * @example 80
+             */
+            carSpots?: number;
+            /**
+             * @description Number of motorcycle spots.
+             * @example 20
+             */
+            motorcycleSpots?: number;
+        };
         UpdateEntityProfileDto: {
             /**
              * @description New address of the entity.
              * @example Av. Corrientes 1000, Buenos Aires
              */
             address?: string;
+            /** @description New per-vehicle-type spot capacity. Only the provided types are updated; the rest keep their current value. */
+            capacity?: components["schemas"]["UpdateEntityCapacityDto"];
             /**
              * @description New CUIT (Argentine tax id), 11 digits.
              * @example 30123456789
@@ -1714,6 +1708,12 @@ export interface components {
              * @example +54 11 5555-1234
              */
             phone?: string;
+            /**
+             * @description New operational status. Use `maintenance` to take the lot offline.
+             * @example active
+             * @enum {string}
+             */
+            status?: "active" | "maintenance";
         };
         UpdateMembershipDto: {
             /**
@@ -1766,28 +1766,6 @@ export interface components {
              */
             stayPriceArs?: number;
         };
-        UpdateZoneDto: {
-            /**
-             * @description New number of bicycle spots for this zone.
-             * @example 6
-             */
-            bicycleSpots?: number;
-            /**
-             * @description New number of car spots for this zone.
-             * @example 40
-             */
-            carSpots?: number;
-            /**
-             * @description New number of motorcycle spots for this zone.
-             * @example 10
-             */
-            motorcycleSpots?: number;
-            /**
-             * @description New name for the zone.
-             * @example Ground floor
-             */
-            name?: string;
-        };
         UserDto: {
             /** Format: date-time */
             createdAt: string;
@@ -1839,18 +1817,6 @@ export interface components {
             title: string;
             /** @description Field-level breakdown of the validation failures. */
             validationsErrors: components["schemas"]["ValidationFieldErrorDto"][];
-        };
-        ZoneDto: {
-            /** Format: int32 */
-            bicycleSpots: number;
-            /** Format: int32 */
-            carSpots: number;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: int32 */
-            motorcycleSpots: number;
-            /** Format: date-time */
-            updatedAt: string;
         };
     };
     responses: never;
@@ -3367,6 +3333,46 @@ export interface operations {
             };
         };
     };
+    tenantsListMine: {
+        parameters: {
+            query?: {
+                /** @description Return only entities where the caller holds this per-entity role. Returns all memberships when omitted. */
+                role?: "owner" | "operator";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntitySummaryDto"][];
+                };
+            };
+            /** @description Invalid query (e.g. unknown `role`). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
     entitiesGetProfile: {
         parameters: {
             query?: never;
@@ -3814,213 +3820,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RateChangesResponseDto"];
-                };
-            };
-        };
-    };
-    zonesList: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description ID of the parking lot (tenant) the zone belongs to. */
-                tenantId: unknown;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ZoneDto"][];
-                };
-            };
-            /** @description Missing, malformed, or expired bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description The caller is authenticated but is not a member of the `:tenantId` parking lot, so its zones are out of reach. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    zonesCreate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description ID of the parking lot (tenant) the zone belongs to. */
-                tenantId: unknown;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateZoneDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ZoneDto"];
-                };
-            };
-            /** @description Invalid payload (missing name, negative or non-integer spot counts, etc.). */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
-                };
-            };
-            /** @description Missing, malformed, or expired bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description The caller is authenticated but is not a member of the `:tenantId` parking lot, so its zones are out of reach. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    zonesRemove: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description ID of the zone to delete. */
-                id: string;
-                /** @description ID of the parking lot (tenant) the zone belongs to. */
-                tenantId: unknown;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The zone was deleted; the response carries the deleted zone `id`. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Missing, malformed, or expired bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description The caller is authenticated but is not a member of the `:tenantId` parking lot, so its zones are out of reach. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description No zone with `:id` exists within the `:tenantId` parking lot (`ZONE_NOT_FOUND`). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    zonesUpdate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description ID of the zone to update. */
-                id: string;
-                /** @description ID of the parking lot (tenant) the zone belongs to. */
-                tenantId: unknown;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateZoneDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ZoneDto"];
-                };
-            };
-            /** @description Invalid payload (negative or non-integer spot counts, etc.). */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
-                };
-            };
-            /** @description Missing, malformed, or expired bearer token. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description The caller is authenticated but is not a member of the `:tenantId` parking lot, so its zones are out of reach. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description No zone with `:id` exists within the `:tenantId` parking lot (`ZONE_NOT_FOUND`). */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
         };

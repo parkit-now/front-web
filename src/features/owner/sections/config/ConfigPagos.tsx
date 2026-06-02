@@ -1,73 +1,83 @@
-import { useState } from 'react';
-import type { MedioPago } from '../../../../types/api';
-import { MEDIOS_PAGO } from '../../../../mock/zonas';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Switch } from '../../../../shared/components/ui/Switch';
 import { Badge } from '../../../../shared/components/ui/Badge';
 import { Button } from '../../../../shared/components/ui/Button';
-import { IconPlus } from '../../../../shared/components/icons';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
-
-let _newIdCounter = 1;
+import { translateApiError } from '../../../../lib/api/translate';
+import { useSucursal } from '../../context/SucursalContext';
+import {
+  listPaymentMethods,
+  togglePaymentMethod,
+  type PaymentMethodSummary,
+  type TogglePaymentMethodInput,
+} from '../../services/entities';
 
 export function ConfigPagos() {
   const { showToast } = useToast();
-  const [medios, setMedios] = useState<MedioPago[]>(MEDIOS_PAGO);
+  const { sucursalId } = useSucursal();
+  const queryClient = useQueryClient();
 
-  function toggleActivo(id: string) {
-    const medio = medios.find((m) => m.id === id);
-    if (!medio) return;
-    if (medio.es_default && medio.activo) {
+  const queryKey = ['payment-methods', sucursalId];
+  const { data: medios = [], isLoading } = useQuery({
+    queryKey,
+    queryFn: () => listPaymentMethods(sucursalId),
+    enabled: Boolean(sucursalId),
+  });
+
+  const mutation = useMutation({
+    mutationFn: ({
+      id,
+      body,
+    }: {
+      id: string;
+      body: TogglePaymentMethodInput;
+    }) => togglePaymentMethod(sucursalId, id, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (error) => {
       showToast({
-        message: 'No podés desactivar un medio de pago predeterminado.',
+        message: translateApiError(error, { endpoint: 'entities.payment' }),
+        kind: 'error',
+      });
+    },
+  });
+
+  function handleToggleEnabled(m: PaymentMethodSummary) {
+    if (m.isDefault && m.enabled) {
+      showToast({
+        message: 'No podés desactivar el medio de pago predeterminado.',
         kind: 'error',
       });
       return;
     }
-    setMedios((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, activo: !m.activo } : m)),
+    mutation.mutate({ id: m.id, body: { enabled: !m.enabled } });
+  }
+
+  function handleMakeDefault(m: PaymentMethodSummary) {
+    mutation.mutate({ id: m.id, body: { isDefault: true } });
+  }
+
+  if (isLoading) {
+    return (
+      <p style={{ color: 'var(--text-3)', fontSize: 14 }}>
+        Cargando medios de pago...
+      </p>
     );
-  }
-
-  function addMedio() {
-    const id = `nuevo-${_newIdCounter++}`;
-    setMedios((prev) => [
-      ...prev,
-      { id, nombre: 'Nuevo medio de pago', activo: false, es_default: false },
-    ]);
-  }
-
-  function updateNombre(id: string, nombre: string) {
-    setMedios((prev) => prev.map((m) => (m.id === id ? { ...m, nombre } : m)));
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div
+      <h2
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          margin: 0,
+          fontSize: 16,
+          fontWeight: 600,
+          color: 'var(--text-1)',
         }}
       >
-        <h2
-          style={{
-            margin: 0,
-            fontSize: 16,
-            fontWeight: 600,
-            color: 'var(--text-1)',
-          }}
-        >
-          Medios de pago
-        </h2>
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<IconPlus size={14} />}
-          onClick={addMedio}
-        >
-          Agregar medio
-        </Button>
-      </div>
+        Medios de pago
+      </h2>
 
       <div className="pk-card" style={{ overflow: 'hidden' }}>
         {medios.map((medio, i) => (
@@ -91,34 +101,35 @@ export function ConfigPagos() {
                 minWidth: 0,
               }}
             >
-              {medio.es_default ? (
-                <span
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 500,
-                    color: 'var(--text-1)',
-                  }}
+              <span
+                style={{
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: 'var(--text-1)',
+                }}
+              >
+                {medio.name}
+              </span>
+              {medio.isDefault && <Badge variant="brand">Por defecto</Badge>}
+              {!medio.isDefault && medio.enabled && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleMakeDefault(medio)}
+                  disabled={mutation.isPending}
                 >
-                  {medio.nombre}
-                </span>
-              ) : (
-                <input
-                  className="pk-input"
-                  style={{ maxWidth: 300, fontSize: 14 }}
-                  value={medio.nombre}
-                  onChange={(e) => updateNombre(medio.id, e.target.value)}
-                />
+                  Hacer predeterminado
+                </Button>
               )}
-              {medio.es_default && <Badge variant="brand">Por defecto</Badge>}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 13, color: 'var(--text-3)' }}>
-                {medio.activo ? 'Activo' : 'Inactivo'}
+                {medio.enabled ? 'Activo' : 'Inactivo'}
               </span>
               <Switch
-                checked={medio.activo}
-                onChange={() => toggleActivo(medio.id)}
-                aria-label={`Toggle ${medio.nombre}`}
+                checked={medio.enabled}
+                onChange={() => handleToggleEnabled(medio)}
+                aria-label={`Toggle ${medio.name}`}
               />
             </div>
           </div>

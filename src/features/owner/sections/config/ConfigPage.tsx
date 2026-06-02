@@ -1,14 +1,12 @@
 import { useState } from 'react';
 import { ConfigPerfil } from './ConfigPerfil';
-import { ConfigZonas } from './ConfigZonas';
 import { ConfigPagos } from './ConfigPagos';
 import { ConfigBilling } from './ConfigBilling';
 
-type Tab = 'perfil' | 'zonas' | 'pagos' | 'facturacion';
+type Tab = 'perfil' | 'pagos' | 'facturacion';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'perfil', label: 'Perfil' },
-  { id: 'zonas', label: 'Zonas y plazas' },
   { id: 'pagos', label: 'Medios de pago' },
   { id: 'facturacion', label: 'Facturación' },
 ];
@@ -71,7 +69,6 @@ export function ConfigPage() {
       {/* Content area */}
       <div style={{ flex: 1, minWidth: 0 }}>
         {tab === 'perfil' && <ConfigPerfil />}
-        {tab === 'zonas' && <ConfigZonas />}
         {tab === 'pagos' && <ConfigPagos />}
         {tab === 'facturacion' && <ConfigBilling />}
       </div>

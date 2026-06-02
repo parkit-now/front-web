@@ -15,7 +15,9 @@ export function DashboardPage() {
       <SectionHeader
         title="Monitoreo en vivo"
         subtitle={
-          sucursal ? `${sucursal.nombre} · ${sucursal.direccion}` : undefined
+          sucursal
+            ? [sucursal.nombre, sucursal.direccion].filter(Boolean).join(' · ')
+            : undefined
         }
       />
       <KpiCards kpis={kpis} loading={kpisLoading} />

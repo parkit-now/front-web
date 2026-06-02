@@ -4,7 +4,6 @@ import { LandingPage } from './features/landing/components/LandingPage';
 import { AuthPage } from './features/auth/AuthPage';
 import { OnboardingPage } from './features/onboarding/components/OnboardingPage';
 import { DashboardPage } from './features/owner/sections/dashboard/DashboardPage';
-import { EstacionamientosPage } from './features/owner/sections/estacionamientos/EstacionamientosPage';
 import { PersonalPage } from './features/owner/sections/personal/PersonalPage';
 import { EstadisticasPage } from './features/owner/sections/estadisticas/EstadisticasPage';
 import { TransaccionesPage } from './features/owner/sections/transacciones/TransaccionesPage';
@@ -72,7 +71,6 @@ export const router = createBrowserRouter([
     children: [
       { index: true, loader: () => redirect('/app/dashboard') },
       { path: 'dashboard', element: <DashboardPage /> },
-      { path: 'estacionamientos', element: <EstacionamientosPage /> },
       { path: 'personal', element: <PersonalPage /> },
       { path: 'estadisticas', element: <EstadisticasPage /> },
       { path: 'transacciones', element: <TransaccionesPage /> },
