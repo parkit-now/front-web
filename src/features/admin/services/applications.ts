@@ -5,6 +5,9 @@ import { getSession } from '../../../lib/supabase/session';
 export type ApplicationSummary = components['schemas']['ApplicationDto'];
 export type ApplicationDetail = components['schemas']['ApplicationDetailDto'];
 export type ApplicationStatus = ApplicationSummary['status'];
+export type ApplicationDocument = ApplicationDetail['documents'][number];
+export type DocumentSignedUrl = components['schemas']['DocumentSignedUrlDto'];
+export type DocumentDisposition = 'inline' | 'attachment';
 
 /**
  * Typed view of `ApplicationDetail.declaredEntity` (an opaque JSON snapshot).
@@ -57,6 +60,22 @@ export async function getApplicationDetail(
   return apiRequest<ApplicationDetail>({
     method: 'GET',
     path: `/admin/applications/${id}`,
+    bearer: await bearer(),
+  });
+}
+
+/**
+ * GET /admin/applications/:id/documents/:documentId/signed-url — short-lived
+ * signed URL to preview (`inline`) or download (`attachment`) a document.
+ */
+export async function getDocumentSignedUrl(
+  applicationId: string,
+  documentId: string,
+  disposition: DocumentDisposition = 'inline',
+): Promise<DocumentSignedUrl> {
+  return apiRequest<DocumentSignedUrl>({
+    method: 'GET',
+    path: `/admin/applications/${applicationId}/documents/${documentId}/signed-url?disposition=${disposition}`,
     bearer: await bearer(),
   });
 }
