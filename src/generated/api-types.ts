@@ -81,6 +81,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/applications/{id}/documents/{documentId}/signed-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mint a signed URL to preview or download an application document
+         * @description Returns a short-lived signed URL (5 minutes) pointing at the document binary in Supabase Storage, so the reviewer can preview it inline or download it.
+         *
+         *     Documents live in a private bucket whose RLS only authorizes the owning applicant; this endpoint mints the URL server-side with the service role, which bypasses RLS.
+         *
+         *     **`disposition`.** `inline` (default) lets the browser render the file (preview); `attachment` forces a download named after the original file.
+         */
+        get: operations["adminApplicationsDocumentSignedUrl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/applications/{id}/reject": {
         parameters: {
             query?: never;
@@ -933,6 +957,18 @@ export interface components {
              */
             name: string;
         };
+        DocumentSignedUrlDto: {
+            /**
+             * @description Seconds the signed URL remains valid.
+             * @example 300
+             */
+            expiresIn: number;
+            /**
+             * @description Time-limited signed URL pointing at the document binary in Supabase Storage.
+             * @example https://project.supabase.co/storage/v1/object/sign/application-documents/applications/3f2504e0/docs/habilitacion.pdf?token=...
+             */
+            url: string;
+        };
         EntityProfileDto: {
             /**
              * @description Address, or `null` if not provided.
@@ -1642,6 +1678,69 @@ export interface operations {
             };
             /** @description Application is not in `pending_review` (already approved/rejected or still a draft) and cannot be reviewed (`ONBOARDING_INVALID_STATE`). */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    adminApplicationsDocumentSignedUrl: {
+        parameters: {
+            query?: {
+                /** @description Content disposition of the signed URL. Defaults to `inline` (preview). */
+                disposition?: "inline" | "attachment";
+            };
+            header?: never;
+            path: {
+                /** @description Application document id (uuid). */
+                documentId: string;
+                /** @description Onboarding application id (uuid). */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentSignedUrlDto"];
+                };
+            };
+            /** @description Invalid `disposition` query value. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Authenticated caller does not hold the `admin` role. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description No document with the given id exists for the given application. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

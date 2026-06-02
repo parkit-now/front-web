@@ -9,6 +9,7 @@ import { useToast } from '../../../lib/notifications/ToastProvider';
 import {
   approveApplication,
   getApplicationDetail,
+  getDocumentSignedUrl,
   listApplications,
   rejectApplication,
   type ApplicationDetail,
@@ -32,6 +33,29 @@ export function useApplicationDetail(id: string | null) {
     queryKey: [...ADMIN_APPLICATIONS_KEY, 'detail', id],
     queryFn: () => getApplicationDetail(id as string),
     enabled: id !== null,
+  });
+}
+
+/**
+ * Lazily fetches an inline signed URL for previewing a document. Enabled only
+ * while the preview is open; the short `staleTime` avoids reusing an expired URL.
+ */
+export function useDocumentPreviewUrl(
+  applicationId: string | null,
+  documentId: string | null,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: [...ADMIN_APPLICATIONS_KEY, 'doc-url', applicationId, documentId],
+    queryFn: () =>
+      getDocumentSignedUrl(
+        applicationId as string,
+        documentId as string,
+        'inline',
+      ),
+    enabled: enabled && applicationId !== null && documentId !== null,
+    staleTime: 4 * 60 * 1000,
+    gcTime: 4 * 60 * 1000,
   });
 }
 

@@ -31,7 +31,8 @@ export type EndpointKey =
   | 'admin.applications.list'
   | 'admin.applications.detail'
   | 'admin.applications.approve'
-  | 'admin.applications.reject';
+  | 'admin.applications.reject'
+  | 'admin.applications.document';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;
@@ -68,6 +69,11 @@ const CODE_MESSAGES: Record<string, string> = {
   ONBOARDING_INVALID_STATE:
     'La solicitud no se puede modificar en su estado actual.',
   ONBOARDING_APPLICATION_NOT_FOUND: 'No encontramos la solicitud.',
+  ONBOARDING_DOCUMENT_NOT_FOUND: 'No encontramos el documento.',
+
+  // Storage (Supabase)
+  STORAGE_SIGNED_URL_FAILED:
+    'No pudimos abrir el documento. Intentalo de nuevo.',
 
   // Entidad (tenant) — acceso por membership.
   ENTITY_NOT_FOUND: 'No encontramos el estacionamiento.',

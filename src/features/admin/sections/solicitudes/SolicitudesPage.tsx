@@ -4,14 +4,23 @@ import { Modal } from '../../../../shared/components/ui/Modal';
 import {
   IconCheck,
   IconClose,
+  IconDownload,
+  IconEye,
   IconInbox,
 } from '../../../../shared/components/icons';
+import { translateApiError } from '../../../../lib/api/translate';
+import { useToast } from '../../../../lib/notifications/ToastProvider';
 import {
   useApplicationActions,
   useApplicationDetail,
   useApplicationsList,
 } from '../../hooks/useApplications';
-import { readDeclaredEntity } from '../../services/applications';
+import {
+  getDocumentSignedUrl,
+  readDeclaredEntity,
+  type ApplicationDocument,
+} from '../../services/applications';
+import { DocumentPreviewModal } from './DocumentPreviewModal';
 
 function formatDate(value: string | null): string {
   if (!value) return '—';
@@ -47,6 +56,43 @@ export function SolicitudesPage() {
 
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+
+  const { showToast } = useToast();
+  const [previewDoc, setPreviewDoc] = useState<ApplicationDocument | null>(
+    null,
+  );
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  async function handleDownload(doc: ApplicationDocument) {
+    if (!selectedId) return;
+    setDownloadingId(doc.id);
+    try {
+      const { url } = await getDocumentSignedUrl(
+        selectedId,
+        doc.id,
+        'attachment',
+      );
+      // The signed URL already carries `Content-Disposition: attachment`, so
+      // navigating to it downloads the file with its original name. The anchor
+      // is briefly attached to the DOM because Firefox ignores `click()` on a
+      // detached element.
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.rel = 'noopener noreferrer';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    } catch (error) {
+      showToast({
+        message: translateApiError(error, {
+          endpoint: 'admin.applications.document',
+        }),
+        kind: 'error',
+      });
+    } finally {
+      setDownloadingId(null);
+    }
+  }
 
   // Keep a valid selection as the queue changes (initial load, approve/reject).
   useEffect(() => {
@@ -416,9 +462,39 @@ export function SolicitudesPage() {
                         >
                           <IconCheck size={12} />
                         </span>
-                        <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
+                        <span
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            fontSize: 13,
+                            color: 'var(--text-2)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
                           {doc.name}
                         </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="pk-btn-icon"
+                          icon={<IconEye size={15} />}
+                          aria-label={`Previsualizar ${doc.name}`}
+                          title="Previsualizar"
+                          onClick={() => setPreviewDoc(doc)}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="pk-btn-icon"
+                          icon={<IconDownload size={15} />}
+                          aria-label={`Descargar ${doc.name}`}
+                          title="Descargar"
+                          loading={downloadingId === doc.id}
+                          disabled={downloadingId !== null}
+                          onClick={() => void handleDownload(doc)}
+                        />
                       </div>
                     ))}
                   </div>
@@ -473,6 +549,17 @@ export function SolicitudesPage() {
           </div>
         )}
       </div>
+
+      {/* Document preview modal */}
+      {selectedId && (
+        <DocumentPreviewModal
+          applicationId={selectedId}
+          doc={previewDoc}
+          open={previewDoc !== null}
+          onClose={() => setPreviewDoc(null)}
+          onDownload={(doc) => void handleDownload(doc)}
+        />
+      )}
 
       {/* Reject reason modal */}
       <Modal
