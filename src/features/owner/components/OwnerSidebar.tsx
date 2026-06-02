@@ -3,7 +3,6 @@ import { Logo } from '../../../shared/components/Logo';
 import { Avatar } from '../../../shared/components/Avatar';
 import {
   IconDashboard,
-  IconBuilding,
   IconUsers,
   IconChart,
   IconReceipt,
@@ -23,11 +22,6 @@ const NAV_ITEMS: NavItem[] = [
     path: '/app/dashboard',
     label: 'Monitoreo en vivo',
     icon: <IconDashboard size={18} />,
-  },
-  {
-    path: '/app/estacionamientos',
-    label: 'Estacionamientos',
-    icon: <IconBuilding size={18} />,
   },
   { path: '/app/personal', label: 'Personal', icon: <IconUsers size={18} /> },
   {

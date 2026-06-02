@@ -44,7 +44,11 @@ export type EndpointKey =
   | 'admin.users.delete'
   | 'admin.users.addMembership'
   | 'admin.users.updateMembership'
-  | 'admin.users.removeMembership';
+  | 'admin.users.removeMembership'
+  | 'tenants.list'
+  | 'entities.profile'
+  | 'entities.update'
+  | 'entities.payment';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;

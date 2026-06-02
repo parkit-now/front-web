@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Modal } from '../../../../shared/components/ui/Modal';
 import { Input } from '../../../../shared/components/ui/Input';
 import { Button } from '../../../../shared/components/ui/Button';
-import { SUCURSALES } from '../../../../mock/sucursales';
+import { useSucursal } from '../../context/SucursalContext';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
 
 const ROLES = ['Administrador', 'Supervisor', 'Operador de rampa'] as const;
@@ -14,15 +14,16 @@ interface InviteModalProps {
 
 export function InviteModal({ open, onClose }: InviteModalProps) {
   const { showToast } = useToast();
+  const { sucursales, sucursalId: activeSucursalId } = useSucursal();
   const [email, setEmail] = useState('');
   const [rol, setRol] = useState<string>(ROLES[0]);
-  const [sucursalId, setSucursalId] = useState(SUCURSALES[0].id);
+  const [sucursalId, setSucursalId] = useState(activeSucursalId);
   const [loading, setLoading] = useState(false);
 
   function handleClose() {
     setEmail('');
     setRol(ROLES[0]);
-    setSucursalId(SUCURSALES[0].id);
+    setSucursalId(activeSucursalId);
     onClose();
   }
 
@@ -95,7 +96,7 @@ export function InviteModal({ open, onClose }: InviteModalProps) {
             onChange={(e) => setSucursalId(e.target.value)}
             disabled={loading}
           >
-            {SUCURSALES.map((s) => (
+            {sucursales.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.nombre}
               </option>

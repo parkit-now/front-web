@@ -113,7 +113,7 @@ export function BayDrawer({ bay, onClose }: BayDrawerProps) {
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                Zona {bay.zona}
+                Plaza {bay.id}
               </span>
               {sucursal && (
                 <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
@@ -166,7 +166,10 @@ export function BayDrawer({ bay, onClose }: BayDrawerProps) {
                 label: 'Vehículo',
                 value: `${bay.modelo ?? '—'}${bay.color && bay.color !== '—' ? ` · ${bay.color}` : ''}`,
               },
-              { label: 'Zona', value: `Zona ${bay.zona}` },
+              {
+                label: 'Plaza',
+                value: bay.id,
+              },
               {
                 label: 'Ingreso',
                 value: bay.ingreso_at ? formatTime(bay.ingreso_at) : '—',

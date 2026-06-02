@@ -24,7 +24,6 @@ export interface Sucursal {
 export interface Bay {
   id: string;
   sucursal_id: string;
-  zona: string;
   tipo: BayType;
   status: BayStatus;
   patente: string | null;
@@ -80,14 +79,6 @@ export interface AuditEvent {
   severidad: AuditSeveridad;
   ts: string;
   fecha_label: string;
-}
-
-export interface Zona {
-  id: string;
-  nombre: string;
-  plazas_auto: number;
-  plazas_moto: number;
-  plazas_bici: number;
 }
 
 export interface MedioPago {
