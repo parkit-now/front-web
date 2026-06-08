@@ -882,8 +882,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Enable or disable a service for the active tenant */
-        patch: operations["ServicesController_toggle"];
+        /** Update a service for the active tenant (enabled and/or spots) */
+        patch: operations["ServicesController_update"];
         trace?: never;
     };
     "/tenants/{tenantId}/services/changes": {
@@ -1904,8 +1904,10 @@ export interface components {
         };
         ServiceCatalogItemDto: {
             /** @enum {string} */
-            code: "ADVANCE_RESERVATION" | "VEHICLE_ELECTRIC" | "VEHICLE_BICYCLE" | "VEHICLE_MOTORCYCLE" | "VEHICLE_PICKUP" | "VEHICLE_TRUCK";
+            code: "ADVANCE_RESERVATION" | "VEHICLE_CAR" | "VEHICLE_ELECTRIC" | "VEHICLE_BICYCLE" | "VEHICLE_MOTORCYCLE" | "VEHICLE_PICKUP" | "VEHICLE_TRUCK";
             enabled: boolean;
+            /** @description Spots assigned to this vehicle type (0 for non-vehicle codes). */
+            spots: number;
         };
         ServiceChangesResponseDto: {
             items: components["schemas"]["ServiceDto"][];
@@ -1914,12 +1916,14 @@ export interface components {
         };
         ServiceDto: {
             /** @enum {string} */
-            code: "ADVANCE_RESERVATION" | "VEHICLE_ELECTRIC" | "VEHICLE_BICYCLE" | "VEHICLE_MOTORCYCLE" | "VEHICLE_PICKUP" | "VEHICLE_TRUCK";
+            code: "ADVANCE_RESERVATION" | "VEHICLE_CAR" | "VEHICLE_ELECTRIC" | "VEHICLE_BICYCLE" | "VEHICLE_MOTORCYCLE" | "VEHICLE_PICKUP" | "VEHICLE_TRUCK";
             /** Format: date-time */
             createdAt: string;
             enabled: boolean;
             /** Format: uuid */
             id: string;
+            /** @description Spots assigned to this vehicle type (0 for non-vehicle codes). */
+            spots: number;
             syncSeq: number;
             /** Format: uuid */
             tenantId: string;
@@ -1961,10 +1965,6 @@ export interface components {
             isDefault?: boolean;
             /** @example Naranja X */
             name?: string;
-        };
-        ToggleServiceDto: {
-            /** @description Whether the service is offered by the tenant. */
-            enabled: boolean;
         };
         UpdateAdminUserDto: {
             /**
@@ -2147,6 +2147,15 @@ export interface components {
              * @example 540
              */
             openMinute?: number;
+        };
+        UpdateServiceDto: {
+            /** @description Whether the service/vehicle type is offered by the tenant. */
+            enabled?: boolean;
+            /**
+             * @description Spots assigned to this vehicle type (ignored for non-vehicle codes).
+             * @example 40
+             */
+            spots?: number;
         };
         UserDto: {
             /** Format: date-time */
@@ -4572,7 +4581,7 @@ export interface operations {
             };
         };
     };
-    ServicesController_toggle: {
+    ServicesController_update: {
         parameters: {
             query?: never;
             header?: never;
@@ -4586,7 +4595,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ToggleServiceDto"];
+                "application/json": components["schemas"]["UpdateServiceDto"];
             };
         };
         responses: {

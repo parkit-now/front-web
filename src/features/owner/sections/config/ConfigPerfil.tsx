@@ -20,9 +20,6 @@ interface PerfilForm {
   phone: string;
   address: string;
   status: 'active' | 'maintenance';
-  carSpots: number;
-  motorcycleSpots: number;
-  bicycleSpots: number;
 }
 
 function toForm(p: EntityProfile): PerfilForm {
@@ -34,9 +31,6 @@ function toForm(p: EntityProfile): PerfilForm {
     phone: p.phone ?? '',
     address: p.address ?? '',
     status: p.status,
-    carSpots: p.capacity.carSpots,
-    motorcycleSpots: p.capacity.motorcycleSpots,
-    bicycleSpots: p.capacity.bicycleSpots,
   };
 }
 
@@ -89,30 +83,19 @@ export function ConfigPerfil() {
 
   function textHandler(field: keyof PerfilForm) {
     return (e: React.ChangeEvent<HTMLInputElement>) =>
-      setField(field, e.target.value as PerfilForm[typeof field]);
-  }
-
-  function numberHandler(field: keyof PerfilForm) {
-    return (e: React.ChangeEvent<HTMLInputElement>) => {
-      const n = Number(e.target.value);
-      setField(field, (Number.isFinite(n) && n >= 0 ? n : 0) as never);
-    };
+      setField(field, e.target.value);
   }
 
   function handleSave() {
     if (!form) return;
     // Build the payload, omitting fields the backend would reject when empty.
+    // Per-type spot capacity is configured in the Services tab now.
     const body: UpdateEntityProfileInput = {
       name: form.name,
       legalName: form.legalName,
       phone: form.phone,
       address: form.address,
       status: form.status,
-      capacity: {
-        carSpots: form.carSpots,
-        motorcycleSpots: form.motorcycleSpots,
-        bicycleSpots: form.bicycleSpots,
-      },
     };
     const cuitDigits = form.cuit.replace(/\D/g, '');
     if (cuitDigits.length > 0) body.cuit = cuitDigits;
@@ -205,46 +188,6 @@ export function ConfigPerfil() {
             disabled={busy}
           />
         </div>
-      </div>
-
-      <h3
-        style={{
-          margin: '8px 0 0',
-          fontSize: 14,
-          fontWeight: 600,
-          color: 'var(--text-1)',
-        }}
-      >
-        Plazas por tipo
-      </h3>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-          gap: 16,
-        }}
-      >
-        <Input
-          label="Autos"
-          type="number"
-          value={String(form.carSpots)}
-          onChange={numberHandler('carSpots')}
-          disabled={busy}
-        />
-        <Input
-          label="Motos"
-          type="number"
-          value={String(form.motorcycleSpots)}
-          onChange={numberHandler('motorcycleSpots')}
-          disabled={busy}
-        />
-        <Input
-          label="Bicicletas"
-          type="number"
-          value={String(form.bicycleSpots)}
-          onChange={numberHandler('bicycleSpots')}
-          disabled={busy}
-        />
       </div>
 
       <div

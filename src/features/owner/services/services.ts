@@ -4,6 +4,7 @@ import { getSession } from '../../../lib/supabase/session';
 
 export type ServiceItem = components['schemas']['ServiceCatalogItemDto'];
 export type ServiceCode = ServiceItem['code'];
+export type UpdateServiceInput = components['schemas']['UpdateServiceDto'];
 
 async function bearer(): Promise<string> {
   const session = await getSession();
@@ -22,16 +23,16 @@ export async function listServices(tenantId: string): Promise<ServiceItem[]> {
   });
 }
 
-/** PATCH /tenants/:tenantId/services/:code — owner-only enable/disable. */
-export async function toggleService(
+/** PATCH /tenants/:tenantId/services/:code — owner-only; set enabled and/or spots. */
+export async function updateService(
   tenantId: string,
   code: ServiceCode,
-  enabled: boolean,
+  body: UpdateServiceInput,
 ): Promise<ServiceItem> {
   return apiRequest<ServiceItem>({
     method: 'PATCH',
     path: `/tenants/${tenantId}/services/${code}`,
-    body: { enabled },
+    body,
     bearer: await bearer(),
   });
 }
