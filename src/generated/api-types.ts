@@ -1904,7 +1904,7 @@ export interface components {
         };
         ServiceCatalogItemDto: {
             /** @enum {string} */
-            code: "ADVANCE_RESERVATION" | "VEHICLE_CAR" | "VEHICLE_ELECTRIC" | "VEHICLE_BICYCLE" | "VEHICLE_MOTORCYCLE" | "VEHICLE_PICKUP" | "VEHICLE_TRUCK";
+            code: "ADVANCE_RESERVATION" | "VEHICLE_CAR" | "VEHICLE_BICYCLE" | "VEHICLE_MOTORCYCLE" | "VEHICLE_PICKUP" | "VEHICLE_TRUCK";
             enabled: boolean;
             /** @description Spots assigned to this vehicle type (0 for non-vehicle codes). */
             spots: number;
@@ -1916,7 +1916,7 @@ export interface components {
         };
         ServiceDto: {
             /** @enum {string} */
-            code: "ADVANCE_RESERVATION" | "VEHICLE_CAR" | "VEHICLE_ELECTRIC" | "VEHICLE_BICYCLE" | "VEHICLE_MOTORCYCLE" | "VEHICLE_PICKUP" | "VEHICLE_TRUCK";
+            code: "ADVANCE_RESERVATION" | "VEHICLE_CAR" | "VEHICLE_BICYCLE" | "VEHICLE_MOTORCYCLE" | "VEHICLE_PICKUP" | "VEHICLE_TRUCK";
             /** Format: date-time */
             createdAt: string;
             enabled: boolean;

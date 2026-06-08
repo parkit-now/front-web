@@ -15,7 +15,6 @@ import {
 const SERVICE_LABELS: Record<ServiceCode, string> = {
   ADVANCE_RESERVATION: 'Reserva anticipada',
   VEHICLE_CAR: 'Autos',
-  VEHICLE_ELECTRIC: 'Vehículos eléctricos',
   VEHICLE_BICYCLE: 'Bicicletas',
   VEHICLE_MOTORCYCLE: 'Motos',
   VEHICLE_PICKUP: 'Camionetas',
@@ -26,7 +25,6 @@ const VEHICLE_CODES: ServiceCode[] = [
   'VEHICLE_CAR',
   'VEHICLE_MOTORCYCLE',
   'VEHICLE_BICYCLE',
-  'VEHICLE_ELECTRIC',
   'VEHICLE_PICKUP',
   'VEHICLE_TRUCK',
 ];
