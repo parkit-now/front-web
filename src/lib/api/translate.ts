@@ -48,7 +48,13 @@ export type EndpointKey =
   | 'tenants.list'
   | 'entities.profile'
   | 'entities.update'
-  | 'entities.payment';
+  | 'entities.payment'
+  | 'schedules.list'
+  | 'schedules.create'
+  | 'schedules.update'
+  | 'schedules.delete'
+  | 'services.list'
+  | 'services.toggle';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;
@@ -109,6 +115,16 @@ const CODE_MESSAGES: Record<string, string> = {
   ENTITY_NO_ACCESS: 'No tenés acceso a este estacionamiento.',
   ENTITY_INSUFFICIENT_ROLE:
     'No tenés permisos suficientes para esta acción en este estacionamiento.',
+
+  // Horarios de atención.
+  SCHEDULE_OVERLAP: 'Los horarios no pueden superponerse.',
+  SCHEDULE_INVALID_RANGE:
+    'La hora de cierre debe ser posterior a la de apertura.',
+  SCHEDULE_NOT_FOUND: 'No encontramos el horario.',
+
+  // Servicios del estacionamiento.
+  SERVICE_INVALID_CODE: 'El servicio seleccionado no es válido.',
+  SERVICE_NOT_FOUND: 'No encontramos el servicio.',
 
   // Validacion (envoltorio — el detalle por campo se traduce con
   // translateValidationCode).
