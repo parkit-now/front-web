@@ -33,6 +33,31 @@ function roleLabel(role: MembershipRole): string {
   return role === 'owner' ? 'Dueño' : 'Operador';
 }
 
+/** What each per-parking role can do — shown in the confirmation dialog. */
+const ROLE_BLURB: Record<MembershipRole, string> = {
+  operator:
+    'Opera el día a día (ingresos y egresos), sin modificar la configuración ni las tarifas.',
+  owner:
+    'Administra el estacionamiento: perfil, tarifas, métodos de pago y zonas.',
+};
+
+/**
+ * A pending privileged action awaiting confirmation. Role/access changes are
+ * explicit, named actions guarded by a confirm dialog (industry pattern), not
+ * silent dropdown edits.
+ */
+type PendingAction =
+  | { kind: 'globalRole'; nextRole: UserRole }
+  | { kind: 'addMembership'; parking: Parking; role: MembershipRole }
+  | {
+      kind: 'changeMembership';
+      parkingId: string;
+      parkingName: string;
+      nextRole: MembershipRole;
+    }
+  | { kind: 'removeMembership'; parkingId: string; parkingName: string }
+  | { kind: 'deleteUser' };
+
 export function UserDetailDrawer({
   userId,
   open,
@@ -49,9 +74,9 @@ export function UserDetailDrawer({
   const [parkingQuery, setParkingQuery] = useState('');
   const debouncedQuery = useDebouncedValue(parkingQuery, 300);
   const [selectedParking, setSelectedParking] = useState<Parking | null>(null);
-  const [newRole, setNewRole] = useState<MembershipRole>('operator');
 
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [pending, setPending] = useState<PendingAction | null>(null);
+  const closePending = () => setPending(null);
 
   const parkingSearch = useParkingsList({
     search: debouncedQuery,
@@ -68,29 +93,140 @@ export function UserDetailDrawer({
     (p) => !linkedIds.has(p.id),
   );
 
-  function handleAddMembership() {
-    if (!userId || !selectedParking) return;
-    addMutation.mutate(
-      { userId, body: { parkingId: selectedParking.id, role: newRole } },
-      {
-        onSuccess: () => {
-          setSelectedParking(null);
-          setParkingQuery('');
-          setNewRole('operator');
-        },
-      },
-    );
+  const displayName = user?.name ?? user?.email ?? '';
+
+  function resetAddForm() {
+    setSelectedParking(null);
+    setParkingQuery('');
   }
 
-  function handleDeleteUser() {
-    if (!userId) return;
-    deleteMutation.mutate(userId, {
-      onSuccess: () => {
-        setConfirmDelete(false);
-        onClose();
-      },
-    });
+  /** Maps the pending action to dialog copy + the mutation that runs it. */
+  function confirmProps() {
+    if (!pending || !user) return null;
+    const strong = (text: string) => <strong>{text}</strong>;
+
+    switch (pending.kind) {
+      case 'globalRole': {
+        const toAdmin = pending.nextRole === 'admin';
+        return {
+          title: toAdmin ? 'Ascender a administrador' : 'Pasar a usuario',
+          confirmLabel: toAdmin ? 'Ascender' : 'Pasar a usuario',
+          destructive: !toAdmin,
+          loading: updateRoleMutation.isPending,
+          message: toAdmin ? (
+            <>
+              ¿Ascender a {strong(displayName)} a administrador? Tendrá acceso
+              completo a todo el sistema y a todos los estacionamientos, sin
+              necesidad de asignaciones.
+            </>
+          ) : (
+            <>
+              ¿Quitarle el rol de administrador a {strong(displayName)}? Pasará
+              a acceder solo a los estacionamientos que tenga asignados.
+            </>
+          ),
+          onConfirm: () =>
+            updateRoleMutation.mutate(
+              { id: user.id, role: pending.nextRole },
+              { onSuccess: closePending },
+            ),
+        };
+      }
+      case 'addMembership':
+        return {
+          title: 'Asignar estacionamiento',
+          confirmLabel: `Asignar como ${roleLabel(pending.role).toLowerCase()}`,
+          destructive: false,
+          loading: addMutation.isPending,
+          message: (
+            <>
+              ¿Asignar a {strong(displayName)} como{' '}
+              {strong(roleLabel(pending.role).toLowerCase())} en{' '}
+              {strong(pending.parking.name)}? {ROLE_BLURB[pending.role]}
+            </>
+          ),
+          onConfirm: () =>
+            addMutation.mutate(
+              {
+                userId: user.id,
+                body: { parkingId: pending.parking.id, role: pending.role },
+              },
+              {
+                onSuccess: () => {
+                  resetAddForm();
+                  closePending();
+                },
+              },
+            ),
+        };
+      case 'changeMembership':
+        return {
+          title: 'Cambiar rol',
+          confirmLabel: `Pasar a ${roleLabel(pending.nextRole).toLowerCase()}`,
+          destructive: false,
+          loading: updateMutation.isPending,
+          message: (
+            <>
+              ¿Cambiar el rol de {strong(displayName)} en{' '}
+              {strong(pending.parkingName)} a{' '}
+              {strong(roleLabel(pending.nextRole).toLowerCase())}?{' '}
+              {ROLE_BLURB[pending.nextRole]}
+            </>
+          ),
+          onConfirm: () =>
+            updateMutation.mutate(
+              {
+                userId: user.id,
+                parkingId: pending.parkingId,
+                role: pending.nextRole,
+              },
+              { onSuccess: closePending },
+            ),
+        };
+      case 'removeMembership':
+        return {
+          title: 'Quitar estacionamiento',
+          confirmLabel: 'Quitar',
+          destructive: true,
+          loading: removeMutation.isPending,
+          message: (
+            <>
+              ¿Quitar el acceso de {strong(displayName)} a{' '}
+              {strong(pending.parkingName)}? Dejará de poder operar o
+              administrar ese estacionamiento.
+            </>
+          ),
+          onConfirm: () =>
+            removeMutation.mutate(
+              { userId: user.id, parkingId: pending.parkingId },
+              { onSuccess: closePending },
+            ),
+        };
+      case 'deleteUser':
+        return {
+          title: 'Eliminar usuario',
+          confirmLabel: 'Eliminar',
+          destructive: true,
+          loading: deleteMutation.isPending,
+          message: (
+            <>
+              ¿Seguro que querés eliminar a {strong(displayName)}? Se eliminará
+              su cuenta por completo y todos sus vínculos con estacionamientos.
+              Esta acción no se puede deshacer.
+            </>
+          ),
+          onConfirm: () =>
+            deleteMutation.mutate(user.id, {
+              onSuccess: () => {
+                closePending();
+                onClose();
+              },
+            }),
+        };
+    }
   }
+
+  const confirm = confirmProps();
 
   return (
     <Drawer
@@ -136,30 +272,34 @@ export function UserDetailDrawer({
           {/* Global role */}
           <section>
             <p style={sectionLabel}>Rol global</p>
-            <select
-              className="pk-input"
-              value={user.role}
-              disabled={updateRoleMutation.isPending}
-              onChange={(e) =>
-                updateRoleMutation.mutate({
-                  id: user.id,
-                  role: e.target.value as UserRole,
-                })
-              }
-            >
-              <option value="user">Usuario</option>
-              <option value="admin">Administrador</option>
-            </select>
-            <p
-              style={{
-                margin: '6px 0 0',
-                fontSize: 12,
-                color: 'var(--text-3)',
-              }}
-            >
-              Un administrador accede a todo el sistema. Un usuario solo a los
-              estacionamientos que tenga asignados.
-            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Badge variant={user.role === 'admin' ? 'brand' : 'default'}>
+                {user.role === 'admin' ? 'Administrador' : 'Usuario'}
+              </Badge>
+              {user.role === 'admin' ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={updateRoleMutation.isPending}
+                  onClick={() =>
+                    setPending({ kind: 'globalRole', nextRole: 'user' })
+                  }
+                >
+                  Pasar a usuario
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={updateRoleMutation.isPending}
+                  onClick={() =>
+                    setPending({ kind: 'globalRole', nextRole: 'admin' })
+                  }
+                >
+                  Ascender a administrador
+                </Button>
+              )}
+            </div>
           </section>
 
           {/* Memberships */}
@@ -184,65 +324,87 @@ export function UserDetailDrawer({
                   marginBottom: 12,
                 }}
               >
-                {user.memberships.map((m) => (
-                  <div
-                    key={m.parkingId}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      padding: '10px 12px',
-                      border: '1px solid var(--border-soft)',
-                      borderRadius: 'var(--r-md)',
-                    }}
-                  >
-                    <span
+                {user.memberships.map((m) => {
+                  const otherRole: MembershipRole =
+                    m.role === 'owner' ? 'operator' : 'owner';
+                  return (
+                    <div
+                      key={m.parkingId}
                       style={{
-                        flex: 1,
-                        minWidth: 0,
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: 'var(--text-1)',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 10,
+                        padding: '12px 14px',
+                        background: 'var(--bg-b)',
+                        border: '1px solid var(--border-soft)',
+                        borderRadius: 'var(--r-md)',
                       }}
                     >
-                      {m.parkingName}
-                    </span>
-                    <select
-                      className="pk-input"
-                      style={{ width: 130, flexShrink: 0 }}
-                      value={m.role}
-                      disabled={
-                        updateMutation.isPending || removeMutation.isPending
-                      }
-                      onChange={(e) =>
-                        updateMutation.mutate({
-                          userId: user.id,
-                          parkingId: m.parkingId,
-                          role: e.target.value as MembershipRole,
-                        })
-                      }
-                    >
-                      <option value="operator">Operador</option>
-                      <option value="owner">Dueño</option>
-                    </select>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={removeMutation.isPending}
-                      onClick={() =>
-                        removeMutation.mutate({
-                          userId: user.id,
-                          parkingId: m.parkingId,
-                        })
-                      }
-                    >
-                      Quitar
-                    </Button>
-                  </div>
-                ))}
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                        }}
+                      >
+                        <span
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: 'var(--text-1)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {m.parkingName}
+                        </span>
+                        <Badge
+                          variant={m.role === 'owner' ? 'brand' : 'default'}
+                        >
+                          {roleLabel(m.role)}
+                        </Badge>
+                      </div>
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'flex-end',
+                          gap: 8,
+                        }}
+                      >
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            setPending({
+                              kind: 'changeMembership',
+                              parkingId: m.parkingId,
+                              parkingName: m.parkingName,
+                              nextRole: otherRole,
+                            })
+                          }
+                        >
+                          Pasar a {roleLabel(otherRole).toLowerCase()}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() =>
+                            setPending({
+                              kind: 'removeMembership',
+                              parkingId: m.parkingId,
+                              parkingName: m.parkingName,
+                            })
+                          }
+                        >
+                          Quitar
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -251,7 +413,7 @@ export function UserDetailDrawer({
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 8,
+                gap: 10,
                 padding: 12,
                 background: 'var(--bg-b)',
                 borderRadius: 'var(--r-md)',
@@ -273,10 +435,7 @@ export function UserDetailDrawer({
                   <button
                     type="button"
                     className="pk-btn pk-btn-ghost pk-btn-sm"
-                    onClick={() => {
-                      setSelectedParking(null);
-                      setParkingQuery('');
-                    }}
+                    onClick={resetAddForm}
                   >
                     Cambiar
                   </button>
@@ -299,23 +458,37 @@ export function UserDetailDrawer({
                 />
               )}
               <div style={{ display: 'flex', gap: 8 }}>
-                <select
-                  className="pk-input"
-                  style={{ width: 150 }}
-                  value={newRole}
-                  onChange={(e) => setNewRole(e.target.value as MembershipRole)}
-                >
-                  <option value="operator">Operador</option>
-                  <option value="owner">Dueño</option>
-                </select>
                 <Button
-                  variant="primary"
+                  variant="secondary"
                   size="sm"
+                  style={{ flex: 1 }}
                   disabled={!selectedParking}
-                  loading={addMutation.isPending}
-                  onClick={handleAddMembership}
+                  onClick={() =>
+                    selectedParking &&
+                    setPending({
+                      kind: 'addMembership',
+                      parking: selectedParking,
+                      role: 'operator',
+                    })
+                  }
                 >
-                  Agregar como {roleLabel(newRole).toLowerCase()}
+                  Operador
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  style={{ flex: 1 }}
+                  disabled={!selectedParking}
+                  onClick={() =>
+                    selectedParking &&
+                    setPending({
+                      kind: 'addMembership',
+                      parking: selectedParking,
+                      role: 'owner',
+                    })
+                  }
+                >
+                  Dueño
                 </Button>
               </div>
             </div>
@@ -331,7 +504,7 @@ export function UserDetailDrawer({
             <Button
               variant="danger"
               size="sm"
-              onClick={() => setConfirmDelete(true)}
+              onClick={() => setPending({ kind: 'deleteUser' })}
             >
               Eliminar usuario
             </Button>
@@ -340,21 +513,14 @@ export function UserDetailDrawer({
       )}
 
       <ConfirmDialog
-        open={confirmDelete}
-        title="Eliminar usuario"
-        destructive
-        confirmLabel="Eliminar"
-        loading={deleteMutation.isPending}
-        onConfirm={handleDeleteUser}
-        onClose={() => setConfirmDelete(false)}
-        message={
-          <>
-            ¿Seguro que querés eliminar a{' '}
-            <strong>{user?.name ?? user?.email}</strong>? Se eliminará su cuenta
-            por completo y todos sus vínculos con estacionamientos. Esta acción
-            no se puede deshacer.
-          </>
-        }
+        open={confirm !== null}
+        title={confirm?.title ?? ''}
+        destructive={confirm?.destructive}
+        confirmLabel={confirm?.confirmLabel}
+        loading={confirm?.loading}
+        onConfirm={() => confirm?.onConfirm()}
+        onClose={closePending}
+        message={confirm?.message ?? ''}
       />
     </Drawer>
   );
