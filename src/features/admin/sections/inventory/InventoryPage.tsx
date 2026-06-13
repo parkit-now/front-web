@@ -8,7 +8,9 @@ import { Pagination } from '../../../../shared/components/ui/Pagination';
 import {
   IconPlus,
   IconSearch,
-  IconArrow,
+  IconEye,
+  IconPencil,
+  IconTrash,
 } from '../../../../shared/components/icons';
 import { useDebouncedValue } from '../../../../shared/hooks/useDebouncedValue';
 import { useParkingActions, useParkingsList } from '../../hooks/useParkings';
@@ -41,7 +43,6 @@ export function InventoryPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Parking | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Parking | null>(null);
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const data = listQuery.data;
   const items = data?.items ?? [];
@@ -121,17 +122,19 @@ export function InventoryPage() {
         >
           <thead>
             <tr style={{ background: 'var(--bg-b)' }}>
-              {['Estacionamiento', 'Domicilio', 'Estado', ''].map((col, i) => (
-                <th
-                  key={col || `col-${i}`}
-                  style={{
-                    ...thStyle,
-                    textAlign: i === 3 ? 'right' : 'left',
-                  }}
-                >
-                  {col}
-                </th>
-              ))}
+              {['Estacionamiento', 'Domicilio', 'Estado', 'Acciones'].map(
+                (col, i) => (
+                  <th
+                    key={col || `col-${i}`}
+                    style={{
+                      ...thStyle,
+                      textAlign: i === 3 ? 'right' : 'left',
+                    }}
+                  >
+                    {col}
+                  </th>
+                ),
+              )}
             </tr>
           </thead>
           <tbody>
@@ -177,127 +180,96 @@ export function InventoryPage() {
                 </td>
               </tr>
             ) : (
-              items.map((s, idx) => {
-                const isHovered = hoveredId === s.id;
-                return (
-                  <tr
-                    key={s.id}
-                    onClick={() => openParking(s)}
-                    title={`Abrir panel de ${s.name}`}
-                    style={{
-                      cursor: 'pointer',
-                      background: isHovered ? 'var(--bg-a)' : 'transparent',
-                      borderBottom:
-                        idx < items.length - 1
-                          ? '1px solid var(--border-soft)'
-                          : 'none',
-                      transition: 'background 120ms',
-                    }}
-                    onMouseEnter={() => setHoveredId(s.id)}
-                    onMouseLeave={() => setHoveredId(null)}
-                  >
-                    <td style={{ padding: '14px 16px' }}>
-                      <span
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: 'var(--text-1)',
-                        }}
-                      >
-                        {s.name}
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
-                        {s.address ?? '—'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '14px 16px' }}>
-                      <Badge
-                        variant={s.status === 'active' ? 'ok' : 'warn'}
-                        dot
-                      >
-                        {s.status === 'active' ? 'Activo' : 'Mantenimiento'}
-                      </Badge>
-                    </td>
-                    <td
+              items.map((s, idx) => (
+                <tr
+                  key={s.id}
+                  style={{
+                    borderBottom:
+                      idx < items.length - 1
+                        ? '1px solid var(--border-soft)'
+                        : 'none',
+                  }}
+                >
+                  <td style={{ padding: '14px 16px' }}>
+                    {/* Only the name (and the eye action) enters the panel. */}
+                    <button
+                      type="button"
+                      onClick={() => openParking(s)}
+                      title={`Abrir panel de ${s.name}`}
                       style={{
-                        padding: '10px 16px',
-                        textAlign: 'right',
-                        whiteSpace: 'nowrap',
+                        border: 'none',
+                        background: 'none',
+                        padding: 0,
+                        font: 'inherit',
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: 'var(--text-1)',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = 'var(--brand)';
+                        e.currentTarget.style.textDecoration = 'underline';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = 'var(--text-1)';
+                        e.currentTarget.style.textDecoration = 'none';
                       }}
                     >
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'flex-end',
-                          gap: 4,
-                        }}
+                      {s.name}
+                    </button>
+                  </td>
+                  <td style={{ padding: '14px 16px' }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
+                      {s.address ?? '—'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '14px 16px' }}>
+                    <Badge variant={s.status === 'active' ? 'ok' : 'warn'} dot>
+                      {s.status === 'active' ? 'Activo' : 'Mantenimiento'}
+                    </Badge>
+                  </td>
+                  <td style={{ padding: '10px 16px' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                        gap: 2,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-ghost pk-btn-icon"
+                        title="Ver panel"
+                        aria-label={`Ver panel de ${s.name}`}
+                        onClick={() => openParking(s)}
                       >
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEdit(s);
-                          }}
-                        >
-                          Editar
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteTarget(s);
-                          }}
-                        >
-                          Eliminar
-                        </Button>
-                        <span
-                          style={{
-                            width: 1,
-                            height: 20,
-                            background: 'var(--border-soft)',
-                            margin: '0 4px',
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openParking(s);
-                          }}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            padding: '6px 12px',
-                            borderRadius: 'var(--r-md)',
-                            fontSize: 13,
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            border: '1px solid',
-                            borderColor: isHovered
-                              ? 'var(--brand)'
-                              : 'var(--brand-soft)',
-                            background: isHovered
-                              ? 'var(--brand)'
-                              : 'var(--brand-soft)',
-                            color: isHovered ? '#fff' : 'var(--brand)',
-                            transition: 'all 140ms',
-                          }}
-                        >
-                          Abrir panel
-                          <IconArrow size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
+                        <IconEye size={17} />
+                      </button>
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-ghost pk-btn-icon"
+                        title="Editar"
+                        aria-label={`Editar ${s.name}`}
+                        onClick={() => openEdit(s)}
+                      >
+                        <IconPencil size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        className="pk-btn pk-btn-ghost pk-btn-icon"
+                        title="Eliminar"
+                        aria-label={`Eliminar ${s.name}`}
+                        style={{ color: 'var(--err-text)' }}
+                        onClick={() => setDeleteTarget(s)}
+                      >
+                        <IconTrash size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
             )}
           </tbody>
         </table>
