@@ -1,47 +1,106 @@
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Switch } from '../../../../shared/components/ui/Switch';
+import type { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '../../../../shared/components/ui/Badge';
 import { Button } from '../../../../shared/components/ui/Button';
+import { Switch } from '../../../../shared/components/ui/Switch';
+import { ConfirmDialog } from '../../../../shared/components/ui/ConfirmDialog';
+import {
+  IconCheckCircle,
+  IconLock,
+  IconPencil,
+  IconPlus,
+  IconTrash,
+} from '../../../../shared/components/icons';
+import { DataTable } from '../../../../features/data-table';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useSucursal } from '../../context/SucursalContext';
 import {
+  createPaymentMethod,
+  deletePaymentMethod,
   listPaymentMethods,
   togglePaymentMethod,
   type PaymentMethodSummary,
-  type TogglePaymentMethodInput,
 } from '../../services/entities';
+import { PaymentMethodFormModal } from './PaymentMethodFormModal';
 
 export function ConfigPagos() {
   const { showToast } = useToast();
   const { sucursalId } = useSucursal();
   const queryClient = useQueryClient();
 
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<PaymentMethodSummary | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PaymentMethodSummary | null>(
+    null,
+  );
+
   const queryKey = ['payment-methods', sucursalId];
-  const { data: medios = [], isLoading } = useQuery({
+  const listQuery = useQuery({
     queryKey,
     queryFn: () => listPaymentMethods(sucursalId),
     enabled: Boolean(sucursalId),
   });
+  const medios = useMemo(() => listQuery.data ?? [], [listQuery.data]);
 
-  const mutation = useMutation({
+  function invalidate() {
+    void queryClient.invalidateQueries({ queryKey });
+  }
+
+  function onError(error: unknown) {
+    showToast({
+      message: translateApiError(error, { endpoint: 'entities.payment' }),
+      kind: 'error',
+    });
+  }
+
+  const toggleMutation = useMutation({
     mutationFn: ({
       id,
       body,
     }: {
       id: string;
-      body: TogglePaymentMethodInput;
+      body: { enabled?: boolean; isDefault?: boolean };
     }) => togglePaymentMethod(sucursalId, id, body),
+    onSuccess: invalidate,
+    onError,
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: ({ id, name }: { id: string | null; name: string }) =>
+      id === null
+        ? createPaymentMethod(sucursalId, { name })
+        : togglePaymentMethod(sucursalId, id, { name }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey });
+      setFormOpen(false);
+      setEditing(null);
+      invalidate();
+    },
+    onError,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deletePaymentMethod(sucursalId, id),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      invalidate();
     },
     onError: (error) => {
-      showToast({
-        message: translateApiError(error, { endpoint: 'entities.payment' }),
-        kind: 'error',
-      });
+      setDeleteTarget(null);
+      onError(error);
     },
   });
+
+  function openCreate() {
+    setEditing(null);
+    setFormOpen(true);
+  }
+
+  function openEdit(method: PaymentMethodSummary) {
+    setEditing(method);
+    setFormOpen(true);
+  }
 
   function handleToggleEnabled(m: PaymentMethodSummary) {
     if (m.isDefault && m.enabled) {
@@ -51,90 +110,221 @@ export function ConfigPagos() {
       });
       return;
     }
-    mutation.mutate({ id: m.id, body: { enabled: !m.enabled } });
+    toggleMutation.mutate({ id: m.id, body: { enabled: !m.enabled } });
   }
 
   function handleMakeDefault(m: PaymentMethodSummary) {
-    mutation.mutate({ id: m.id, body: { isDefault: true } });
+    toggleMutation.mutate({ id: m.id, body: { isDefault: true } });
   }
 
-  if (isLoading) {
-    return (
-      <p style={{ color: 'var(--text-3)', fontSize: 14 }}>
-        Cargando medios de pago...
-      </p>
-    );
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <h2
-        style={{
-          margin: 0,
-          fontSize: 16,
-          fontWeight: 600,
-          color: 'var(--text-1)',
-        }}
-      >
-        Medios de pago
-      </h2>
-
-      <div className="pk-card" style={{ overflow: 'hidden' }}>
-        {medios.map((medio, i) => (
-          <div
-            key={medio.id}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              padding: '14px 20px',
-              borderBottom:
-                i < medios.length - 1 ? '1px solid var(--border-soft)' : 'none',
-            }}
-          >
+  const columns = useMemo<ColumnDef<PaymentMethodSummary, unknown>[]>(
+    () => [
+      {
+        id: 'name',
+        header: 'Medio de pago',
+        accessorKey: 'name',
+        cell: ({ row }) => {
+          const m = row.original;
+          return (
             <div
               style={{
-                flex: 1,
                 display: 'flex',
                 alignItems: 'center',
-                gap: 10,
+                gap: 8,
                 minWidth: 0,
               }}
             >
               <span
                 style={{
-                  fontSize: 14,
-                  fontWeight: 500,
+                  fontSize: 13,
+                  fontWeight: 600,
                   color: 'var(--text-1)',
                 }}
               >
-                {medio.name}
+                {m.name}
               </span>
-              {medio.isDefault && <Badge variant="brand">Por defecto</Badge>}
-              {!medio.isDefault && medio.enabled && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleMakeDefault(medio)}
-                  disabled={mutation.isPending}
+              {m.isSystem && <Badge>Sistema</Badge>}
+            </div>
+          );
+        },
+      },
+      {
+        id: 'default',
+        header: 'Predeterminado',
+        accessorFn: (m) => (m.isDefault ? 'yes' : 'no'),
+        enableSorting: false,
+        cell: ({ row }) => {
+          const m = row.original;
+          if (m.isDefault) return <Badge variant="brand">Por defecto</Badge>;
+          return (
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<IconCheckCircle size={15} />}
+              disabled={!m.enabled || toggleMutation.isPending}
+              onClick={() => handleMakeDefault(m)}
+            >
+              Marcar
+            </Button>
+          );
+        },
+      },
+      {
+        id: 'acciones',
+        header: () => <div style={{ textAlign: 'center' }}>Acciones</div>,
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) => {
+          const m = row.original;
+          return (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              <button
+                type="button"
+                className="pk-btn pk-btn-ghost pk-btn-icon"
+                title="Editar nombre"
+                aria-label={`Editar ${m.name}`}
+                onClick={() => openEdit(m)}
+              >
+                <IconPencil size={16} />
+              </button>
+              {m.isSystem ? (
+                <button
+                  type="button"
+                  className="pk-btn pk-btn-ghost pk-btn-icon"
+                  title="Los medios de sistema no se pueden eliminar"
+                  aria-label={`${m.name} es un medio de sistema y no se puede eliminar`}
+                  disabled
+                  style={{ opacity: 0.35 }}
                 >
-                  Hacer predeterminado
-                </Button>
+                  <IconTrash size={16} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="pk-btn pk-btn-ghost pk-btn-icon"
+                  title="Eliminar"
+                  aria-label={`Eliminar ${m.name}`}
+                  style={{ color: 'var(--err-text)' }}
+                  onClick={() => setDeleteTarget(m)}
+                >
+                  <IconTrash size={16} />
+                </button>
+              )}
+              {m.isDefault ? (
+                // The default can't be disabled (it'd leave a disabled method
+                // pre-selected at checkout). Communicate the rule instead of
+                // showing a dead toggle: lock + tooltip on how to unlock it.
+                <span
+                  title="El medio predeterminado siempre está activo. Para desactivarlo, primero marcá otro como predeterminado."
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginLeft: 4,
+                    fontSize: 12,
+                    color: 'var(--text-3)',
+                  }}
+                >
+                  <IconLock size={13} />
+                  <span style={{ minWidth: 52 }}>Siempre activo</span>
+                </span>
+              ) : (
+                <span
+                  title={m.enabled ? 'Desactivar' : 'Activar'}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginLeft: 4,
+                  }}
+                >
+                  <Switch
+                    checked={m.enabled}
+                    onChange={() => handleToggleEnabled(m)}
+                    aria-label={`Activar/desactivar ${m.name}`}
+                  />
+                  <span
+                    style={{
+                      fontSize: 12,
+                      color: 'var(--text-3)',
+                      minWidth: 52,
+                    }}
+                  >
+                    {m.enabled ? 'Activo' : 'Inactivo'}
+                  </span>
+                </span>
               )}
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 13, color: 'var(--text-3)' }}>
-                {medio.enabled ? 'Activo' : 'Inactivo'}
-              </span>
-              <Switch
-                checked={medio.enabled}
-                onChange={() => handleToggleEnabled(medio)}
-                aria-label={`Toggle ${medio.name}`}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+          );
+        },
+      },
+    ],
+    // Handlers close over stable mutate fns; isPending drives the "Marcar" button.
+    [toggleMutation.isPending],
+  );
+
+  return (
+    <>
+      <DataTable<PaymentMethodSummary>
+        data={medios}
+        columns={columns}
+        title="Medios de pago"
+        isLoading={listQuery.isLoading}
+        emptyMessage="Todavía no hay medios de pago. Agregá el primero."
+        searchPlaceholder="Buscar medio de pago"
+        searchableKeys={['name']}
+        getRowId={(m) => m.id}
+        onRefresh={() => void listQuery.refetch()}
+        refreshDisabled={listQuery.isFetching}
+        headerAction={
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<IconPlus size={15} />}
+            onClick={openCreate}
+          >
+            Agregar medio de pago
+          </Button>
+        }
+      />
+
+      <PaymentMethodFormModal
+        open={formOpen}
+        method={editing}
+        pending={saveMutation.isPending}
+        onClose={() => {
+          setFormOpen(false);
+          setEditing(null);
+        }}
+        onSubmit={(name) =>
+          saveMutation.mutate({ id: editing?.id ?? null, name })
+        }
+      />
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Eliminar medio de pago"
+        destructive
+        confirmLabel="Eliminar"
+        loading={deleteMutation.isPending}
+        onConfirm={() => {
+          if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
+        }}
+        onClose={() => setDeleteTarget(null)}
+        message={
+          <>
+            ¿Seguro que querés eliminar <strong>{deleteTarget?.name}</strong>?
+            Esta acción no se puede deshacer.
+          </>
+        }
+      />
+    </>
   );
 }

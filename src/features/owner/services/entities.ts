@@ -11,6 +11,8 @@ export type PaymentMethodSummary =
   components['schemas']['PaymentMethodSummaryDto'];
 export type TogglePaymentMethodInput =
   components['schemas']['TogglePaymentMethodDto'];
+export type CreatePaymentMethodInput =
+  components['schemas']['CreatePaymentMethodDto'];
 export type MembershipRole = EntitySummary['role'];
 
 async function bearer(): Promise<string> {
@@ -68,7 +70,20 @@ export async function listPaymentMethods(
   });
 }
 
-/** PATCH /tenants/:tenantId/payment-methods/:id — owner-only enable/default. */
+/** POST /tenants/:tenantId/payment-methods — owner-only create custom method. */
+export async function createPaymentMethod(
+  tenantId: string,
+  body: CreatePaymentMethodInput,
+): Promise<PaymentMethodSummary> {
+  return apiRequest<PaymentMethodSummary>({
+    method: 'POST',
+    path: `/tenants/${tenantId}/payment-methods`,
+    body,
+    bearer: await bearer(),
+  });
+}
+
+/** PATCH /tenants/:tenantId/payment-methods/:id — owner-only enable/default/rename. */
 export async function togglePaymentMethod(
   tenantId: string,
   paymentMethodId: string,
@@ -78,6 +93,18 @@ export async function togglePaymentMethod(
     method: 'PATCH',
     path: `/tenants/${tenantId}/payment-methods/${paymentMethodId}`,
     body,
+    bearer: await bearer(),
+  });
+}
+
+/** DELETE /tenants/:tenantId/payment-methods/:id — owner-only, custom methods only. */
+export async function deletePaymentMethod(
+  tenantId: string,
+  paymentMethodId: string,
+): Promise<void> {
+  await apiRequest<void>({
+    method: 'DELETE',
+    path: `/tenants/${tenantId}/payment-methods/${paymentMethodId}`,
     bearer: await bearer(),
   });
 }

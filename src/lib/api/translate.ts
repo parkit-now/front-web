@@ -116,6 +116,11 @@ const CODE_MESSAGES: Record<string, string> = {
   ENTITY_INSUFFICIENT_ROLE:
     'No tenés permisos suficientes para esta acción en este estacionamiento.',
 
+  // Medios de pago.
+  PAYMENT_METHOD_NOT_FOUND: 'No encontramos el medio de pago.',
+  PAYMENT_METHOD_SYSTEM_LOCKED:
+    'Este es un medio de pago del sistema: podés desactivarlo pero no eliminarlo.',
+
   // Horarios de atención.
   SCHEDULE_OVERLAP: 'Los horarios no pueden superponerse.',
   SCHEDULE_INVALID_RANGE:
