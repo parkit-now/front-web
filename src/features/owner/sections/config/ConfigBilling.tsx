@@ -1,5 +1,10 @@
+import { useMemo } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '../../../../shared/components/ui/Badge';
 import { fmtMoney0 } from '../../../../shared/utils/fmt';
+import { DataTable } from '../../../../features/data-table';
+import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
+import { useSucursal } from '../../context/SucursalContext';
 
 interface Factura {
   id: string;
@@ -34,6 +39,65 @@ const FACTURAS: Factura[] = [
 ];
 
 export function ConfigBilling() {
+  const userId = useCurrentUserId();
+  const { sucursalId } = useSucursal();
+
+  const columns = useMemo<ColumnDef<Factura, unknown>[]>(
+    () => [
+      {
+        id: 'numero',
+        header: 'Número',
+        accessorKey: 'numero',
+        cell: ({ row }) => (
+          <span
+            style={{
+              fontFamily: 'var(--mono)',
+              fontSize: 13,
+              color: 'var(--text-2)',
+            }}
+          >
+            {row.original.numero}
+          </span>
+        ),
+      },
+      {
+        id: 'fecha',
+        header: 'Fecha',
+        accessorKey: 'fecha',
+        cell: ({ row }) => (
+          <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
+            {row.original.fecha}
+          </span>
+        ),
+      },
+      {
+        id: 'monto',
+        header: 'Monto',
+        accessorKey: 'monto',
+        sortingFn: 'basic',
+        cell: ({ row }) => (
+          <span
+            style={{
+              fontFamily: 'var(--mono)',
+              fontSize: 14,
+              fontWeight: 600,
+              color: 'var(--text-1)',
+            }}
+          >
+            {fmtMoney0(row.original.monto)}
+          </span>
+        ),
+      },
+      {
+        id: 'estado',
+        header: 'Estado',
+        accessorKey: 'estado',
+        cell: ({ row }) => <Badge variant="ok">{row.original.estado}</Badge>,
+      },
+    ],
+    [],
+  );
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <h2
@@ -169,77 +233,20 @@ export function ConfigBilling() {
         >
           Historial de facturas
         </h3>
-        <div className="pk-card" style={{ overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-soft)' }}>
-                {['Número', 'Fecha', 'Monto', 'Estado'].map((col) => (
-                  <th
-                    key={col}
-                    style={{
-                      padding: '10px 16px',
-                      textAlign: 'left',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: 'var(--text-3)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                    }}
-                  >
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {FACTURAS.map((f, i) => (
-                <tr
-                  key={f.id}
-                  style={{
-                    borderBottom:
-                      i < FACTURAS.length - 1
-                        ? '1px solid var(--border-soft)'
-                        : 'none',
-                  }}
-                >
-                  <td
-                    style={{
-                      padding: '12px 16px',
-                      fontSize: 13,
-                      fontFamily: 'var(--mono)',
-                      color: 'var(--text-2)',
-                    }}
-                  >
-                    {f.numero}
-                  </td>
-                  <td
-                    style={{
-                      padding: '12px 16px',
-                      fontSize: 13,
-                      color: 'var(--text-2)',
-                    }}
-                  >
-                    {f.fecha}
-                  </td>
-                  <td
-                    style={{
-                      padding: '12px 16px',
-                      fontSize: 14,
-                      fontWeight: 600,
-                      color: 'var(--text-1)',
-                      fontFamily: 'var(--mono)',
-                    }}
-                  >
-                    {fmtMoney0(f.monto)}
-                  </td>
-                  <td style={{ padding: '12px 16px' }}>
-                    <Badge variant="ok">{f.estado}</Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable<Factura>
+          data={FACTURAS}
+          columns={columns}
+          emptyMessage="No hay facturas para mostrar."
+          searchPlaceholder="Buscar por número"
+          searchableKeys={['numero']}
+          getRowId={(factura) => factura.id}
+          initialPageSize={10}
+          templateScope={
+            userId && sucursalId
+              ? { userId, tenantId: sucursalId, tableKey: 'owner-billing' }
+              : undefined
+          }
+        />
       </div>
     </div>
   );

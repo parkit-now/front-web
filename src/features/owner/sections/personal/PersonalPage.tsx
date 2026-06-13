@@ -1,19 +1,16 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import type { ColumnDef } from '@tanstack/react-table';
 import { PERSONAL } from '../../../../mock/personal';
+import type { PersonalMember } from '../../../../types/api';
 import { SectionHeader } from '../../../../shared/components/SectionHeader';
 import { Badge } from '../../../../shared/components/ui/Badge';
 import { Button } from '../../../../shared/components/ui/Button';
 import { Avatar } from '../../../../shared/components/Avatar';
 import { IconPlus } from '../../../../shared/components/icons';
+import { DataTable } from '../../../../features/data-table';
+import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
+import { useSucursal } from '../../context/SucursalContext';
 import { InviteModal } from './InviteModal';
-
-const ALL_ROLES = [
-  'Todos',
-  'Administrador',
-  'Supervisor',
-  'Operador de rampa',
-] as const;
-type RoleFilter = (typeof ALL_ROLES)[number];
 
 function roleBadgeVariant(rol: string): 'brand' | 'warn' | 'ok' | 'default' {
   if (rol === 'Administrador') return 'brand';
@@ -22,11 +19,86 @@ function roleBadgeVariant(rol: string): 'brand' | 'warn' | 'ok' | 'default' {
 }
 
 export function PersonalPage() {
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>('Todos');
+  const userId = useCurrentUserId();
+  const { sucursalId } = useSucursal();
   const [inviteOpen, setInviteOpen] = useState(false);
 
-  const filtered = PERSONAL.filter((p) =>
-    roleFilter === 'Todos' ? true : p.rol === roleFilter,
+  const members = useMemo(() => PERSONAL, []);
+
+  const columns = useMemo<ColumnDef<PersonalMember, unknown>[]>(
+    () => [
+      {
+        id: 'miembro',
+        header: 'Miembro',
+        accessorFn: (member) => member.nombre,
+        cell: ({ row }) => {
+          const member = row.original;
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Avatar name={member.nombre} size={32} soft />
+              <div>
+                <div
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: 'var(--text-1)',
+                  }}
+                >
+                  {member.nombre}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                  {member.email}
+                </div>
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: 'rol',
+        header: 'Rol',
+        accessorKey: 'rol',
+        cell: ({ row }) => (
+          <Badge variant={roleBadgeVariant(row.original.rol)}>
+            {row.original.rol}
+          </Badge>
+        ),
+      },
+      {
+        id: 'sucursal',
+        header: 'Sucursal',
+        accessorKey: 'sucursal',
+        cell: ({ row }) => (
+          <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
+            {row.original.sucursal}
+          </span>
+        ),
+      },
+      {
+        id: 'actividad_label',
+        header: 'Última actividad',
+        accessorKey: 'actividad_label',
+        cell: ({ row }) => (
+          <span style={{ fontSize: 13, color: 'var(--text-3)' }}>
+            {row.original.actividad_label}
+          </span>
+        ),
+      },
+      {
+        id: 'estado',
+        header: 'Estado',
+        accessorKey: 'estado',
+        cell: ({ row }) => (
+          <Badge
+            variant={row.original.estado === 'active' ? 'ok' : 'default'}
+            dot
+          >
+            {row.original.estado === 'active' ? 'Activo' : 'Inactivo'}
+          </Badge>
+        ),
+      },
+    ],
+    [],
   );
 
   return (
@@ -46,128 +118,32 @@ export function PersonalPage() {
         }
       />
 
-      {/* Role filter chips */}
-      <div
-        style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}
-      >
-        {ALL_ROLES.map((r) => (
-          <button
-            key={r}
-            type="button"
-            onClick={() => setRoleFilter(r)}
-            style={{
-              padding: '5px 14px',
-              borderRadius: 999,
-              border: '1px solid',
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: 'pointer',
-              transition: 'all 150ms',
-              borderColor: roleFilter === r ? 'var(--brand)' : 'var(--border)',
-              background:
-                roleFilter === r ? 'var(--brand-soft)' : 'transparent',
-              color: roleFilter === r ? 'var(--brand)' : 'var(--text-2)',
-            }}
-          >
-            {r}
-          </button>
-        ))}
-      </div>
-
-      {/* Table */}
-      <div className="pk-card" style={{ overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--border-soft)' }}>
-              {['Miembro', 'Rol', 'Sucursal', 'Última actividad', 'Estado'].map(
-                (col) => (
-                  <th
-                    key={col}
-                    style={{
-                      padding: '10px 16px',
-                      textAlign: 'left',
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: 'var(--text-3)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {col}
-                  </th>
-                ),
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((member, i) => (
-              <tr
-                key={member.id}
-                style={{
-                  borderBottom:
-                    i < filtered.length - 1
-                      ? '1px solid var(--border-soft)'
-                      : 'none',
-                }}
-              >
-                <td style={{ padding: '12px 16px' }}>
-                  <div
-                    style={{ display: 'flex', alignItems: 'center', gap: 10 }}
-                  >
-                    <Avatar name={member.nombre} size={32} soft />
-                    <div>
-                      <div
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 600,
-                          color: 'var(--text-1)',
-                        }}
-                      >
-                        {member.nombre}
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                        {member.email}
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td style={{ padding: '12px 16px' }}>
-                  <Badge variant={roleBadgeVariant(member.rol)}>
-                    {member.rol}
-                  </Badge>
-                </td>
-                <td
-                  style={{
-                    padding: '12px 16px',
-                    fontSize: 13,
-                    color: 'var(--text-2)',
-                  }}
-                >
-                  {member.sucursal}
-                </td>
-                <td
-                  style={{
-                    padding: '12px 16px',
-                    fontSize: 13,
-                    color: 'var(--text-3)',
-                  }}
-                >
-                  {member.actividad_label}
-                </td>
-                <td style={{ padding: '12px 16px' }}>
-                  <Badge
-                    variant={member.estado === 'active' ? 'ok' : 'default'}
-                    dot
-                  >
-                    {member.estado === 'active' ? 'Activo' : 'Inactivo'}
-                  </Badge>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable<PersonalMember>
+        data={members}
+        columns={columns}
+        emptyMessage="No hay miembros para mostrar."
+        searchPlaceholder="Buscar por nombre o email"
+        searchableKeys={['nombre', 'email', 'sucursal']}
+        filterableColumns={['rol', 'estado']}
+        filterOptionsByColumn={{
+          rol: [
+            { value: 'Administrador', label: 'Administrador' },
+            { value: 'Supervisor', label: 'Supervisor' },
+            { value: 'Operador de rampa', label: 'Operador de rampa' },
+          ],
+          estado: [
+            { value: 'active', label: 'Activo' },
+            { value: 'inactive', label: 'Inactivo' },
+          ],
+        }}
+        getRowId={(member) => member.id}
+        initialPageSize={10}
+        templateScope={
+          userId && sucursalId
+            ? { userId, tenantId: sucursalId, tableKey: 'owner-staff' }
+            : undefined
+        }
+      />
 
       <InviteModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
     </div>
