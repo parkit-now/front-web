@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../../../shared/components/ui/Button';
 import { Switch } from '../../../../shared/components/ui/Switch';
@@ -36,11 +36,13 @@ export function ConfigServicios() {
   const canEdit = sucursal?.role === 'owner';
 
   const queryKey = ['services', sucursalId];
-  const { data: services = [], isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey,
     queryFn: () => listServices(sucursalId),
     enabled: Boolean(sucursalId),
   });
+  // Stable reference so the sync effect below doesn't loop while data is undefined.
+  const services = useMemo(() => data ?? [], [data]);
 
   const byCode = new Map(services.map((s) => [s.code, s]));
 

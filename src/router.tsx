@@ -1,4 +1,4 @@
-import { createBrowserRouter, redirect } from 'react-router-dom';
+import { createBrowserRouter, redirect, Navigate } from 'react-router-dom';
 import { fetchMe, getSession, homePathForMe } from './lib/supabase/session';
 import { LandingPage } from './features/landing/components/LandingPage';
 import { AuthPage } from './features/auth/AuthPage';
@@ -56,6 +56,20 @@ async function onboardingLoader() {
   return home === '/onboarding' ? null : redirect(home);
 }
 
+/**
+ * Owner panel sections, shared between the owner portal (`/app/*`) and an admin
+ * entering a specific lot (`/ops/estacionamientos/:tenantId/*`). Paths are
+ * relative so they mount under either base.
+ */
+const ownerSectionRoutes = [
+  { path: 'dashboard', element: <DashboardPage /> },
+  { path: 'personal', element: <PersonalPage /> },
+  { path: 'estadisticas', element: <EstadisticasPage /> },
+  { path: 'transacciones', element: <TransaccionesPage /> },
+  { path: 'auditoria', element: <AuditoriaPage /> },
+  { path: 'config', element: <ConfigPage /> },
+];
+
 export const router = createBrowserRouter([
   { path: '/', element: <LandingPage /> },
   { path: '/login', element: <AuthPage /> },
@@ -70,12 +84,7 @@ export const router = createBrowserRouter([
     loader: appLoader,
     children: [
       { index: true, loader: () => redirect('/app/dashboard') },
-      { path: 'dashboard', element: <DashboardPage /> },
-      { path: 'personal', element: <PersonalPage /> },
-      { path: 'estadisticas', element: <EstadisticasPage /> },
-      { path: 'transacciones', element: <TransaccionesPage /> },
-      { path: 'auditoria', element: <AuditoriaPage /> },
-      { path: 'config', element: <ConfigPage /> },
+      ...ownerSectionRoutes,
     ],
   },
   {
@@ -87,6 +96,18 @@ export const router = createBrowserRouter([
       { path: 'solicitudes', element: <SolicitudesPage /> },
       { path: 'usuarios', element: <UsuariosPage /> },
       { path: 'inventory', element: <InventoryPage /> },
+    ],
+  },
+  {
+    // Admin enters any lot through the owner panel, scoped by `:tenantId` in the
+    // URL (deep-linkable). Admin-only via `opsLoader`; the same owner sections
+    // are reused, gated by an impersonation banner instead of the admin chrome.
+    path: '/ops/estacionamientos/:tenantId',
+    element: <OwnerPortal mode="admin" />,
+    loader: opsLoader,
+    children: [
+      { index: true, element: <Navigate to="dashboard" replace /> },
+      ...ownerSectionRoutes,
     ],
   },
   { path: '*', loader: () => redirect('/') },

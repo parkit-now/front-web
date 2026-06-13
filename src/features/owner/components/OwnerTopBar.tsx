@@ -6,19 +6,21 @@ import {
 } from '../../../shared/components/icons';
 import { SucursalSwitcher } from './SucursalSwitcher';
 
+// Keyed by the last path segment so it works under both `/app/*` and
+// `/ops/estacionamientos/:tenantId/*`.
 const SECTION_TITLES: Record<string, string> = {
-  '/app/dashboard': 'Monitoreo en vivo',
-  '/app/estacionamientos': 'Estacionamientos',
-  '/app/personal': 'Personal',
-  '/app/estadisticas': 'Estadísticas',
-  '/app/transacciones': 'Transacciones',
-  '/app/auditoria': 'Auditoría',
-  '/app/config': 'Configuración',
+  dashboard: 'Monitoreo en vivo',
+  personal: 'Personal',
+  estadisticas: 'Estadísticas',
+  transacciones: 'Transacciones',
+  auditoria: 'Auditoría',
+  config: 'Configuración',
 };
 
 export function OwnerTopBar() {
   const { pathname } = useLocation();
-  const title = SECTION_TITLES[pathname] ?? 'Portal';
+  const segment = pathname.split('/').filter(Boolean).pop() ?? '';
+  const title = SECTION_TITLES[segment] ?? 'Portal';
 
   return (
     <header

@@ -12,35 +12,36 @@ import {
 } from '../../../shared/components/icons';
 
 interface NavItem {
-  path: string;
+  /** Path segment, joined to the sidebar's `basePath`. */
+  segment: string;
   label: string;
   icon: React.ReactNode;
 }
 
 const NAV_ITEMS: NavItem[] = [
   {
-    path: '/app/dashboard',
+    segment: 'dashboard',
     label: 'Monitoreo en vivo',
     icon: <IconDashboard size={18} />,
   },
-  { path: '/app/personal', label: 'Personal', icon: <IconUsers size={18} /> },
+  { segment: 'personal', label: 'Personal', icon: <IconUsers size={18} /> },
   {
-    path: '/app/estadisticas',
+    segment: 'estadisticas',
     label: 'Estadísticas',
     icon: <IconChart size={18} />,
   },
   {
-    path: '/app/transacciones',
+    segment: 'transacciones',
     label: 'Transacciones',
     icon: <IconReceipt size={18} />,
   },
   {
-    path: '/app/auditoria',
+    segment: 'auditoria',
     label: 'Auditoría',
     icon: <IconShield size={18} />,
   },
   {
-    path: '/app/config',
+    segment: 'config',
     label: 'Configuración',
     icon: <IconSettings size={18} />,
   },
@@ -50,12 +51,19 @@ interface OwnerSidebarProps {
   userName: string;
   userRole?: string;
   onSignOut: () => void;
+  /** Route prefix the nav items hang off. `/app` for owners, the
+   * `/ops/estacionamientos/:tenantId` base for admins entering a lot. */
+  basePath?: string;
+  /** Push the sticky sidebar down when an impersonation bar sits above it. */
+  topOffset?: number;
 }
 
 export function OwnerSidebar({
   userName,
   userRole = 'Dueño',
   onSignOut,
+  basePath = '/app',
+  topOffset = 0,
 }: OwnerSidebarProps) {
   const { pathname } = useLocation();
 
@@ -68,9 +76,9 @@ export function OwnerSidebar({
         borderRight: '1px solid var(--border-soft)',
         display: 'flex',
         flexDirection: 'column',
-        height: '100vh',
+        height: `calc(100vh - ${topOffset}px)`,
         position: 'sticky',
-        top: 0,
+        top: topOffset,
       }}
     >
       {/* Logo */}
@@ -97,13 +105,14 @@ export function OwnerSidebar({
       {/* Nav items */}
       <nav style={{ flex: 1, padding: '0 8px', overflowY: 'auto' }}>
         {NAV_ITEMS.map((item) => {
+          const to = `${basePath}/${item.segment}`;
           const isActive =
-            pathname === item.path ||
-            (item.path !== '/app/dashboard' && pathname.startsWith(item.path));
+            pathname === to ||
+            (item.segment !== 'dashboard' && pathname.startsWith(to));
           return (
             <Link
-              key={item.path}
-              to={item.path}
+              key={item.segment}
+              to={to}
               style={{
                 display: 'flex',
                 alignItems: 'center',

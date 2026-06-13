@@ -1,10 +1,15 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Badge } from '../../../../shared/components/ui/Badge';
 import { Button } from '../../../../shared/components/ui/Button';
 import { ConfirmDialog } from '../../../../shared/components/ui/ConfirmDialog';
 import { Input } from '../../../../shared/components/ui/Input';
 import { Pagination } from '../../../../shared/components/ui/Pagination';
-import { IconPlus, IconSearch } from '../../../../shared/components/icons';
+import {
+  IconPlus,
+  IconSearch,
+  IconChevronRight,
+} from '../../../../shared/components/icons';
 import { useDebouncedValue } from '../../../../shared/hooks/useDebouncedValue';
 import { useParkingActions, useParkingsList } from '../../hooks/useParkings';
 import type { Parking } from '../../services/parkings';
@@ -25,6 +30,7 @@ const thStyle: React.CSSProperties = {
 };
 
 export function InventoryPage() {
+  const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState('');
   const search = useDebouncedValue(searchInput, 300);
   const [page, setPage] = useState(1);
@@ -47,6 +53,11 @@ export function InventoryPage() {
   function openEdit(parking: Parking) {
     setEditing(parking);
     setFormOpen(true);
+  }
+
+  /** Enter the parking's panel as admin (same panel the owner sees). */
+  function openParking(parking: Parking) {
+    void navigate(`/ops/estacionamientos/${parking.id}/dashboard`);
   }
 
   function handleSearch(value: string) {
@@ -168,11 +179,21 @@ export function InventoryPage() {
               items.map((s, idx) => (
                 <tr
                   key={s.id}
+                  onClick={() => openParking(s)}
+                  title={`Abrir ${s.name}`}
                   style={{
+                    cursor: 'pointer',
                     borderBottom:
                       idx < items.length - 1
                         ? '1px solid var(--border-soft)'
                         : 'none',
+                    transition: 'background 120ms',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'var(--bg-a)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
                   }}
                 >
                   <td style={{ padding: '14px 16px' }}>
@@ -206,17 +227,31 @@ export function InventoryPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => openEdit(s)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEdit(s);
+                      }}
                     >
                       Editar
                     </Button>
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setDeleteTarget(s)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteTarget(s);
+                      }}
                     >
                       Eliminar
                     </Button>
+                    <IconChevronRight
+                      size={16}
+                      style={{
+                        color: 'var(--text-3)',
+                        verticalAlign: 'middle',
+                        marginLeft: 4,
+                      }}
+                    />
                   </td>
                 </tr>
               ))

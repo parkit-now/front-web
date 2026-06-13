@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../../../shared/components/ui/Button';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
@@ -47,11 +47,13 @@ export function ConfigHorarios() {
   const canEdit = sucursal?.role === 'owner';
 
   const queryKey = ['schedules', sucursalId];
-  const { data: schedules = [], isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey,
     queryFn: () => listSchedules(sucursalId),
     enabled: Boolean(sucursalId),
   });
+  // Stable reference so the sync effect below doesn't loop while data is undefined.
+  const schedules = useMemo(() => data ?? [], [data]);
 
   // Editable copy of each persisted range, keyed by schedule id.
   const [edits, setEdits] = useState<
