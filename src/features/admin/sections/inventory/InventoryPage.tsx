@@ -8,7 +8,7 @@ import { Pagination } from '../../../../shared/components/ui/Pagination';
 import {
   IconPlus,
   IconSearch,
-  IconChevronRight,
+  IconArrow,
 } from '../../../../shared/components/icons';
 import { useDebouncedValue } from '../../../../shared/hooks/useDebouncedValue';
 import { useParkingActions, useParkingsList } from '../../hooks/useParkings';
@@ -41,6 +41,7 @@ export function InventoryPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Parking | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Parking | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const data = listQuery.data;
   const items = data?.items ?? [];
@@ -176,85 +177,127 @@ export function InventoryPage() {
                 </td>
               </tr>
             ) : (
-              items.map((s, idx) => (
-                <tr
-                  key={s.id}
-                  onClick={() => openParking(s)}
-                  title={`Abrir ${s.name}`}
-                  style={{
-                    cursor: 'pointer',
-                    borderBottom:
-                      idx < items.length - 1
-                        ? '1px solid var(--border-soft)'
-                        : 'none',
-                    transition: 'background 120ms',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'var(--bg-a)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                  }}
-                >
-                  <td style={{ padding: '14px 16px' }}>
-                    <span
-                      style={{
-                        fontSize: 13,
-                        fontWeight: 600,
-                        color: 'var(--text-1)',
-                      }}
-                    >
-                      {s.name}
-                    </span>
-                  </td>
-                  <td style={{ padding: '14px 16px' }}>
-                    <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
-                      {s.address ?? '—'}
-                    </span>
-                  </td>
-                  <td style={{ padding: '14px 16px' }}>
-                    <Badge variant={s.status === 'active' ? 'ok' : 'warn'} dot>
-                      {s.status === 'active' ? 'Activo' : 'Mantenimiento'}
-                    </Badge>
-                  </td>
-                  <td
+              items.map((s, idx) => {
+                const isHovered = hoveredId === s.id;
+                return (
+                  <tr
+                    key={s.id}
+                    onClick={() => openParking(s)}
+                    title={`Abrir panel de ${s.name}`}
                     style={{
-                      padding: '10px 16px',
-                      textAlign: 'right',
-                      whiteSpace: 'nowrap',
+                      cursor: 'pointer',
+                      background: isHovered ? 'var(--bg-a)' : 'transparent',
+                      borderBottom:
+                        idx < items.length - 1
+                          ? '1px solid var(--border-soft)'
+                          : 'none',
+                      transition: 'background 120ms',
                     }}
+                    onMouseEnter={() => setHoveredId(s.id)}
+                    onMouseLeave={() => setHoveredId(null)}
                   >
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openEdit(s);
-                      }}
-                    >
-                      Editar
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteTarget(s);
-                      }}
-                    >
-                      Eliminar
-                    </Button>
-                    <IconChevronRight
-                      size={16}
+                    <td style={{ padding: '14px 16px' }}>
+                      <span
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: 'var(--text-1)',
+                        }}
+                      >
+                        {s.name}
+                      </span>
+                    </td>
+                    <td style={{ padding: '14px 16px' }}>
+                      <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
+                        {s.address ?? '—'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '14px 16px' }}>
+                      <Badge
+                        variant={s.status === 'active' ? 'ok' : 'warn'}
+                        dot
+                      >
+                        {s.status === 'active' ? 'Activo' : 'Mantenimiento'}
+                      </Badge>
+                    </td>
+                    <td
                       style={{
-                        color: 'var(--text-3)',
-                        verticalAlign: 'middle',
-                        marginLeft: 4,
+                        padding: '10px 16px',
+                        textAlign: 'right',
+                        whiteSpace: 'nowrap',
                       }}
-                    />
-                  </td>
-                </tr>
-              ))
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'flex-end',
+                          gap: 4,
+                        }}
+                      >
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEdit(s);
+                          }}
+                        >
+                          Editar
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeleteTarget(s);
+                          }}
+                        >
+                          Eliminar
+                        </Button>
+                        <span
+                          style={{
+                            width: 1,
+                            height: 20,
+                            background: 'var(--border-soft)',
+                            margin: '0 4px',
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openParking(s);
+                          }}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            padding: '6px 12px',
+                            borderRadius: 'var(--r-md)',
+                            fontSize: 13,
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            whiteSpace: 'nowrap',
+                            border: '1px solid',
+                            borderColor: isHovered
+                              ? 'var(--brand)'
+                              : 'var(--brand-soft)',
+                            background: isHovered
+                              ? 'var(--brand)'
+                              : 'var(--brand-soft)',
+                            color: isHovered ? '#fff' : 'var(--brand)',
+                            transition: 'all 140ms',
+                          }}
+                        >
+                          Abrir panel
+                          <IconArrow size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
