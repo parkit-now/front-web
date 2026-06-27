@@ -9,6 +9,7 @@ import { EstadisticasPage } from './features/owner/sections/estadisticas/Estadis
 import { TransaccionesPage } from './features/owner/sections/transacciones/TransaccionesPage';
 import { AuditoriaPage } from './features/owner/sections/auditoria/AuditoriaPage';
 import { ConfigPage } from './features/owner/sections/config/ConfigPage';
+import { PaymentMethodsPage } from './features/owner/sections/payment-methods/PaymentMethodsPage';
 import { SolicitudesPage } from './features/admin/sections/solicitudes/SolicitudesPage';
 import { UsuariosPage } from './features/admin/sections/usuarios/UsuariosPage';
 import { InventoryPage } from './features/admin/sections/inventory/InventoryPage';
@@ -67,6 +68,7 @@ const ownerSectionRoutes = [
   { path: 'estadisticas', element: <EstadisticasPage /> },
   { path: 'transacciones', element: <TransaccionesPage /> },
   { path: 'auditoria', element: <AuditoriaPage /> },
+  { path: 'metodos-de-pago', element: <PaymentMethodsPage /> },
   { path: 'config', element: <ConfigPage /> },
 ];
 

@@ -42,7 +42,7 @@ function formatDateTime(iso: string): string {
   }).format(new Date(iso));
 }
 
-export function ConfigPagos() {
+export function PaymentMethodsPage() {
   const { showToast } = useToast();
   const { sucursalId } = useSucursal();
   const userId = useCurrentUserId();
@@ -123,7 +123,7 @@ export function ConfigPagos() {
   function handleToggleEnabled(m: PaymentMethodSummary) {
     if (m.isDefault && m.enabled) {
       showToast({
-        message: 'No podés desactivar el medio de pago predeterminado.',
+        message: 'No podés desactivar el método de pago predeterminado.',
         kind: 'error',
       });
       return;
@@ -139,7 +139,7 @@ export function ConfigPagos() {
     () => [
       {
         id: 'name',
-        header: 'Medio de pago',
+        header: 'Nombre',
         accessorKey: 'name',
         cell: ({ row }) => {
           const m = row.original;
@@ -162,28 +162,8 @@ export function ConfigPagos() {
                 {m.name}
               </span>
               {m.isSystem && <Badge>Sistema</Badge>}
+              {m.isDefault && <Badge variant="brand">Por defecto</Badge>}
             </div>
-          );
-        },
-      },
-      {
-        id: 'default',
-        header: 'Predeterminado',
-        accessorFn: (m) => (m.isDefault ? 'yes' : 'no'),
-        enableSorting: false,
-        cell: ({ row }) => {
-          const m = row.original;
-          if (m.isDefault) return <Badge variant="brand">Por defecto</Badge>;
-          return (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<IconCheckCircle size={15} />}
-              disabled={!m.enabled || toggleMutation.isPending}
-              onClick={() => handleMakeDefault(m)}
-            >
-              Marcar
-            </Button>
           );
         },
       },
@@ -259,6 +239,18 @@ export function ConfigPagos() {
                   <IconTrash size={16} />
                 </button>
               )}
+              {!m.isDefault && m.enabled ? (
+                <button
+                  type="button"
+                  className="pk-btn pk-btn-ghost pk-btn-icon"
+                  title="Marcar como predeterminado"
+                  aria-label={`Marcar ${m.name} como predeterminado`}
+                  disabled={toggleMutation.isPending}
+                  onClick={() => handleMakeDefault(m)}
+                >
+                  <IconCheckCircle size={16} />
+                </button>
+              ) : null}
               {m.isDefault ? (
                 // The default can't be disabled (it'd leave a disabled method
                 // pre-selected at checkout). Communicate the rule instead of
@@ -317,10 +309,10 @@ export function ConfigPagos() {
       <DataTable<PaymentMethodSummary>
         data={medios}
         columns={columns}
-        title="Medios de pago"
+        title="Métodos de pago"
         isLoading={listQuery.isLoading}
-        emptyMessage="Todavía no hay medios de pago. Agregá el primero."
-        searchPlaceholder="Buscar medio de pago"
+        emptyMessage="Todavía no hay métodos de pago. Agregá el primero."
+        searchPlaceholder="Buscar método de pago"
         searchableKeys={['name']}
         filterableColumns={['status']}
         filterOptionsByColumn={{
@@ -344,7 +336,7 @@ export function ConfigPagos() {
             icon={<IconPlus size={15} />}
             onClick={openCreate}
           >
-            Agregar medio de pago
+            Agregar método de pago
           </Button>
         }
       />
@@ -364,7 +356,7 @@ export function ConfigPagos() {
 
       <ConfirmDialog
         open={deleteTarget !== null}
-        title="Eliminar medio de pago"
+        title="Eliminar método de pago"
         destructive
         confirmLabel="Eliminar"
         loading={deleteMutation.isPending}

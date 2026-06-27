@@ -7,6 +7,7 @@ import {
   IconChart,
   IconReceipt,
   IconShield,
+  IconCreditCard,
   IconSettings,
   IconLogout,
 } from '../../../shared/components/icons';
@@ -39,6 +40,11 @@ const NAV_ITEMS: NavItem[] = [
     segment: 'auditoria',
     label: 'Auditoría',
     icon: <IconShield size={18} />,
+  },
+  {
+    segment: 'metodos-de-pago',
+    label: 'Métodos de pago',
+    icon: <IconCreditCard size={18} />,
   },
   {
     segment: 'config',
