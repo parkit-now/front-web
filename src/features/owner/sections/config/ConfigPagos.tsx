@@ -139,7 +139,7 @@ export function ConfigPagos() {
     () => [
       {
         id: 'name',
-        header: 'Medio de pago',
+        header: 'Nombre',
         accessorKey: 'name',
         cell: ({ row }) => {
           const m = row.original;
@@ -162,28 +162,8 @@ export function ConfigPagos() {
                 {m.name}
               </span>
               {m.isSystem && <Badge>Sistema</Badge>}
+              {m.isDefault && <Badge variant="brand">Por defecto</Badge>}
             </div>
-          );
-        },
-      },
-      {
-        id: 'default',
-        header: 'Predeterminado',
-        accessorFn: (m) => (m.isDefault ? 'yes' : 'no'),
-        enableSorting: false,
-        cell: ({ row }) => {
-          const m = row.original;
-          if (m.isDefault) return <Badge variant="brand">Por defecto</Badge>;
-          return (
-            <Button
-              variant="ghost"
-              size="sm"
-              icon={<IconCheckCircle size={15} />}
-              disabled={!m.enabled || toggleMutation.isPending}
-              onClick={() => handleMakeDefault(m)}
-            >
-              Marcar
-            </Button>
           );
         },
       },
@@ -259,6 +239,18 @@ export function ConfigPagos() {
                   <IconTrash size={16} />
                 </button>
               )}
+              {!m.isDefault && m.enabled ? (
+                <button
+                  type="button"
+                  className="pk-btn pk-btn-ghost pk-btn-icon"
+                  title="Marcar como predeterminado"
+                  aria-label={`Marcar ${m.name} como predeterminado`}
+                  disabled={toggleMutation.isPending}
+                  onClick={() => handleMakeDefault(m)}
+                >
+                  <IconCheckCircle size={16} />
+                </button>
+              ) : null}
               {m.isDefault ? (
                 // The default can't be disabled (it'd leave a disabled method
                 // pre-selected at checkout). Communicate the rule instead of
