@@ -15,6 +15,7 @@ import {
 import { DataTable } from '../../../../features/data-table';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { translateApiError } from '../../../../lib/api/translate';
+import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
 import { useSucursal } from '../../context/SucursalContext';
 import {
   createPaymentMethod,
@@ -25,9 +26,26 @@ import {
 } from '../../services/entities';
 import { PaymentMethodFormModal } from './PaymentMethodFormModal';
 
+function paymentMethodStatus(
+  method: PaymentMethodSummary,
+): 'Habilitado' | 'Deshabilitado' {
+  return method.enabled ? 'Habilitado' : 'Deshabilitado';
+}
+
+function formatDateTime(iso: string): string {
+  return new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(iso));
+}
+
 export function ConfigPagos() {
   const { showToast } = useToast();
   const { sucursalId } = useSucursal();
+  const userId = useCurrentUserId();
   const queryClient = useQueryClient();
 
   const [formOpen, setFormOpen] = useState(false);
@@ -170,6 +188,30 @@ export function ConfigPagos() {
         },
       },
       {
+        id: 'status',
+        header: 'Estado',
+        accessorFn: (m) => paymentMethodStatus(m),
+        cell: ({ row }) => {
+          const disabled =
+            paymentMethodStatus(row.original) === 'Deshabilitado';
+          return (
+            <Badge variant={disabled ? 'default' : 'ok'}>
+              {disabled ? 'Deshabilitado' : 'Habilitado'}
+            </Badge>
+          );
+        },
+      },
+      {
+        id: 'updatedAt',
+        header: 'Actualizado',
+        accessorKey: 'updatedAt',
+        cell: ({ row }) => (
+          <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+            {formatDateTime(row.original.updatedAt)}
+          </span>
+        ),
+      },
+      {
         id: 'acciones',
         header: () => <div style={{ textAlign: 'center' }}>Acciones</div>,
         enableSorting: false,
@@ -280,9 +322,21 @@ export function ConfigPagos() {
         emptyMessage="Todavía no hay medios de pago. Agregá el primero."
         searchPlaceholder="Buscar medio de pago"
         searchableKeys={['name']}
+        filterableColumns={['status']}
+        filterOptionsByColumn={{
+          status: [
+            { value: 'Habilitado', label: 'Habilitado' },
+            { value: 'Deshabilitado', label: 'Deshabilitado' },
+          ],
+        }}
         getRowId={(m) => m.id}
         onRefresh={() => void listQuery.refetch()}
         refreshDisabled={listQuery.isFetching}
+        templateScope={
+          userId && sucursalId
+            ? { userId, tenantId: sucursalId, tableKey: 'payment-methods' }
+            : undefined
+        }
         headerAction={
           <Button
             variant="primary"
