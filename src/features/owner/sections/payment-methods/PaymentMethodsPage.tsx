@@ -42,7 +42,7 @@ function formatDateTime(iso: string): string {
   }).format(new Date(iso));
 }
 
-export function ConfigPagos() {
+export function PaymentMethodsPage() {
   const { showToast } = useToast();
   const { sucursalId } = useSucursal();
   const userId = useCurrentUserId();
@@ -123,7 +123,7 @@ export function ConfigPagos() {
   function handleToggleEnabled(m: PaymentMethodSummary) {
     if (m.isDefault && m.enabled) {
       showToast({
-        message: 'No podés desactivar el medio de pago predeterminado.',
+        message: 'No podés desactivar el método de pago predeterminado.',
         kind: 'error',
       });
       return;
@@ -309,10 +309,10 @@ export function ConfigPagos() {
       <DataTable<PaymentMethodSummary>
         data={medios}
         columns={columns}
-        title="Medios de pago"
+        title="Métodos de pago"
         isLoading={listQuery.isLoading}
-        emptyMessage="Todavía no hay medios de pago. Agregá el primero."
-        searchPlaceholder="Buscar medio de pago"
+        emptyMessage="Todavía no hay métodos de pago. Agregá el primero."
+        searchPlaceholder="Buscar método de pago"
         searchableKeys={['name']}
         filterableColumns={['status']}
         filterOptionsByColumn={{
@@ -336,7 +336,7 @@ export function ConfigPagos() {
             icon={<IconPlus size={15} />}
             onClick={openCreate}
           >
-            Agregar medio de pago
+            Agregar método de pago
           </Button>
         }
       />
@@ -356,7 +356,7 @@ export function ConfigPagos() {
 
       <ConfirmDialog
         open={deleteTarget !== null}
-        title="Eliminar medio de pago"
+        title="Eliminar método de pago"
         destructive
         confirmLabel="Eliminar"
         loading={deleteMutation.isPending}

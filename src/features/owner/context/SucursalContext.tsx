@@ -56,6 +56,7 @@ const SECTIONS = [
   'estadisticas',
   'transacciones',
   'auditoria',
+  'metodos-de-pago',
   'config',
 ] as const;
 

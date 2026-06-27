@@ -35,7 +35,7 @@ export function PaymentMethodFormModal({
   function handleSubmit() {
     const trimmed = name.trim();
     if (trimmed.length === 0) {
-      setError('Ingresá un nombre para el medio de pago.');
+      setError('Ingresá un nombre para el método de pago.');
       return;
     }
     onSubmit(trimmed);
@@ -45,7 +45,7 @@ export function PaymentMethodFormModal({
     <Modal
       open={open}
       onClose={onClose}
-      title={isEdit ? 'Editar medio de pago' : 'Nuevo medio de pago'}
+      title={isEdit ? 'Editar método de pago' : 'Nuevo método de pago'}
       width={420}
       footer={
         <>
