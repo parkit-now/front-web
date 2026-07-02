@@ -7,6 +7,7 @@ import {
   IconChart,
   IconReceipt,
   IconShield,
+  IconCar,
   IconCreditCard,
   IconSettings,
   IconLogout,
@@ -40,6 +41,11 @@ const NAV_ITEMS: NavItem[] = [
     segment: 'auditoria',
     label: 'Auditoría',
     icon: <IconShield size={18} />,
+  },
+  {
+    segment: 'revision-lpr',
+    label: 'Revisión LPR',
+    icon: <IconCar size={18} />,
   },
   {
     segment: 'metodos-de-pago',

@@ -8,6 +8,7 @@ import { PersonalPage } from './features/owner/sections/personal/PersonalPage';
 import { EstadisticasPage } from './features/owner/sections/estadisticas/EstadisticasPage';
 import { TransaccionesPage } from './features/owner/sections/transacciones/TransaccionesPage';
 import { AuditoriaPage } from './features/owner/sections/auditoria/AuditoriaPage';
+import { LprReviewPage } from './features/owner/sections/lpr-review/LprReviewPage';
 import { ConfigPage } from './features/owner/sections/config/ConfigPage';
 import { PaymentMethodsPage } from './features/owner/sections/payment-methods/PaymentMethodsPage';
 import { SolicitudesPage } from './features/admin/sections/solicitudes/SolicitudesPage';
@@ -68,6 +69,7 @@ const ownerSectionRoutes = [
   { path: 'estadisticas', element: <EstadisticasPage /> },
   { path: 'transacciones', element: <TransaccionesPage /> },
   { path: 'auditoria', element: <AuditoriaPage /> },
+  { path: 'revision-lpr', element: <LprReviewPage /> },
   { path: 'metodos-de-pago', element: <PaymentMethodsPage /> },
   { path: 'config', element: <ConfigPage /> },
 ];
