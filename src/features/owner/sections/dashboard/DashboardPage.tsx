@@ -1,14 +1,38 @@
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { SectionHeader } from '../../../../shared/components/SectionHeader';
+import { Badge } from '../../../../shared/components/ui/Badge';
+import { IconCar, IconChevronRight } from '../../../../shared/components/icons';
 import { KpiCards } from './KpiCards';
 import { LiveMonitor } from './LiveMonitor';
 import { useKpis } from '../../hooks/useKpis';
 import { useBays } from '../../hooks/useBays';
 import { useSucursal } from '../../context/SucursalContext';
+import { listLprDetectionEvents } from '../../services/lpr-events';
+
+const DISMISSED_LPR_LIMIT = 50;
 
 export function DashboardPage() {
-  const { sucursal } = useSucursal();
+  const { mode, sucursal, sucursalId } = useSucursal();
   const { data: kpis, isLoading: kpisLoading } = useKpis();
   const { data: bays = [], isLoading: baysLoading } = useBays();
+  const dismissedQuery = useQuery({
+    queryKey: ['lpr-events', sucursalId, 'dismissed', DISMISSED_LPR_LIMIT],
+    queryFn: () =>
+      listLprDetectionEvents({
+        tenantId: sucursalId,
+        status: 'dismissed',
+        limit: DISMISSED_LPR_LIMIT,
+      }),
+    enabled: Boolean(sucursalId),
+    staleTime: 30_000,
+  });
+
+  const dismissedCount = dismissedQuery.data?.length ?? 0;
+  const reviewPath =
+    mode === 'admin'
+      ? `/ops/estacionamientos/${sucursalId}/revision-lpr`
+      : '/app/revision-lpr';
 
   return (
     <div>
@@ -20,6 +44,24 @@ export function DashboardPage() {
             : undefined
         }
       />
+      {dismissedCount > 0 && (
+        <Link to={reviewPath} className="dashboard-lpr-review-link">
+          <div className="dashboard-lpr-review-icon">
+            <IconCar size={18} />
+          </div>
+          <div className="dashboard-lpr-review-copy">
+            <strong>Patentes descartadas</strong>
+            <span>
+              {dismissedCount}{' '}
+              {dismissedCount === 1
+                ? 'descarte del operario'
+                : 'descartes del operario'}
+            </span>
+          </div>
+          <Badge variant="warn">{dismissedCount}</Badge>
+          <IconChevronRight size={16} />
+        </Link>
+      )}
       <KpiCards kpis={kpis} loading={kpisLoading} />
       {baysLoading ? (
         <div className="pk-card pk-card-pad" style={{ minHeight: 200 }}>

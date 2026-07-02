@@ -167,7 +167,7 @@ export function LprReviewPage() {
   return (
     <div>
       <SectionHeader
-        title="Revisión LPR"
+        title="Patentes descartadas"
         subtitle={
           sucursal
             ? [sucursal.nombre, 'descartes del operario']
@@ -197,7 +197,7 @@ export function LprReviewPage() {
         <div className="pk-card">
           <EmptyState
             icon={<IconAlert size={28} />}
-            title="No se pudo cargar la revisión LPR"
+            title="No se pudieron cargar las patentes descartadas"
             description="Probá actualizar la sección."
           />
         </div>

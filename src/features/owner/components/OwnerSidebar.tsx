@@ -44,7 +44,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     segment: 'revision-lpr',
-    label: 'Revisión LPR',
+    label: 'Patentes descartadas',
     icon: <IconCar size={18} />,
   },
   {
