@@ -42,3 +42,14 @@ export async function getLprDetectionEventImageUrl(input: {
   });
   return signed.url;
 }
+
+export async function archiveLprDetectionEvent(input: {
+  tenantId: string;
+  eventId: string;
+}): Promise<LprDetectionEvent> {
+  return apiRequest<LprDetectionEvent>({
+    method: 'PATCH',
+    path: `/tenants/${encodeURIComponent(input.tenantId)}/lpr-events/${encodeURIComponent(input.eventId)}/archive`,
+    bearer: await bearer(),
+  });
+}

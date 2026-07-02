@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { SectionHeader } from '../../../../shared/components/SectionHeader';
 import { Badge } from '../../../../shared/components/ui/Badge';
 import { Button } from '../../../../shared/components/ui/Button';
@@ -11,6 +12,7 @@ import {
 } from '../../../../shared/components/icons';
 import { useSucursal } from '../../context/SucursalContext';
 import {
+  archiveLprDetectionEvent,
   getLprDetectionEventImageUrl,
   listLprDetectionEvents,
   type LprDetectionEvent,
@@ -94,9 +96,13 @@ function EvidenceImage({
 function LprEvidenceCard({
   tenantId,
   event,
+  archiving,
+  onArchive,
 }: {
   tenantId: string;
   event: LprDetectionEvent;
+  archiving: boolean;
+  onArchive: (event: LprDetectionEvent) => void;
 }) {
   const plate =
     event.displayPlate ?? event.normalizedText ?? event.rawText ?? '-';
@@ -142,6 +148,16 @@ function LprEvidenceCard({
             <strong>{shortId(event.id)}</strong>
           </div>
         </div>
+        <div className="lpr-review-actions">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => onArchive(event)}
+            loading={archiving}
+          >
+            Archivar
+          </Button>
+        </div>
       </div>
     </article>
   );
@@ -149,6 +165,8 @@ function LprEvidenceCard({
 
 export function LprReviewPage() {
   const { sucursal, sucursalId } = useSucursal();
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
 
   const query = useQuery({
     queryKey: ['lpr-events', sucursalId, 'dismissed', REVIEW_LIMIT],
@@ -163,6 +181,22 @@ export function LprReviewPage() {
   });
 
   const events = query.data ?? [];
+  const archiveMutation = useMutation({
+    mutationFn: (event: LprDetectionEvent) =>
+      archiveLprDetectionEvent({ tenantId: sucursalId, eventId: event.id }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['lpr-events', sucursalId, 'dismissed'],
+      });
+      showToast({ message: 'Patente archivada.', kind: 'success' });
+    },
+    onError: () => {
+      showToast({
+        message: 'No se pudo archivar la patente descartada.',
+        kind: 'error',
+      });
+    },
+  });
 
   return (
     <div>
@@ -216,6 +250,11 @@ export function LprReviewPage() {
               key={event.id}
               tenantId={sucursalId}
               event={event}
+              archiving={
+                archiveMutation.isPending &&
+                archiveMutation.variables?.id === event.id
+              }
+              onArchive={(next) => archiveMutation.mutate(next)}
             />
           ))}
         </div>

@@ -310,6 +310,12 @@ a {
   overflow-wrap: anywhere;
 }
 
+.lpr-review-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
 .lpr-review-loading {
   display: flex;
   align-items: center;
