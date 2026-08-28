@@ -122,9 +122,10 @@ export function TransaccionesPage() {
         ),
       },
       {
-        id: 'fecha_label',
+        id: 'procesado_at',
         header: 'Fecha',
-        accessorKey: 'fecha_label',
+        accessorKey: 'procesado_at',
+        filterFn: 'dateRange',
         cell: ({ row }) => (
           <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
             {row.original.fecha_label}
@@ -158,7 +159,7 @@ export function TransaccionesPage() {
         emptyMessage="No hay transacciones para mostrar."
         searchPlaceholder="Buscar por ID, patente o cliente"
         searchableKeys={['id', 'patente', 'cliente', 'medio_pago']}
-        filterableColumns={['estado', 'medio_pago']}
+        filterableColumns={['estado', 'medio_pago', 'procesado_at']}
         filterOptionsByColumn={{
           estado: [
             { value: 'ok', label: 'Exitosa' },
