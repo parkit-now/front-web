@@ -44,7 +44,7 @@ env-use-prod: ## Activar entorno produccion (copia .env.production → .env)
 	@cp $(ENV_PROD) .env
 	@echo "✓ .env apunta a entorno PRODUCCION ($(ENV_PROD))"
 
-dev: env-use-local ## Levantar app apuntando al backend LOCAL
+dev: install env-use-local ## Levantar app apuntando al backend LOCAL
 	@bun run dev
 
 prod: env-use-prod ## Build de prod + servir en preview con link clickeable
