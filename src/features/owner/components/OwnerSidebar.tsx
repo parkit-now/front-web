@@ -8,6 +8,7 @@ import {
   IconReceipt,
   IconShield,
   IconCar,
+  IconDollar,
   IconCreditCard,
   IconSettings,
   IconLogout,
@@ -47,6 +48,7 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Patentes descartadas',
     icon: <IconCar size={18} />,
   },
+  { segment: 'tasas', label: 'Tasas', icon: <IconDollar size={18} /> },
   {
     segment: 'metodos-de-pago',
     label: 'Métodos de pago',

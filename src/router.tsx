@@ -11,6 +11,7 @@ import { AuditoriaPage } from './features/owner/sections/auditoria/AuditoriaPage
 import { LprReviewPage } from './features/owner/sections/lpr-review/LprReviewPage';
 import { ConfigPage } from './features/owner/sections/config/ConfigPage';
 import { PaymentMethodsPage } from './features/owner/sections/payment-methods/PaymentMethodsPage';
+import { TasasPage } from './features/owner/sections/tasas/TasasPage';
 import { SolicitudesPage } from './features/admin/sections/solicitudes/SolicitudesPage';
 import { UsuariosPage } from './features/admin/sections/usuarios/UsuariosPage';
 import { InventoryPage } from './features/admin/sections/inventory/InventoryPage';
@@ -70,6 +71,7 @@ const ownerSectionRoutes = [
   { path: 'transacciones', element: <TransaccionesPage /> },
   { path: 'auditoria', element: <AuditoriaPage /> },
   { path: 'revision-lpr', element: <LprReviewPage /> },
+  { path: 'tasas', element: <TasasPage /> },
   { path: 'metodos-de-pago', element: <PaymentMethodsPage /> },
   { path: 'config', element: <ConfigPage /> },
 ];
