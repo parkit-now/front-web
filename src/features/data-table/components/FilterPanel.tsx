@@ -28,9 +28,6 @@ type FilterPanelProps<TData> = {
   filterOptionsByColumn?: Record<string, DataTableFilterOption[]>;
 };
 
-/** Below this many options, a search box is just clutter. */
-const SEARCH_THRESHOLD = 8;
-
 function resolveColumnLabel<TData>(column: Column<TData, unknown>): string {
   const header = column.columnDef.header;
   return typeof header === 'string' && header.trim().length > 0
@@ -236,15 +233,28 @@ export function FilterPanel<TData>({
           <div className="dt-filter-list">
             {columns.map((column) => {
               const dateColumn = isDateColumn(column);
+
+              if (dateColumn) {
+                return (
+                  <div className="dt-filter-date-row" key={column.id}>
+                    <span className="dt-filter-date-label">
+                      <CalendarDays size={15} />
+                      {resolveColumnLabel(column)}
+                    </span>
+                    <DateRangeFilter
+                      value={dateRangeValue(column as Column<unknown, unknown>)}
+                      onChange={(next) => column.setFilterValue(next)}
+                      placeholder="Elegir fecha"
+                    />
+                  </div>
+                );
+              }
+
               const count = activeCountByColumn.get(column.id) ?? 0;
               const expanded = expandedColumnIds.has(column.id);
-              const options = dateColumn
-                ? []
-                : getOptions(column, filterOptionsByColumn);
+              const options = getOptions(column, filterOptionsByColumn);
               const search = searchByColumn[column.id] ?? '';
-              const visibleOptions = dateColumn
-                ? options
-                : filterOptionsBySearch(options, search);
+              const visibleOptions = filterOptionsBySearch(options, search);
 
               return (
                 <section
@@ -256,11 +266,7 @@ export function FilterPanel<TData>({
                     className="dt-filter-section-header"
                     onClick={() => toggleColumn(column.id)}
                   >
-                    {dateColumn ? (
-                      <CalendarDays size={15} />
-                    ) : (
-                      <SlidersHorizontal size={15} />
-                    )}
+                    <SlidersHorizontal size={15} />
                     <span>{resolveColumnLabel(column)}</span>
                     {count > 0 ? <b>{count}</b> : null}
                     <ChevronDown size={16} />
@@ -268,38 +274,26 @@ export function FilterPanel<TData>({
 
                   {expanded ? (
                     <div className="dt-filter-options">
-                      {dateColumn ? (
-                        <div className="dt-filter-date">
-                          <DateRangeFilter
-                            value={dateRangeValue(
-                              column as Column<unknown, unknown>,
-                            )}
-                            onChange={(next) => column.setFilterValue(next)}
-                            placeholder="Elegir fecha"
-                          />
-                        </div>
-                      ) : options.length === 0 ? (
+                      {options.length === 0 ? (
                         <p className="dt-empty-note">
                           Sin opciones disponibles.
                         </p>
                       ) : (
                         <>
-                          {options.length > SEARCH_THRESHOLD ? (
-                            <div className="dt-filter-search">
-                              <Search size={14} />
-                              <input
-                                type="text"
-                                value={search}
-                                onChange={(event) =>
-                                  setSearchByColumn((current) => ({
-                                    ...current,
-                                    [column.id]: event.target.value,
-                                  }))
-                                }
-                                placeholder="Buscar..."
-                              />
-                            </div>
-                          ) : null}
+                          <div className="dt-filter-search">
+                            <Search size={14} />
+                            <input
+                              type="text"
+                              value={search}
+                              onChange={(event) =>
+                                setSearchByColumn((current) => ({
+                                  ...current,
+                                  [column.id]: event.target.value,
+                                }))
+                              }
+                              placeholder="Buscar..."
+                            />
+                          </div>
                           <div className="dt-filter-options-scroll">
                             {visibleOptions.length === 0 ? (
                               <p className="dt-empty-note">

@@ -14,8 +14,12 @@ import {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { DayPicker, type DateRange } from 'react-day-picker';
-import { useCloseOnOutsideClick } from '../../../lib/ui/useCloseOnOutsideClick';
+import {
+  POPOVER_PANEL_ATTRIBUTE,
+  useCloseOnOutsideClick,
+} from '../../../lib/ui/useCloseOnOutsideClick';
 
 export type { DateRange };
 
@@ -40,6 +44,14 @@ function formatLabel(value: DateRange | undefined): string | null {
  * Single-day-or-range date filter, styled to match this app's design system.
  * Click one day to filter that exact day; click a second to filter the range
  * between them. Reused across every table with a date filter.
+ *
+ * The panel is portaled to `document.body` — it can be nested inside a
+ * container with `overflow: hidden` (e.g. FilterPanel's dropdown), which
+ * would otherwise clip it since `position: fixed` only escapes layout, not
+ * an ancestor's overflow clipping. The portal is marked with
+ * `data-popover-panel` so `useCloseOnOutsideClick` (used by an ancestor
+ * popover like FilterPanel) doesn't mistake a click inside it for a click
+ * outside.
  */
 export function DateRangeFilter({
   value,
@@ -48,12 +60,11 @@ export function DateRangeFilter({
   className,
 }: DateRangeFilterProps) {
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [panelStyle, setPanelStyle] = useState<CSSProperties>();
 
   const close = useCallback(() => setOpen(false), []);
-  useCloseOnOutsideClick(wrapRef, open, close);
+  useCloseOnOutsideClick(triggerRef, open, close);
 
   const updatePosition = useCallback(() => {
     const trigger = triggerRef.current;
@@ -83,7 +94,7 @@ export function DateRangeFilter({
   const now = new Date();
 
   return (
-    <div className="dr-filter" ref={wrapRef}>
+    <div className="dr-filter">
       <button
         ref={triggerRef}
         type="button"
@@ -109,67 +120,76 @@ export function DateRangeFilter({
         ) : null}
       </button>
 
-      {open ? (
-        <div className="dr-filter-panel" style={panelStyle}>
-          <DayPicker
-            mode="range"
-            selected={value}
-            onSelect={onChange}
-            locale={es}
-            defaultMonth={value?.from ?? now}
-            captionLayout="dropdown"
-            navLayout="around"
-            startMonth={new Date(now.getFullYear() - YEAR_SPAN, 0)}
-            endMonth={new Date(now.getFullYear() + YEAR_SPAN, 11)}
-            classNames={{
-              root: 'dr-cal',
-              months: 'dr-cal-months',
-              month: 'dr-cal-month',
-              month_caption: 'dr-cal-caption',
-              dropdowns: 'dr-cal-dropdowns',
-              dropdown_root: 'dr-cal-dropdown-root',
-              dropdown: 'dr-cal-dropdown',
-              caption_label: 'dr-cal-caption-label',
-              button_previous: 'dr-cal-nav-prev',
-              button_next: 'dr-cal-nav-next',
-              chevron: 'dr-cal-chevron',
-              month_grid: 'dr-cal-grid',
-              weekdays: 'dr-cal-weekdays',
-              weekday: 'dr-cal-weekday',
-              weeks: 'dr-cal-weeks',
-              week: 'dr-cal-week',
-              day: 'dr-cal-day',
-              day_button: 'dr-cal-day-button',
-              selected: 'is-selected',
-              range_start: 'is-range-start',
-              range_middle: 'is-range-middle',
-              range_end: 'is-range-end',
-              today: 'is-today',
-              outside: 'is-outside',
-              disabled: 'is-disabled',
-            }}
-            formatters={{
-              formatMonthDropdown: (month) =>
-                month.toLocaleString('es', { month: 'short' }),
-            }}
-            components={{
-              Chevron: ({ orientation, size, className: chevronClass }) => {
-                if (orientation === 'left')
+      {open &&
+        createPortal(
+          <div
+            className="dr-filter-panel"
+            style={panelStyle}
+            {...{ [POPOVER_PANEL_ATTRIBUTE]: true }}
+          >
+            <DayPicker
+              mode="range"
+              selected={value}
+              onSelect={onChange}
+              locale={es}
+              defaultMonth={value?.from ?? now}
+              captionLayout="dropdown"
+              navLayout="around"
+              startMonth={new Date(now.getFullYear() - YEAR_SPAN, 0)}
+              endMonth={new Date(now.getFullYear() + YEAR_SPAN, 11)}
+              classNames={{
+                root: 'dr-cal',
+                months: 'dr-cal-months',
+                month: 'dr-cal-month',
+                month_caption: 'dr-cal-caption',
+                dropdowns: 'dr-cal-dropdowns',
+                dropdown_root: 'dr-cal-dropdown-root',
+                dropdown: 'dr-cal-dropdown',
+                caption_label: 'dr-cal-caption-label',
+                button_previous: 'dr-cal-nav-prev',
+                button_next: 'dr-cal-nav-next',
+                chevron: 'dr-cal-chevron',
+                month_grid: 'dr-cal-grid',
+                weekdays: 'dr-cal-weekdays',
+                weekday: 'dr-cal-weekday',
+                weeks: 'dr-cal-weeks',
+                week: 'dr-cal-week',
+                day: 'dr-cal-day',
+                day_button: 'dr-cal-day-button',
+                selected: 'is-selected',
+                range_start: 'is-range-start',
+                range_middle: 'is-range-middle',
+                range_end: 'is-range-end',
+                today: 'is-today',
+                outside: 'is-outside',
+                disabled: 'is-disabled',
+              }}
+              formatters={{
+                formatMonthDropdown: (month) =>
+                  month.toLocaleString('es', { month: 'short' }),
+              }}
+              components={{
+                Chevron: ({ orientation, size, className: chevronClass }) => {
+                  if (orientation === 'left')
+                    return (
+                      <ChevronLeft size={size ?? 16} className={chevronClass} />
+                    );
+                  if (orientation === 'right')
+                    return (
+                      <ChevronRight
+                        size={size ?? 16}
+                        className={chevronClass}
+                      />
+                    );
                   return (
-                    <ChevronLeft size={size ?? 16} className={chevronClass} />
+                    <ChevronDown size={size ?? 14} className={chevronClass} />
                   );
-                if (orientation === 'right')
-                  return (
-                    <ChevronRight size={size ?? 16} className={chevronClass} />
-                  );
-                return (
-                  <ChevronDown size={size ?? 14} className={chevronClass} />
-                );
-              },
-            }}
-          />
-        </div>
-      ) : null}
+                },
+              }}
+            />
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
