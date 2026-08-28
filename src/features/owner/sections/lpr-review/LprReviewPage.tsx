@@ -1,7 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
+import { endOfDay, startOfDay } from 'date-fns';
+import { useState } from 'react';
+import { Pagination } from '../../../data-table/components/Pagination';
+import '../../../data-table/data-table.css';
 import { SectionHeader } from '../../../../shared/components/SectionHeader';
 import { Badge } from '../../../../shared/components/ui/Badge';
 import { Button } from '../../../../shared/components/ui/Button';
+import {
+  DateRangeFilter,
+  type DateRange,
+} from '../../../../shared/components/ui/DateRangeFilter';
 import { EmptyState } from '../../../../shared/components/ui/EmptyState';
 import {
   IconAlert,
@@ -16,7 +24,8 @@ import {
   type LprDetectionEvent,
 } from '../../services/lpr-events';
 
-const REVIEW_LIMIT = 50;
+const PAGE_SIZE_OPTIONS = [12, 24, 48];
+const DEFAULT_PAGE_SIZE = 24;
 
 function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return 'Sin fecha';
@@ -33,6 +42,19 @@ function formatConfidence(value: number): string {
 function shortId(value: string | null | undefined): string {
   if (!value) return 'Sin usuario';
   return value.slice(0, 8);
+}
+
+/** A single selected day filters just that day; a range covers the whole
+ * span from the start of the first day to the end of the last. */
+function dateRangeToQuery(range: DateRange | undefined): {
+  firstSeenFrom?: string;
+  firstSeenTo?: string;
+} {
+  if (!range?.from) return {};
+  return {
+    firstSeenFrom: startOfDay(range.from).toISOString(),
+    firstSeenTo: endOfDay(range.to ?? range.from).toISOString(),
+  };
 }
 
 function EvidenceImage({
@@ -135,7 +157,7 @@ function LprEvidenceCard({
           </div>
           <div>
             <span>Operario</span>
-            <strong>{shortId(event.reviewedByUserId)}</strong>
+            <strong>{event.reviewedByName ?? 'Sin operario'}</strong>
           </div>
           <div>
             <span>Evento</span>
@@ -150,19 +172,52 @@ function LprEvidenceCard({
 export function LprReviewPage() {
   const { sucursal, sucursalId } = useSucursal();
 
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>();
+
+  function handlePageIndexChange(next: number) {
+    setPageIndex(next);
+  }
+
+  function handlePageSizeChange(next: number) {
+    setPageSize(next);
+    setPageIndex(0);
+  }
+
+  function handleDateRangeChange(next: DateRange | undefined) {
+    setDateRange(next);
+    setPageIndex(0);
+  }
+
+  const { firstSeenFrom, firstSeenTo } = dateRangeToQuery(dateRange);
+
   const query = useQuery({
-    queryKey: ['lpr-events', sucursalId, 'dismissed', REVIEW_LIMIT],
+    queryKey: [
+      'lpr-events',
+      sucursalId,
+      'dismissed',
+      pageIndex,
+      pageSize,
+      firstSeenFrom,
+      firstSeenTo,
+    ],
     queryFn: () =>
       listLprDetectionEvents({
         tenantId: sucursalId,
         status: 'dismissed',
-        limit: REVIEW_LIMIT,
+        page: pageIndex + 1,
+        pageSize,
+        firstSeenFrom,
+        firstSeenTo,
       }),
     enabled: Boolean(sucursalId),
     staleTime: 30_000,
   });
 
-  const events = query.data ?? [];
+  const events = query.data?.items ?? [];
+  const total = query.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div>
@@ -188,6 +243,14 @@ export function LprReviewPage() {
         }
       />
 
+      <div className="lpr-review-filters">
+        <DateRangeFilter
+          value={dateRange}
+          onChange={handleDateRangeChange}
+          placeholder="Fecha de detección"
+        />
+      </div>
+
       {query.isLoading ? (
         <div className="pk-card pk-card-pad lpr-review-loading">
           <IconClock size={18} />
@@ -206,19 +269,33 @@ export function LprReviewPage() {
           <EmptyState
             icon={<IconCar size={32} />}
             title="Sin descartes LPR"
-            description="No hay patentes descartadas por el operario para esta sucursal."
+            description="No hay patentes descartadas por el operario para esta sucursal en el rango seleccionado."
           />
         </div>
       ) : (
-        <div className="lpr-review-grid">
-          {events.map((event) => (
-            <LprEvidenceCard
-              key={event.id}
-              tenantId={sucursalId}
-              event={event}
-            />
-          ))}
-        </div>
+        <>
+          <div className="lpr-review-grid">
+            {events.map((event) => (
+              <LprEvidenceCard
+                key={event.id}
+                tenantId={sucursalId}
+                event={event}
+              />
+            ))}
+          </div>
+
+          <Pagination
+            pageIndex={pageIndex}
+            pageSize={pageSize}
+            pageCount={pageCount}
+            totalRows={total}
+            pageSizeOptions={PAGE_SIZE_OPTIONS}
+            canPreviousPage={pageIndex > 0}
+            canNextPage={pageIndex < pageCount - 1}
+            onPageIndexChange={handlePageIndexChange}
+            onPageSizeChange={handlePageSizeChange}
+          />
+        </>
       )}
     </div>
   );

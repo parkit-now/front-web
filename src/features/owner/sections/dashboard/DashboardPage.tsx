@@ -10,25 +10,24 @@ import { useBays } from '../../hooks/useBays';
 import { useSucursal } from '../../context/SucursalContext';
 import { listLprDetectionEvents } from '../../services/lpr-events';
 
-const DISMISSED_LPR_LIMIT = 50;
-
 export function DashboardPage() {
   const { mode, sucursal, sucursalId } = useSucursal();
   const { data: kpis, isLoading: kpisLoading } = useKpis();
   const { data: bays = [], isLoading: baysLoading } = useBays();
   const dismissedQuery = useQuery({
-    queryKey: ['lpr-events', sucursalId, 'dismissed', DISMISSED_LPR_LIMIT],
+    queryKey: ['lpr-events', sucursalId, 'dismissed-count'],
     queryFn: () =>
       listLprDetectionEvents({
         tenantId: sucursalId,
         status: 'dismissed',
-        limit: DISMISSED_LPR_LIMIT,
+        page: 1,
+        pageSize: 1,
       }),
     enabled: Boolean(sucursalId),
     staleTime: 30_000,
   });
 
-  const dismissedCount = dismissedQuery.data?.length ?? 0;
+  const dismissedCount = dismissedQuery.data?.total ?? 0;
   const reviewPath =
     mode === 'admin'
       ? `/ops/estacionamientos/${sucursalId}/revision-lpr`

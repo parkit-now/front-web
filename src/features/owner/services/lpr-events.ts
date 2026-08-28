@@ -5,6 +5,8 @@ import { getSession } from '../../../lib/supabase/session';
 
 export type LprDetectionEvent = components['schemas']['LprDetectionEventDto'];
 export type LprDetectionStatus = LprDetectionEvent['status'];
+export type PaginatedLprDetectionEvents =
+  components['schemas']['PaginatedLprDetectionEventsDto'];
 
 async function bearer(): Promise<string> {
   const session = await getSession();
@@ -17,14 +19,21 @@ async function bearer(): Promise<string> {
 export async function listLprDetectionEvents(input: {
   tenantId: string;
   status?: LprDetectionStatus;
-  limit?: number;
-}): Promise<LprDetectionEvent[]> {
+  page?: number;
+  pageSize?: number;
+  firstSeenFrom?: string;
+  firstSeenTo?: string;
+}): Promise<PaginatedLprDetectionEvents> {
   const params = new URLSearchParams();
   if (input.status) params.set('status', input.status);
-  if (input.limit !== undefined) params.set('limit', String(input.limit));
+  if (input.page !== undefined) params.set('page', String(input.page));
+  if (input.pageSize !== undefined)
+    params.set('pageSize', String(input.pageSize));
+  if (input.firstSeenFrom) params.set('firstSeenFrom', input.firstSeenFrom);
+  if (input.firstSeenTo) params.set('firstSeenTo', input.firstSeenTo);
 
   const qs = params.toString();
-  return apiRequest<LprDetectionEvent[]>({
+  return apiRequest<PaginatedLprDetectionEvents>({
     method: 'GET',
     path: `/tenants/${encodeURIComponent(input.tenantId)}/lpr-events${qs ? `?${qs}` : ''}`,
     bearer: await bearer(),
