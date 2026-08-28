@@ -412,6 +412,43 @@
   padding: 7px 8px 9px;
 }
 
+.dt-filter-date {
+  padding: 2px 8px 9px;
+}
+
+.dt-filter-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.dt-filter-search svg {
+  flex: none;
+  color: var(--text-3);
+}
+
+.dt-filter-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--text-1);
+}
+
+.dt-filter-options-scroll {
+  display: grid;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
 .dt-check-row {
   display: flex;
   align-items: center;

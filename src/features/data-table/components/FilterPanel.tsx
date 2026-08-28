@@ -3,6 +3,7 @@ import {
   CalendarDays,
   ChevronDown,
   RotateCcw,
+  Search,
   SlidersHorizontal,
 } from 'lucide-react';
 import {
@@ -13,14 +14,22 @@ import {
   useRef,
   useState,
 } from 'react';
+import {
+  DateRangeFilter,
+  type DateRange,
+} from '../../../shared/components/ui/DateRangeFilter';
 import { useCloseOnOutsideClick } from '../../../lib/ui/useCloseOnOutsideClick';
 import type { DataTableFilterOption } from '../types';
+import { normalizeText } from '../utils';
 
 type FilterPanelProps<TData> = {
   table: Table<TData>;
   filterableColumns: string[];
   filterOptionsByColumn?: Record<string, DataTableFilterOption[]>;
 };
+
+/** Below this many options, a search box is just clutter. */
+const SEARCH_THRESHOLD = 8;
 
 function resolveColumnLabel<TData>(column: Column<TData, unknown>): string {
   const header = column.columnDef.header;
@@ -32,6 +41,15 @@ function resolveColumnLabel<TData>(column: Column<TData, unknown>): string {
 function selectedValues(column: Column<unknown, unknown>): string[] {
   const value = column.getFilterValue();
   return Array.isArray(value) ? value.map(String) : [];
+}
+
+function dateRangeValue(
+  column: Column<unknown, unknown>,
+): DateRange | undefined {
+  const value = column.getFilterValue();
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as DateRange)
+    : undefined;
 }
 
 function getOptions<TData>(
@@ -51,9 +69,26 @@ function getOptions<TData>(
   return unique.map((value) => ({ value, label: value }));
 }
 
+function filterOptionsBySearch(
+  options: DataTableFilterOption[],
+  search: string,
+): DataTableFilterOption[] {
+  const query = normalizeText(search);
+  if (!query) return options;
+  return options.filter((option) =>
+    normalizeText(option.label).includes(query),
+  );
+}
+
 function isDateColumn<TData>(column: Column<TData, unknown>): boolean {
-  if (String(column.columnDef.filterFn ?? '') === 'dateRange') return true;
-  return /date|fecha|created|updated|contacto/i.test(column.id);
+  return String(column.columnDef.filterFn ?? '') === 'dateRange';
+}
+
+function activeUnitCount<TData>(column: Column<TData, unknown>): number {
+  if (isDateColumn(column)) {
+    return dateRangeValue(column as Column<unknown, unknown>)?.from ? 1 : 0;
+  }
+  return selectedValues(column as Column<unknown, unknown>).length;
 }
 
 export function FilterPanel<TData>({
@@ -64,6 +99,9 @@ export function FilterPanel<TData>({
   const [open, setOpen] = useState(false);
   const [expandedColumnIds, setExpandedColumnIds] = useState<Set<string>>(
     () => new Set(),
+  );
+  const [searchByColumn, setSearchByColumn] = useState<Record<string, string>>(
+    {},
   );
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -76,17 +114,14 @@ export function FilterPanel<TData>({
     .map((columnId) => table.getColumn(columnId))
     .filter((column): column is Column<TData, unknown> => Boolean(column));
 
-  const selectedByColumn = useMemo(() => {
+  const activeCountByColumn = useMemo(() => {
     return new Map(
-      columns.map((column) => [
-        column.id,
-        selectedValues(column as Column<unknown, unknown>),
-      ]),
+      columns.map((column) => [column.id, activeUnitCount(column)]),
     );
   }, [columns]);
 
-  const activeCount = Array.from(selectedByColumn.values()).reduce(
-    (total, selected) => total + selected.length,
+  const activeCount = Array.from(activeCountByColumn.values()).reduce(
+    (total, count) => total + count,
     0,
   );
 
@@ -125,7 +160,7 @@ export function FilterPanel<TData>({
   useEffect(() => {
     if (!open) return;
     const activeColumnIds = columns
-      .filter((column) => (selectedByColumn.get(column.id) ?? []).length > 0)
+      .filter((column) => (activeCountByColumn.get(column.id) ?? 0) > 0)
       .map((column) => column.id);
     if (activeColumnIds.length === 0) return;
     setExpandedColumnIds((current) => {
@@ -136,12 +171,12 @@ export function FilterPanel<TData>({
       activeColumnIds.forEach((columnId) => next.add(columnId));
       return next;
     });
-  }, [columns, open, selectedByColumn]);
+  }, [activeCountByColumn, columns, open]);
 
   if (columns.length === 0) return null;
 
   function toggleValue(column: Column<TData, unknown>, value: string): void {
-    const current = selectedByColumn.get(column.id) ?? [];
+    const current = selectedValues(column as Column<unknown, unknown>);
     const next = current.includes(value)
       ? current.filter((item) => item !== value)
       : [...current, value];
@@ -187,17 +222,29 @@ export function FilterPanel<TData>({
               Filtros
               {activeCount > 0 ? <b>{activeCount}</b> : null}
             </span>
-            <button type="button" onClick={() => table.resetColumnFilters()}>
+            <button
+              type="button"
+              onClick={() => {
+                table.resetColumnFilters();
+                setSearchByColumn({});
+              }}
+            >
               <RotateCcw size={14} /> Limpiar
             </button>
           </div>
 
           <div className="dt-filter-list">
             {columns.map((column) => {
-              const selected = selectedByColumn.get(column.id) ?? [];
-              const options = getOptions(column, filterOptionsByColumn);
               const dateColumn = isDateColumn(column);
-              const expanded = dateColumn || expandedColumnIds.has(column.id);
+              const count = activeCountByColumn.get(column.id) ?? 0;
+              const expanded = expandedColumnIds.has(column.id);
+              const options = dateColumn
+                ? []
+                : getOptions(column, filterOptionsByColumn);
+              const search = searchByColumn[column.id] ?? '';
+              const visibleOptions = dateColumn
+                ? options
+                : filterOptionsBySearch(options, search);
 
               return (
                 <section
@@ -207,10 +254,7 @@ export function FilterPanel<TData>({
                   <button
                     type="button"
                     className="dt-filter-section-header"
-                    onClick={() => {
-                      if (!dateColumn) toggleColumn(column.id);
-                    }}
-                    disabled={dateColumn}
+                    onClick={() => toggleColumn(column.id)}
                   >
                     {dateColumn ? (
                       <CalendarDays size={15} />
@@ -218,27 +262,70 @@ export function FilterPanel<TData>({
                       <SlidersHorizontal size={15} />
                     )}
                     <span>{resolveColumnLabel(column)}</span>
-                    {selected.length > 0 ? <b>{selected.length}</b> : null}
-                    {!dateColumn ? <ChevronDown size={16} /> : null}
+                    {count > 0 ? <b>{count}</b> : null}
+                    <ChevronDown size={16} />
                   </button>
 
                   {expanded ? (
                     <div className="dt-filter-options">
-                      {options.length === 0 ? (
+                      {dateColumn ? (
+                        <div className="dt-filter-date">
+                          <DateRangeFilter
+                            value={dateRangeValue(
+                              column as Column<unknown, unknown>,
+                            )}
+                            onChange={(next) => column.setFilterValue(next)}
+                            placeholder="Elegir fecha"
+                          />
+                        </div>
+                      ) : options.length === 0 ? (
                         <p className="dt-empty-note">
                           Sin opciones disponibles.
                         </p>
                       ) : (
-                        options.map((option) => (
-                          <label className="dt-check-row" key={option.value}>
-                            <input
-                              type="checkbox"
-                              checked={selected.includes(option.value)}
-                              onChange={() => toggleValue(column, option.value)}
-                            />
-                            <span>{option.label}</span>
-                          </label>
-                        ))
+                        <>
+                          {options.length > SEARCH_THRESHOLD ? (
+                            <div className="dt-filter-search">
+                              <Search size={14} />
+                              <input
+                                type="text"
+                                value={search}
+                                onChange={(event) =>
+                                  setSearchByColumn((current) => ({
+                                    ...current,
+                                    [column.id]: event.target.value,
+                                  }))
+                                }
+                                placeholder="Buscar..."
+                              />
+                            </div>
+                          ) : null}
+                          <div className="dt-filter-options-scroll">
+                            {visibleOptions.length === 0 ? (
+                              <p className="dt-empty-note">
+                                Sin coincidencias.
+                              </p>
+                            ) : (
+                              visibleOptions.map((option) => (
+                                <label
+                                  className="dt-check-row"
+                                  key={option.value}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedValues(
+                                      column as Column<unknown, unknown>,
+                                    ).includes(option.value)}
+                                    onChange={() =>
+                                      toggleValue(column, option.value)
+                                    }
+                                  />
+                                  <span>{option.label}</span>
+                                </label>
+                              ))
+                            )}
+                          </div>
+                        </>
                       )}
                     </div>
                   ) : null}
