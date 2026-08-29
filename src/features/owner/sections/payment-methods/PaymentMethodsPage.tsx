@@ -311,7 +311,13 @@ export function PaymentMethodsPage() {
         columns={columns}
         title="Métodos de pago"
         isLoading={listQuery.isLoading}
-        emptyMessage="Todavía no hay métodos de pago. Agregá el primero."
+        emptyMessage={
+          // Sin esta rama, una carga fallida se ve igual que "no hay métodos" y
+          // el dueño puede creer que se le borró la configuración de cobros.
+          listQuery.isError
+            ? 'No pudimos cargar los métodos de pago. Probá recargar la tabla.'
+            : 'Todavía no hay métodos de pago. Agregá el primero.'
+        }
         searchPlaceholder="Buscar método de pago"
         searchableKeys={['name']}
         filterableColumns={['status']}
