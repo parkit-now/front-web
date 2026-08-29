@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '../../../../shared/components/ui/Badge';
@@ -64,6 +64,16 @@ export function TasasPage() {
   const [confirmAction, setConfirmAction] = useState<RateConfirmAction | null>(
     null,
   );
+
+  // El editor y el diálogo guardan una foto de la tasa (id y version) del
+  // estacionamiento activo. Si se cambia de estacionamiento con alguno abierto,
+  // esa foto queda apuntando a otra playa: la validación compara contra tarifas
+  // ajenas y el guardado saldría contra el tenant equivocado. Se descartan.
+  useEffect(() => {
+    setFormOpen(false);
+    setEditing(null);
+    setConfirmAction(null);
+  }, [sucursalId]);
 
   const queryKey = ['rates', sucursalId, { includeInactive: true }];
   const listQuery = useQuery({
