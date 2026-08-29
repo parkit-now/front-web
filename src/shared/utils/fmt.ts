@@ -35,3 +35,25 @@ export function formatTime(isoString: string): string {
   const d = new Date(isoString);
   return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 }
+
+const AR_DATE_TIME = new Intl.DateTimeFormat('es-AR', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+  timeZone: 'America/Argentina/Buenos_Aires',
+});
+
+/**
+ * Fecha y hora fijadas al huso de Argentina, igual que el desktop
+ * (`front-desktop/src/lib/format/argentina.ts`). La zona va explícita para que
+ * un usuario en otro huso vea la misma hora que el operador en la playa.
+ */
+export function fmtDateTimeAr(value: string | null | undefined): string {
+  if (!value) return 'Sin fecha';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return 'Sin fecha';
+  return AR_DATE_TIME.format(parsed);
+}

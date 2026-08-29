@@ -57,6 +57,7 @@ const SECTIONS = [
   'transacciones',
   'auditoria',
   'revision-lpr',
+  'tasas',
   'metodos-de-pago',
   'config',
 ] as const;

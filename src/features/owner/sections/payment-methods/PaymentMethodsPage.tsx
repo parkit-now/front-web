@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '../../../../shared/components/ui/Badge';
@@ -53,6 +53,15 @@ export function PaymentMethodsPage() {
   const [deleteTarget, setDeleteTarget] = useState<PaymentMethodSummary | null>(
     null,
   );
+
+  // El formulario y el diálogo guardan el medio de pago del estacionamiento
+  // activo. Al cambiar de estacionamiento esa referencia queda apuntando a otra
+  // playa y la acción saldría contra el tenant equivocado. Se descartan.
+  useEffect(() => {
+    setFormOpen(false);
+    setEditing(null);
+    setDeleteTarget(null);
+  }, [sucursalId]);
 
   const queryKey = ['payment-methods', sucursalId];
   const listQuery = useQuery({
@@ -311,7 +320,13 @@ export function PaymentMethodsPage() {
         columns={columns}
         title="Métodos de pago"
         isLoading={listQuery.isLoading}
-        emptyMessage="Todavía no hay métodos de pago. Agregá el primero."
+        emptyMessage={
+          // Sin esta rama, una carga fallida se ve igual que "no hay métodos" y
+          // el dueño puede creer que se le borró la configuración de cobros.
+          listQuery.isError
+            ? 'No pudimos cargar los métodos de pago. Probá recargar la tabla.'
+            : 'Todavía no hay métodos de pago. Agregá el primero.'
+        }
         searchPlaceholder="Buscar método de pago"
         searchableKeys={['name']}
         filterableColumns={['status']}

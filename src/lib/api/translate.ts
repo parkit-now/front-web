@@ -16,6 +16,10 @@ import { ApiError } from './client';
  */
 
 export type EndpointKey =
+  | 'rates.list'
+  | 'rates.create'
+  | 'rates.update'
+  | 'rates.delete'
   | 'auth.login'
   | 'auth.register'
   | 'auth.refresh'
