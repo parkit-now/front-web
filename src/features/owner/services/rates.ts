@@ -65,8 +65,13 @@ export async function updateRate(
 
 /**
  * DELETE /tenants/:tenantId/rates/:id — solo owner, optimistic locking.
- * Es borrado físico: no hay tombstone, así que el pull incremental
- * (`/rates/changes`) no propaga la baja al desktop.
+ * Es borrado lógico: el backend marca `deleted_at` y la fila sobrevive como
+ * tombstone, así que el pull incremental (`/rates/changes`) sí propaga la baja
+ * al desktop, que la elimina de su copia local. El listado (`GET /rates`) ya no
+ * la devuelve, ni con `includeInactive`.
+ *
+ * La baja llega recién en la próxima sincronización del desktop (login, cambio
+ * de estacionamiento o reconexión): no hay sondeo periódico.
  */
 export async function deleteRate(
   tenantId: string,
