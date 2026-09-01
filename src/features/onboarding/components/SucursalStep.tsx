@@ -50,45 +50,24 @@ export function SucursalStep({ values, errors, disabled, onChange }: Props) {
         </div>
 
         <div className="onboarding-field">
-          <label htmlFor="sucursal-carSpots">Plazas para autos</label>
+          <label htmlFor="sucursal-totalSpots">Plazas totales</label>
           <input
-            id="sucursal-carSpots"
+            id="sucursal-totalSpots"
             type="number"
             min={0}
             inputMode="numeric"
-            value={values.carSpots}
-            onChange={(e) => onChange('carSpots', e.target.value)}
+            value={values.totalSpots}
+            onChange={(e) => onChange('totalSpots', e.target.value)}
             placeholder="0"
             disabled={disabled}
+            className={errors.totalSpots ? 'input-error' : undefined}
+            aria-invalid={errors.totalSpots ? true : undefined}
           />
-        </div>
-
-        <div className="onboarding-field">
-          <label htmlFor="sucursal-motorcycleSpots">Plazas para motos</label>
-          <input
-            id="sucursal-motorcycleSpots"
-            type="number"
-            min={0}
-            inputMode="numeric"
-            value={values.motorcycleSpots}
-            onChange={(e) => onChange('motorcycleSpots', e.target.value)}
-            placeholder="0"
-            disabled={disabled}
-          />
-        </div>
-
-        <div className="onboarding-field">
-          <label htmlFor="sucursal-bicycleSpots">Plazas para bicicletas</label>
-          <input
-            id="sucursal-bicycleSpots"
-            type="number"
-            min={0}
-            inputMode="numeric"
-            value={values.bicycleSpots}
-            onChange={(e) => onChange('bicycleSpots', e.target.value)}
-            placeholder="0"
-            disabled={disabled}
-          />
+          {/* Los campos de plazas nunca habían tenido mensaje de error: un
+              valor mal escrito se descartaba en silencio. */}
+          {errors.totalSpots ? (
+            <p className="field-error">{errors.totalSpots}</p>
+          ) : null}
         </div>
       </div>
     </div>

@@ -27,12 +27,9 @@ import {
   type UpdateVehicleInput,
   type Vehicle,
 } from '../../services/vehicles';
+import { listVehicleTypes } from '../../services/vehicle-types';
 import { VehicleFormModal } from './VehicleFormModal';
-import {
-  diffVehicleUpdate,
-  TYPE_LABEL,
-  type VehicleFormPayload,
-} from './validation';
+import { diffVehicleUpdate, type VehicleFormPayload } from './validation';
 
 /**
  * El optimistic locking del backend devuelve 409 cuando la `version` que
@@ -41,11 +38,6 @@ import {
  */
 const CONFLICT_MESSAGE =
   'El vehículo fue modificado por otra persona. Actualizamos la lista, revisá los datos y volvé a intentar.';
-
-/** `null` = global (lo administra la plataforma), UUID = propio de la playa. */
-function isOwn(vehicle: Vehicle, tenantId: string): boolean {
-  return vehicle.tenantId === tenantId;
-}
 
 export function VehiculosPage() {
   const { showToast } = useToast();
@@ -79,6 +71,20 @@ export function VehiculosPage() {
     enabled: Boolean(sucursalId),
   });
   const vehicles = useMemo(() => listQuery.data ?? [], [listQuery.data]);
+
+  // Los tipos se izan a la página porque la columna Tipo ya los necesita para
+  // resolver `typeId -> nombre`; el modal los recibe por props. Misma queryKey
+  // que la sección de tipos, así TanStack comparte caché.
+  const typesQuery = useQuery({
+    queryKey: ['vehicle-types', sucursalId],
+    queryFn: () => listVehicleTypes(sucursalId),
+    enabled: Boolean(sucursalId),
+  });
+  const types = useMemo(() => typesQuery.data ?? [], [typesQuery.data]);
+  const typeNameById = useMemo(
+    () => new Map(types.map((t) => [t.id, t.name])),
+    [types],
+  );
 
   function invalidate() {
     void queryClient.invalidateQueries({ queryKey });
@@ -169,7 +175,9 @@ export function VehiculosPage() {
       saveMutation.mutate({ kind: 'create', payload });
       return;
     }
-    const body = diffVehicleUpdate(payload, editing);
+    // `typesLoaded` evita un borrado silencioso del tipo: si la lista no cargó,
+    // el select queda vacío y un diff ingenuo mandaría `typeId` en blanco.
+    const body = diffVehicleUpdate(payload, editing, types.length > 0);
     if (Object.keys(body).length === 0) {
       showToast({ message: 'No hay cambios para guardar.', kind: 'info' });
       return;
@@ -202,30 +210,16 @@ export function VehiculosPage() {
       {
         id: 'type',
         header: 'Tipo',
-        // Se ordena y filtra por la etiqueta visible, no por el valor crudo del
-        // enum: es lo que el usuario ve en la celda.
-        accessorFn: (vehicle) =>
-          vehicle.type ? (TYPE_LABEL[vehicle.type] ?? vehicle.type) : '',
-        size: 130,
+        // Se ordena y filtra por el NOMBRE, no por el uuid: es lo que el
+        // usuario ve en la celda.
+        accessorFn: (vehicle) => typeNameById.get(vehicle.typeId) ?? '',
+        size: 150,
         cell: ({ row }) => {
-          const type = row.original.type;
-          if (!type) return <span style={{ color: 'var(--text-3)' }}>—</span>;
-          return TYPE_LABEL[type] ?? type;
-        },
-      },
-      {
-        id: 'origin',
-        header: 'Origen',
-        accessorFn: (vehicle) =>
-          isOwn(vehicle, sucursalId) ? 'Propio' : 'Global',
-        size: 120,
-        cell: ({ row }) => {
-          const own = isOwn(row.original, sucursalId);
-          return (
-            <Badge variant={own ? 'ok' : 'default'}>
-              {own ? 'Propio' : 'Global'}
-            </Badge>
-          );
+          const name = typeNameById.get(row.original.typeId);
+          // Un typeId que no resuelve significa que los tipos todavía no
+          // llegaron (o esa etapa del fetch falló). Mejor un guion que un uuid.
+          if (!name) return <span style={{ color: 'var(--text-3)' }}>—</span>;
+          return name;
         },
       },
     ];
@@ -242,9 +236,6 @@ export function VehiculosPage() {
         enableHiding: false,
         cell: ({ row }) => {
           const vehicle = row.original;
-          // Los globales los administra la plataforma: se ven, no se tocan. El
-          // backend además los rechaza con 404 si alguien fuerza la llamada.
-          if (!isOwn(vehicle, sucursalId)) return null;
           const name = `${vehicle.brand} ${vehicle.model}`;
           return (
             <div
@@ -281,7 +272,7 @@ export function VehiculosPage() {
         },
       },
     ];
-  }, [canManage, isBusy, sucursalId]);
+  }, [canManage, isBusy, typeNameById]);
 
   return (
     <>
@@ -289,7 +280,7 @@ export function VehiculosPage() {
         data={vehicles}
         columns={columns}
         title="Catálogo de vehículos"
-        subtitle="Vehículos globales del sistema y los propios de este estacionamiento."
+        subtitle="Los vehículos que este estacionamiento puede registrar."
         isLoading={listQuery.isLoading}
         emptyMessage={
           // Sin esta rama, una carga fallida se ve igual que "no hay vehículos"
@@ -302,13 +293,7 @@ export function VehiculosPage() {
         }
         searchPlaceholder="Buscar por marca o modelo..."
         searchableKeys={['brand', 'model']}
-        filterableColumns={['origin', 'type']}
-        filterOptionsByColumn={{
-          origin: [
-            { value: 'Global', label: 'Global' },
-            { value: 'Propio', label: 'Propio' },
-          ],
-        }}
+        filterableColumns={['type']}
         getRowId={(vehicle) => vehicle.id}
         initialPageSize={10}
         onRefresh={() => void listQuery.refetch()}
@@ -336,6 +321,9 @@ export function VehiculosPage() {
       />
 
       <VehicleFormModal
+        types={types}
+        typesLoading={typesQuery.isLoading}
+        typesError={typesQuery.isError}
         open={formOpen}
         vehicle={editing}
         vehicles={vehicles}

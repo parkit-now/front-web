@@ -12,6 +12,7 @@ import { LprReviewPage } from './features/owner/sections/lpr-review/LprReviewPag
 import { ConfigPage } from './features/owner/sections/config/ConfigPage';
 import { PaymentMethodsPage } from './features/owner/sections/payment-methods/PaymentMethodsPage';
 import { TasasPage } from './features/owner/sections/tasas/TasasPage';
+import { TiposVehiculoPage } from './features/owner/sections/tipos-de-vehiculo/TiposVehiculoPage';
 import { VehiculosPage } from './features/owner/sections/vehiculos/VehiculosPage';
 import { SolicitudesPage } from './features/admin/sections/solicitudes/SolicitudesPage';
 import { UsuariosPage } from './features/admin/sections/usuarios/UsuariosPage';
@@ -74,6 +75,7 @@ const ownerSectionRoutes = [
   { path: 'revision-lpr', element: <LprReviewPage /> },
   { path: 'tasas', element: <TasasPage /> },
   { path: 'vehiculos', element: <VehiculosPage /> },
+  { path: 'tipos-de-vehiculo', element: <TiposVehiculoPage /> },
   { path: 'metodos-de-pago', element: <PaymentMethodsPage /> },
   { path: 'config', element: <ConfigPage /> },
 ];

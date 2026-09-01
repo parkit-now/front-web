@@ -7,7 +7,7 @@ import type {
 import { readDeclaredEntity } from '../services/onboarding';
 import {
   normalizeCuit,
-  parseSpots,
+  parseTotalSpots,
   validateContactForm,
   validateSucursalForm,
   type ContactFieldErrors,
@@ -63,11 +63,7 @@ export function DraftWizard({
   const [sucursal, setSucursal] = useState<SucursalFormValues>(() => ({
     name: declared.name ?? '',
     address: declared.address ?? '',
-    carSpots: declared.carSpots != null ? String(declared.carSpots) : '',
-    motorcycleSpots:
-      declared.motorcycleSpots != null ? String(declared.motorcycleSpots) : '',
-    bicycleSpots:
-      declared.bicycleSpots != null ? String(declared.bicycleSpots) : '',
+    totalSpots: declared.totalSpots != null ? String(declared.totalSpots) : '',
   }));
   const [sucursalErrors, setSucursalErrors] = useState<SucursalFieldErrors>({});
 
@@ -107,9 +103,7 @@ export function DraftWizard({
 
   /** Full declared-entity payload, used for both POST (create) and PATCH (save). */
   function buildPayload(): CreateApplicationInput {
-    const carSpots = parseSpots(sucursal.carSpots);
-    const motorcycleSpots = parseSpots(sucursal.motorcycleSpots);
-    const bicycleSpots = parseSpots(sucursal.bicycleSpots);
+    const totalSpots = parseTotalSpots(sucursal.totalSpots);
     return {
       name: sucursal.name.trim(),
       address: sucursal.address.trim(),
@@ -117,9 +111,7 @@ export function DraftWizard({
       cuit: normalizeCuit(contact.cuit),
       email: contact.email.trim(),
       phone: contact.phone.trim(),
-      ...(carSpots != null ? { carSpots } : {}),
-      ...(motorcycleSpots != null ? { motorcycleSpots } : {}),
-      ...(bicycleSpots != null ? { bicycleSpots } : {}),
+      ...(totalSpots != null ? { totalSpots } : {}),
     };
   }
 

@@ -400,7 +400,9 @@ export function SolicitudesPage() {
                     ['Teléfono', detail.phone ?? '—'],
                     [
                       'Plazas declaradas',
-                      `${declared.carSpots ?? 0} autos · ${declared.motorcycleSpots ?? 0} motos · ${declared.bicycleSpots ?? 0} bicis`,
+                      declared.totalSpots != null
+                        ? `${declared.totalSpots} plazas`
+                        : '—',
                     ],
                     ['Documentos adjuntos', `${detail.docsCount} archivos`],
                   ].map(([label, value]) => (

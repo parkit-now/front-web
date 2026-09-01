@@ -1,36 +1,10 @@
-import type {
-  UpdateVehicleInput,
-  Vehicle,
-  VehicleType,
-} from '../../services/vehicles';
-
-/**
- * Espeja el enum `VehicleType` del backend. `camioneta` se quitó porque se
- * pisaba con `pickup` y con `suv` (una Hilux es las dos cosas). `bici` y
- * `camion` se sumaron: son categorías con plazas asignables
- * (`ServiceCode.VEHICLE_BICYCLE` / `VEHICLE_TRUCK`) que antes no se podían
- * expresar acá.
- */
-export const VEHICLE_TYPE_OPTIONS: { value: VehicleType; label: string }[] = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'moto', label: 'Moto' },
-  { value: 'bici', label: 'Bicicleta' },
-  { value: 'suv', label: 'SUV' },
-  { value: 'pickup', label: 'Pickup' },
-  { value: 'van', label: 'Utilitario' },
-  { value: 'camion', label: 'Camión' },
-  { value: 'otro', label: 'Otro' },
-];
-
-export const TYPE_LABEL: Record<string, string> = Object.fromEntries(
-  VEHICLE_TYPE_OPTIONS.map((o) => [o.value, o.label]),
-);
+import type { UpdateVehicleInput, Vehicle } from '../../services/vehicles';
 
 export interface VehicleFormState {
   brand: string;
   model: string;
-  /** Vacío = sin tipo especificado. */
-  type: string;
+  /** Id del tipo. Vacío = todavía no eligió. */
+  typeId: string;
 }
 
 export type VehicleFormErrors = Partial<Record<keyof VehicleFormState, string>>;
@@ -38,20 +12,20 @@ export type VehicleFormErrors = Partial<Record<keyof VehicleFormState, string>>;
 export interface VehicleFormPayload {
   brand: string;
   model: string;
-  type?: VehicleType;
+  typeId: string;
 }
 
 const TEXT_MAX_LENGTH = 120;
 
 export function emptyVehicleForm(): VehicleFormState {
-  return { brand: '', model: '', type: '' };
+  return { brand: '', model: '', typeId: '' };
 }
 
 export function vehicleToForm(vehicle: Vehicle): VehicleFormState {
   return {
     brand: vehicle.brand,
     model: vehicle.model,
-    type: vehicle.type ?? '',
+    typeId: vehicle.typeId,
   };
 }
 
@@ -60,6 +34,9 @@ export function vehicleToForm(vehicle: Vehicle): VehicleFormState {
  *
  * Mide sobre `.trim()`: si mirara `.length` a secas, tres espacios habilitarían
  * el botón y el error recién aparecería al guardar.
+ *
+ * El tipo es obligatorio: borrar un tipo obliga a reasignar, así que un vehículo
+ * nunca queda sin tipo. "Otro" es el balde para lo que no encaja.
  */
 export function canSubmitVehicleForm(form: VehicleFormState): boolean {
   const brand = form.brand.trim();
@@ -68,7 +45,8 @@ export function canSubmitVehicleForm(form: VehicleFormState): boolean {
     brand.length > 0 &&
     brand.length <= TEXT_MAX_LENGTH &&
     model.length > 0 &&
-    model.length <= TEXT_MAX_LENGTH
+    model.length <= TEXT_MAX_LENGTH &&
+    form.typeId !== ''
   );
 }
 
@@ -98,54 +76,48 @@ export function validateVehicleForm(
     errors.model = 'Máximo 120 caracteres.';
   }
 
+  if (form.typeId === '') {
+    errors.typeId = 'Elegí un tipo de vehículo.';
+  }
+
   // Chequeo de duplicados del lado del cliente: es UX, no la verdad. La verdad
-  // la impone `vehicles_scope_brand_model_uidx` en la base, que devuelve 409.
-  // Sirve para no gastar un request y para dar un mensaje más claro que el del
-  // backend, sobre todo en el caso del catálogo global.
+  // la impone `vehicles_tenant_brand_model_uidx` en la base, que devuelve 409.
+  // Sirve para no gastar un request y para avisar antes de que el usuario
+  // cierre el modal.
   if (!errors.brand && !errors.model) {
     const key = normalizeKey(brand, model);
     const clash = ctx.vehicles.find(
       (v) => v.id !== ctx.editingId && normalizeKey(v.brand, v.model) === key,
     );
     if (clash) {
-      errors.model = clash.tenantId
-        ? 'Ya tenés un vehículo con esa marca y modelo.'
-        : `"${clash.brand} ${clash.model}" ya está en el catálogo global, no hace falta cargarlo.`;
+      errors.model = 'Ya tenés un vehículo con esa marca y modelo.';
     }
   }
 
   if (Object.keys(errors).length > 0) return { errors };
 
-  return {
-    errors,
-    payload: {
-      brand,
-      model,
-      type: form.type === '' ? undefined : (form.type as VehicleType),
-    },
-  };
+  return { errors, payload: { brand, model, typeId: form.typeId } };
 }
 
 /**
  * Solo los campos que cambiaron. Devuelve `{}` cuando no hay nada que guardar,
  * para no gastar un PATCH al pedo.
  *
- * `type` es el caso incómodo: sacarle el tipo a un vehículo que lo tenía es un
- * cambio real, pero `UpdateVehicleDto` no acepta `null`. Se manda `'otro'`, que
- * es el escape hatch del enum — el desktop directamente no permite volver a
- * "sin tipo" una vez elegido.
+ * `typesLoaded` existe por un caso concreto de pérdida de datos: si la lista de
+ * tipos no cargó, el select queda vacío y un diff ingenuo mandaría un `typeId`
+ * en blanco, borrándole el tipo a un vehículo que sí lo tenía. Cuando no cargó,
+ * el tipo no se toca.
  */
 export function diffVehicleUpdate(
   payload: VehicleFormPayload,
   current: Vehicle,
+  typesLoaded = true,
 ): UpdateVehicleInput {
   const body: UpdateVehicleInput = {};
   if (payload.brand !== current.brand) body.brand = payload.brand;
   if (payload.model !== current.model) body.model = payload.model;
-
-  const currentType = current.type ?? undefined;
-  if (payload.type !== currentType) {
-    body.type = payload.type ?? 'otro';
+  if (typesLoaded && payload.typeId !== current.typeId) {
+    body.typeId = payload.typeId;
   }
   return body;
 }

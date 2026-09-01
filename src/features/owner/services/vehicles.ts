@@ -2,10 +2,9 @@ import type { components } from '../../../generated/api-types';
 import { apiRequest } from '../../../lib/api/client';
 import { getSession } from '../../../lib/supabase/session';
 
-export type Vehicle = components['schemas']['VehicleCatalogItemDto'];
+export type Vehicle = components['schemas']['VehicleDto'];
 export type CreateVehicleInput = components['schemas']['CreateVehicleDto'];
 export type UpdateVehicleInput = components['schemas']['UpdateVehicleDto'];
-export type VehicleType = NonNullable<CreateVehicleInput['type']>;
 
 async function bearer(): Promise<string> {
   const session = await getSession();
@@ -16,10 +15,10 @@ async function bearer(): Promise<string> {
 }
 
 /**
- * GET /tenants/:tenantId/vehicles — los globales del sistema más los propios de
- * este estacionamiento, ordenados por marca y modelo.
+ * GET /tenants/:tenantId/vehicles — el catálogo de este estacionamiento,
+ * ordenado por marca y modelo.
  *
- * No confundir con `/vehicles/catalog`, que es el feed de sincronización del
+ * No confundir con `/vehicles/changes`, que es el feed de sincronización del
  * desktop: ese SÍ devuelve las filas borradas (con `deletedAt` no-nulo) porque
  * el tombstone es la única forma de comunicarle una baja a un cliente offline.
  * Este endpoint las excluye, que es lo que corresponde para una tabla.
@@ -35,9 +34,6 @@ export async function listVehicles(tenantId: string): Promise<Vehicle[]> {
 /**
  * POST /tenants/:tenantId/vehicles — solo owner. Responde 201 (a diferencia de
  * las tasas, que responden 200) y el `id` (UUIDv7) lo genera el cliente.
- *
- * Siempre crea un vehículo del estacionamiento activo: el catálogo global lo
- * siembra la plataforma y no se puede escribir por esta API.
  */
 export async function createVehicle(
   tenantId: string,
@@ -73,7 +69,7 @@ export async function updateVehicle(
 /**
  * DELETE /tenants/:tenantId/vehicles/:id — solo owner, con optimistic locking.
  * Es borrado lógico: el backend marca `deleted_at` y la fila sigue viajando por
- * `/vehicles/catalog` como tombstone, para que el desktop la borre de su copia
+ * `/vehicles/changes` como tombstone, para que el desktop la borre de su copia
  * local. Un borrado físico no emitiría nada y el vehículo quedaría ahí para
  * siempre.
  */

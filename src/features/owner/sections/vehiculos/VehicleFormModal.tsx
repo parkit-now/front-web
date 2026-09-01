@@ -1,14 +1,15 @@
 import { useEffect, useState, type CSSProperties } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '../../../../shared/components/ui/Button';
 import { Input } from '../../../../shared/components/ui/Input';
 import { Modal } from '../../../../shared/components/ui/Modal';
+import type { VehicleType } from '../../services/vehicle-types';
 import type { Vehicle } from '../../services/vehicles';
 import {
   canSubmitVehicleForm,
   emptyVehicleForm,
   validateVehicleForm,
   vehicleToForm,
-  VEHICLE_TYPE_OPTIONS,
   type VehicleFormErrors,
   type VehicleFormPayload,
   type VehicleFormState,
@@ -27,6 +28,14 @@ interface VehicleFormModalProps {
   vehicle: Vehicle | null;
   /** Todos los del estacionamiento: se usan para detectar duplicados. */
   vehicles: Vehicle[];
+  /**
+   * Los tipos vivos del estacionamiento. Vienen por props y no de una query
+   * propia porque la página ya los necesita para la columna Tipo: fetchearlos
+   * dos veces sería absurdo, y así la lista llega tibia al abrir el modal.
+   */
+  types: VehicleType[];
+  typesLoading: boolean;
+  typesError: boolean;
   pending: boolean;
   onSubmit: (payload: VehicleFormPayload) => void;
 }
@@ -36,6 +45,9 @@ export function VehicleFormModal({
   onClose,
   vehicle,
   vehicles,
+  types,
+  typesLoading,
+  typesError,
   pending,
   onSubmit,
 }: VehicleFormModalProps) {
@@ -99,7 +111,7 @@ export function VehicleFormModal({
       <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-2)' }}>
         {isEdit
           ? 'Esta edición usa control de versión para evitar pisar cambios concurrentes.'
-          : 'El vehículo quedará disponible solo para este estacionamiento.'}
+          : 'El vehículo se agrega al catálogo de este estacionamiento.'}
       </p>
 
       <div style={GRID_2}>
@@ -135,28 +147,44 @@ export function VehicleFormModal({
         <label className="pk-label" htmlFor="vehicle-type">
           Tipo
         </label>
+        {/* El select depende de una query, así que tiene estados que antes no
+            existían. Ninguno bloquea el formulario: marca y modelo siguen
+            editables, y una lista lenta no puede tomar de rehén al alta. */}
         <select
           id="vehicle-type"
           className="pk-input"
-          value={form.type}
-          disabled={pending}
-          onChange={(e) => set('type', e.target.value)}
+          value={form.typeId}
+          disabled={pending || typesLoading || typesError || types.length === 0}
+          onChange={(e) => set('typeId', e.target.value)}
         >
-          {/* El desktop no tiene esta opción, así que una vez elegido un tipo
-              no hay forma de volver a "sin tipo". Acá sí. */}
-          <option value="">Sin tipo especificado</option>
-          {VEHICLE_TYPE_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
+          {typesLoading && <option value="">Cargando tipos...</option>}
+          {!typesLoading && typesError && (
+            <option value="">No se pudieron cargar los tipos</option>
+          )}
+          {!typesLoading && !typesError && types.length === 0 && (
+            <option value="">No hay tipos configurados</option>
+          )}
+          {!typesLoading && !typesError && types.length > 0 && (
+            <>
+              <option value="" disabled>
+                Elegí un tipo
+              </option>
+              {types.map((type) => (
+                <option key={type.id} value={type.id}>
+                  {type.name}
+                </option>
+              ))}
+            </>
+          )}
         </select>
+        {errors.typeId && <p className="field-error">{errors.typeId}</p>}
+        {!typesLoading && !typesError && types.length === 0 && (
+          <p style={{ margin: 0, fontSize: 12 }}>
+            {/* Relativo: resuelve igual bajo /app y bajo /ops/estacionamientos. */}
+            <Link to="../tipos-de-vehiculo">Crear tipos de vehículo</Link>
+          </p>
+        )}
       </div>
-
-      <p style={{ margin: '16px 0 0', fontSize: 12, color: 'var(--text-3)' }}>
-        Los vehículos del catálogo global no se editan desde acá: los administra
-        la plataforma y aparecen en todos los estacionamientos.
-      </p>
     </Modal>
   );
 }

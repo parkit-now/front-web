@@ -23,9 +23,7 @@ export type DeclaredEntity = {
   cuit?: string;
   email?: string;
   phone?: string;
-  carSpots?: number;
-  motorcycleSpots?: number;
-  bicycleSpots?: number;
+  totalSpots?: number;
 };
 
 /** Reads `declaredEntity` as a typed object (empty when absent). */
