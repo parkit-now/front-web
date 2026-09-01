@@ -9,6 +9,8 @@ import {
   IconShield,
   IconCar,
   IconDollar,
+  IconAuto,
+  IconLayers,
   IconCreditCard,
   IconSettings,
   IconLogout,
@@ -49,6 +51,12 @@ const NAV_ITEMS: NavItem[] = [
     icon: <IconCar size={18} />,
   },
   { segment: 'tasas', label: 'Tasas', icon: <IconDollar size={18} /> },
+  { segment: 'vehiculos', label: 'Vehículos', icon: <IconAuto size={18} /> },
+  {
+    segment: 'tipos-de-vehiculo',
+    label: 'Tipos de vehículo',
+    icon: <IconLayers size={18} />,
+  },
   {
     segment: 'metodos-de-pago',
     label: 'Métodos de pago',

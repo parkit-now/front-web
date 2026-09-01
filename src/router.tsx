@@ -12,11 +12,14 @@ import { LprReviewPage } from './features/owner/sections/lpr-review/LprReviewPag
 import { ConfigPage } from './features/owner/sections/config/ConfigPage';
 import { PaymentMethodsPage } from './features/owner/sections/payment-methods/PaymentMethodsPage';
 import { TasasPage } from './features/owner/sections/tasas/TasasPage';
+import { TiposVehiculoPage } from './features/owner/sections/tipos-de-vehiculo/TiposVehiculoPage';
+import { VehiculosPage } from './features/owner/sections/vehiculos/VehiculosPage';
 import { SolicitudesPage } from './features/admin/sections/solicitudes/SolicitudesPage';
 import { UsuariosPage } from './features/admin/sections/usuarios/UsuariosPage';
 import { InventoryPage } from './features/admin/sections/inventory/InventoryPage';
 import { OwnerPortal } from './features/owner/components/OwnerPortal';
 import { AdminPortal } from './features/admin/components/AdminPortal';
+import { RouteErrorPage } from './shared/components/RouteErrorPage';
 
 /**
  * Owner/operations portal: a `user` who belongs to at least one entity (an
@@ -72,22 +75,35 @@ const ownerSectionRoutes = [
   { path: 'auditoria', element: <AuditoriaPage /> },
   { path: 'revision-lpr', element: <LprReviewPage /> },
   { path: 'tasas', element: <TasasPage /> },
+  { path: 'vehiculos', element: <VehiculosPage /> },
+  { path: 'tipos-de-vehiculo', element: <TiposVehiculoPage /> },
   { path: 'metodos-de-pago', element: <PaymentMethodsPage /> },
   { path: 'config', element: <ConfigPage /> },
 ];
 
+/**
+ * Toda ruta con loader lleva `errorElement`. Un loader que tira sin red de
+ * contención lo pinta React Router con su pantalla de desarrollo — stack trace
+ * y "💿 Hey developer 👋" — que es lo último que tiene que ver un dueño cuando
+ * el backend se cae. La sesión vencida no llega hasta acá: la ataja `fetchMe`
+ * mandando al login.
+ */
+const errorElement = <RouteErrorPage />;
+
 export const router = createBrowserRouter([
-  { path: '/', element: <LandingPage /> },
-  { path: '/login', element: <AuthPage /> },
+  { path: '/', element: <LandingPage />, errorElement },
+  { path: '/login', element: <AuthPage />, errorElement },
   {
     path: '/onboarding',
     element: <OnboardingPage />,
     loader: onboardingLoader,
+    errorElement,
   },
   {
     path: '/app',
     element: <OwnerPortal />,
     loader: appLoader,
+    errorElement,
     children: [
       { index: true, loader: () => redirect('/app/dashboard') },
       ...ownerSectionRoutes,
@@ -97,6 +113,7 @@ export const router = createBrowserRouter([
     path: '/ops',
     element: <AdminPortal />,
     loader: opsLoader,
+    errorElement,
     children: [
       { index: true, loader: () => redirect('/ops/solicitudes') },
       { path: 'solicitudes', element: <SolicitudesPage /> },
@@ -111,6 +128,7 @@ export const router = createBrowserRouter([
     path: '/ops/estacionamientos/:tenantId',
     element: <OwnerPortal mode="admin" />,
     loader: opsLoader,
+    errorElement,
     children: [
       { index: true, element: <Navigate to="dashboard" replace /> },
       ...ownerSectionRoutes,
