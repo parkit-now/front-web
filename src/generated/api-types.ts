@@ -795,6 +795,26 @@ export interface paths {
         patch: operations["LprEventsController_updateStatus"];
         trace?: never;
     };
+    "/tenants/{tenantId}/lpr-events/{eventId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Archive a dismissed LPR detection event after owner review
+         * @description Hides a dismissed event from the owner review inbox without deleting the auditable event or its stored evidence image.
+         */
+        patch: operations["LprEventsController_archive"];
+        trace?: never;
+    };
     "/tenants/{tenantId}/lpr-events/{eventId}/image": {
         parameters: {
             query?: never;
@@ -839,6 +859,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tenants/{tenantId}/lpr-events/{eventId}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Move an archived LPR detection event back to owner review */
+        patch: operations["LprEventsController_unarchive"];
+        trace?: never;
+    };
     "/tenants/{tenantId}/lpr-events/changes": {
         parameters: {
             query?: never;
@@ -848,6 +885,28 @@ export interface paths {
         };
         /** Pull incremental LPR detection event changes for sync */
         get: operations["LprEventsController_pullChanges"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/lpr-events/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search past LPR detection events with visual evidence
+         * @description Owner-facing audit view: a paginated, newest-first feed of past camera/OCR detections.
+         *     Filter by detection-timestamp range (`from`/`to`), plate (`plate`, normalized prefix match) and movement `direction` (ingreso/egreso, derived from the camera `location`).
+         *     Each item carries the plate, timestamp, direction, OCR confidence/quality and whether an evidence image is still available; load the full-resolution photo through `GET :eventId/image-signed-url`.
+         */
+        get: operations["LprEventsController_history"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1956,6 +2015,10 @@ export interface components {
             maxSeq: number;
         };
         LprDetectionEventDto: {
+            /** Format: date-time */
+            archivedAt?: string | null;
+            /** Format: uuid */
+            archivedByUserId?: string | null;
             bestCaptureId?: string | null;
             cameraId: string;
             candidates: Record<string, never>[];
@@ -1972,6 +2035,8 @@ export interface components {
             formatValid: boolean;
             /** Format: uuid */
             id: string;
+            /** Format: date-time */
+            imageDeletedAt?: string | null;
             imageStoragePath?: string | null;
             imageUrl?: string | null;
             /** Format: date-time */
@@ -2019,6 +2084,78 @@ export interface components {
             timestamp?: string;
             /** @enum {string} */
             vehicleType?: "auto" | "pickup" | "suv" | "van" | "moto" | "camioneta" | "otro";
+        };
+        LprEventHistoryItemDto: {
+            /** Format: date-time */
+            archivedAt?: string | null;
+            /** Format: uuid */
+            archivedByUserId?: string | null;
+            bestCaptureId?: string | null;
+            cameraId: string;
+            candidates: Record<string, never>[];
+            confidence: number;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * @description Movement direction derived from the camera `location`.
+             * @enum {string}
+             */
+            direction: "ingreso" | "egreso";
+            displayPlate?: string | null;
+            /** Format: uuid */
+            entryId?: string | null;
+            /** Format: date-time */
+            firstSeenAt: string;
+            /** @enum {string} */
+            formatType: "argentina_old" | "argentina_mercosur" | "unknown";
+            formatValid: boolean;
+            /** @description True when the event still has an evidence image (`imageStoragePath` set and not purged by the retention job). */
+            hasImage: boolean;
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            imageDeletedAt?: string | null;
+            imageStoragePath?: string | null;
+            imageUrl?: string | null;
+            /** Format: date-time */
+            lastSeenAt: string;
+            location: string;
+            normalizedText?: string | null;
+            /** @description Best available plate string: `displayPlate`, else `normalizedText`, else `rawText`. */
+            plate: string | null;
+            /** @enum {string} */
+            qualityStatus: "valid_high" | "valid_low" | "invalid_format" | "low_confidence";
+            rawText?: string | null;
+            /** Format: date-time */
+            reviewedAt?: string | null;
+            /** Format: uuid */
+            reviewedByUserId?: string | null;
+            /** @enum {string} */
+            status: "pending" | "registered" | "dismissed" | "suppressed_active_entry" | "suppressed_pending_event" | "suppressed_recent_exit";
+            syncSeq: number;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: date-time */
+            updatedAt: string;
+            version: number;
+        };
+        LprEventHistoryPageDto: {
+            items: components["schemas"]["LprEventHistoryItemDto"][];
+            /**
+             * @description Current 1-based page.
+             * @example 1
+             */
+            page: number;
+            /**
+             * @description Items per page.
+             * @example 20
+             */
+            pageSize: number;
+            /**
+             * @description Total number of events matching the query.
+             * @example 128
+             */
+            total: number;
         };
         MeMembershipDto: {
             /**
@@ -2669,8 +2806,6 @@ export interface components {
             formatValid: boolean;
             /** Format: uuid */
             id: string;
-            imageStoragePath?: string;
-            imageUrl?: string;
             /** Format: date-time */
             lastSeenAt: string;
             location: string;
@@ -4745,6 +4880,8 @@ export interface operations {
     LprEventsController_list: {
         parameters: {
             query?: {
+                /** @description When false (default), archived LPR events are hidden from review lists. Set true to list archived events instead. */
+                archived?: boolean;
                 limit?: number;
                 status?: "pending" | "registered" | "dismissed" | "suppressed_active_entry" | "suppressed_pending_event" | "suppressed_recent_exit";
             };
@@ -4820,6 +4957,29 @@ export interface operations {
             };
         };
     };
+    LprEventsController_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprDetectionEventDto"];
+                };
+            };
+        };
+    };
     LprEventsController_uploadImage: {
         parameters: {
             query?: never;
@@ -4870,6 +5030,29 @@ export interface operations {
             };
         };
     };
+    LprEventsController_unarchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprDetectionEventDto"];
+                };
+            };
+        };
+    };
     LprEventsController_pullChanges: {
         parameters: {
             query?: {
@@ -4893,6 +5076,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LprDetectionEventChangesResponseDto"];
+                };
+            };
+        };
+    };
+    LprEventsController_history: {
+        parameters: {
+            query?: {
+                /** @description Filter by movement direction. Derived from the camera `location`: values containing "salida" are `egreso`, everything else is `ingreso`. */
+                direction?: "ingreso" | "egreso";
+                /** @description Only events whose detection timestamp (`lastSeenAt`) is at or after this instant (ISO 8601). */
+                from?: string;
+                /** @description 1-based page number. */
+                page?: number;
+                /** @description Number of items per page (capped at 100). */
+                pageSize?: number;
+                /** @description Filter by plate. Case- and format-insensitive prefix match against the normalized plate text (separators and spaces are stripped, letters upper-cased). */
+                plate?: string;
+                /** @description Only events whose detection timestamp (`lastSeenAt`) is at or before this instant (ISO 8601). */
+                to?: string;
+            };
+            header?: never;
+            path: {
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LprEventHistoryPageDto"];
                 };
             };
         };
