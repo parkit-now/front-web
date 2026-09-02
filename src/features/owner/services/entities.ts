@@ -3,10 +3,26 @@ import { apiRequest } from '../../../lib/api/client';
 import { getSession } from '../../../lib/supabase/session';
 
 export type EntitySummary = components['schemas']['EntitySummaryDto'];
-export type EntityProfile = components['schemas']['EntityProfileDto'];
 export type EntityCapacity = components['schemas']['EntityCapacityDto'];
+
+/**
+ * TODO(sync-types): the backend `EntityProfileDto` / `UpdateEntityProfileDto`
+ * already carry `lprImageRetentionDays` (owner-configurable LPR image
+ * retention window, 30-365 days), but the generated OpenAPI types are stale.
+ * Drop this local extension once `make sync-types` runs against the updated
+ * backend.
+ */
+type LprRetentionFields = { lprImageRetentionDays: number };
+
+export type EntityProfile = components['schemas']['EntityProfileDto'] &
+  LprRetentionFields;
 export type UpdateEntityProfileInput =
-  components['schemas']['UpdateEntityProfileDto'];
+  components['schemas']['UpdateEntityProfileDto'] & Partial<LprRetentionFields>;
+
+/** Allowed range for `lprImageRetentionDays`, mirrored from the backend DTO/CHECK. */
+export const LPR_IMAGE_RETENTION_DAYS_MIN = 30;
+export const LPR_IMAGE_RETENTION_DAYS_MAX = 365;
+export const LPR_IMAGE_RETENTION_DAYS_DEFAULT = 90;
 export type PaymentMethodSummary =
   components['schemas']['PaymentMethodSummaryDto'];
 export type TogglePaymentMethodInput =
@@ -46,7 +62,10 @@ export async function getEntityProfile(
   });
 }
 
-/** PATCH /tenants/:tenantId — owner-only edit of profile, status and capacity. */
+/**
+ * PATCH /tenants/:tenantId — owner-only edit of profile, status, capacity and
+ * the LPR image retention window (`lprImageRetentionDays`).
+ */
 export async function updateEntityProfile(
   tenantId: string,
   body: UpdateEntityProfileInput,
