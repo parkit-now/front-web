@@ -7,6 +7,7 @@ import {
   IconChart,
   IconReceipt,
   IconShield,
+  IconList,
   IconCar,
   IconCreditCard,
   IconSettings,
@@ -41,6 +42,11 @@ const NAV_ITEMS: NavItem[] = [
     segment: 'auditoria',
     label: 'Auditoría',
     icon: <IconShield size={18} />,
+  },
+  {
+    segment: 'historial-eventos',
+    label: 'Historial de eventos',
+    icon: <IconList size={18} />,
   },
   {
     segment: 'revision-lpr',
