@@ -36,7 +36,6 @@ export type ResolvedRange =
     }
   | { ok: false; reason: 'incomplete' | 'inverted' };
 
-
 export function resolveRange(input: RangeInput, anchor: number): ResolvedRange {
   if (input.preset !== 'custom') {
     const { from, to, granularity } = presetRange(
