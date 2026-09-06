@@ -62,7 +62,13 @@ export type EndpointKey =
   | 'schedules.update'
   | 'schedules.delete'
   | 'services.list'
-  | 'services.toggle';
+  | 'services.toggle'
+  | 'metrics.revenue'
+  | 'metrics.byPaymentMethod'
+  | 'metrics.topPlates'
+  | 'metrics.summary'
+  | 'staff.list'
+  | 'audit.list';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;
@@ -240,6 +246,9 @@ const VALIDATION_CODE_MESSAGES: Record<string, string> = {
   isEmail: 'Email inválido.',
   isUUID: 'Identificador inválido.',
   isDate: 'Fecha inválida.',
+  // El backend exige offset explícito en las fechas de métricas: sin él
+  // resolvería el instante contra el reloj del servidor (UTC en producción).
+  isOffsetDateTime: 'La fecha debe incluir la zona horaria.',
   isIn: 'Valor no permitido.',
   isEnum: 'Valor no permitido.',
   minLength: 'Demasiado corto.',

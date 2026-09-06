@@ -6,7 +6,6 @@ export type BayStatus = 'occupied' | 'overdue' | 'reserved' | 'vacant';
 export type UserRole = 'owner' | 'admin' | 'supervisor' | 'operator';
 export type SucursalEstado = 'active' | 'maintenance';
 export type TransactionEstado = 'ok' | 'failed' | 'cancelled';
-export type AuditSeveridad = 'info' | 'warn' | 'crit';
 
 export interface Sucursal {
   id: string;
@@ -38,18 +37,6 @@ export interface Bay {
   monto_actual: number | null;
 }
 
-export interface KpiSnapshot {
-  sucursal_id: string;
-  ocupacion_pct: number;
-  ocupadas: number;
-  total: number;
-  ingresos_dia: number;
-  ingresos_dia_delta_pct: number;
-  ingresos_mes: number;
-  ingresos_mes_proyectado: number;
-  sparkline_data: number[];
-}
-
 export interface Transaction {
   id: string;
   sucursal_id: string;
@@ -60,25 +47,6 @@ export interface Transaction {
   estado: TransactionEstado;
   fecha_label: string;
   procesado_at: string;
-}
-
-export interface PersonalMember {
-  id: string;
-  nombre: string;
-  email: string;
-  rol: string;
-  sucursal: string;
-  actividad_label: string;
-  estado: 'active' | 'inactive';
-}
-
-export interface AuditEvent {
-  id: string;
-  actor_nombre: string;
-  accion: string;
-  severidad: AuditSeveridad;
-  ts: string;
-  fecha_label: string;
 }
 
 export interface MedioPago {

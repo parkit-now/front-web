@@ -11,6 +11,7 @@ export type DataTableServerState = {
   rowCount: number;
   isFetching?: boolean;
   onPaginationChange?: (state: { pageIndex: number; pageSize: number }) => void;
+  onGlobalFilterChange?: (value: string) => void;
 };
 
 export type DataTableProps<TData> = {

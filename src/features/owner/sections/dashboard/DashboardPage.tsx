@@ -12,7 +12,7 @@ import { listLprDetectionEvents } from '../../services/lpr-events';
 
 export function DashboardPage() {
   const { mode, sucursal, sucursalId } = useSucursal();
-  const { data: kpis, isLoading: kpisLoading } = useKpis();
+  const { data: kpis, isLoading: kpisLoading, isMonthLoading } = useKpis();
   const { data: bays = [], isLoading: baysLoading } = useBays();
   const dismissedQuery = useQuery({
     queryKey: ['lpr-events', sucursalId, 'dismissed-count'],
@@ -61,7 +61,11 @@ export function DashboardPage() {
           <IconChevronRight size={16} />
         </Link>
       )}
-      <KpiCards kpis={kpis} loading={kpisLoading} />
+      <KpiCards
+        kpis={kpis}
+        loading={kpisLoading}
+        monthLoading={isMonthLoading}
+      />
       {baysLoading ? (
         <div className="pk-card pk-card-pad" style={{ minHeight: 200 }}>
           <p style={{ color: 'var(--text-3)', fontSize: 14 }}>

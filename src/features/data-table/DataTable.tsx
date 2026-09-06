@@ -144,9 +144,16 @@ export function DataTable<TData>({
     );
   }, [columnFilters, globalFilter, sorting]);
 
+  const serverStateRef = useRef(serverState);
+  serverStateRef.current = serverState;
+
   useEffect(() => {
-    serverState?.onPaginationChange?.(pagination);
-  }, [pagination, serverState]);
+    serverStateRef.current?.onPaginationChange?.(pagination);
+  }, [pagination]);
+
+  useEffect(() => {
+    serverStateRef.current?.onGlobalFilterChange?.(globalFilter);
+  }, [globalFilter]);
 
   const table = useReactTable({
     data,

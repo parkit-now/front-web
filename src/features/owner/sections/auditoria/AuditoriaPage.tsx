@@ -1,70 +1,75 @@
-import { useState } from 'react';
-import { AUDITORIA } from '../../../../mock/auditoria';
-import type { AuditSeveridad } from '../../../../types/api';
+import { useMemo, useState } from 'react';
 import { SectionHeader } from '../../../../shared/components/SectionHeader';
-import { Button } from '../../../../shared/components/ui/Button';
-import { Input } from '../../../../shared/components/ui/Input';
+import { Skeleton } from '../../../../shared/components/ui/Skeleton';
+import { EmptyState } from '../../../../shared/components/ui/EmptyState';
+import { Pagination } from '../../../../shared/components/ui/Pagination';
 import {
-  IconSearch,
-  IconChevronLeft,
-  IconChevronRight,
-} from '../../../../shared/components/icons';
+  DateRangeFilter,
+  type DateRange,
+} from '../../../../shared/components/ui/DateRangeFilter';
+import { fmtDateTimeAr } from '../../../../shared/utils/fmt';
+import {
+  localDayKey,
+  toArOffsetIso,
+} from '../../../../shared/utils/ar-datetime';
+import { translateApiError } from '../../../../lib/api/translate';
+import { useAuditEvents } from '../../hooks/useAuditEvents';
+import type { AuditAction, AuditSeverity } from '../../services/audit';
+import {
+  SEVERITY_DOT_COLOR,
+  SEVERITY_LABELS,
+  auditActionLabel,
+  auditActionOptions,
+} from './labels';
 
 const PAGE_SIZE = 12;
 
-type SevFilter = 'Todos' | 'Info' | 'Advertencia' | 'Crítico';
-
-const SEV_MAP: Record<SevFilter, AuditSeveridad | null> = {
-  Todos: null,
-  Info: 'info',
-  Advertencia: 'warn',
-  Crítico: 'crit',
-};
-
-const SEV_FILTERS: SevFilter[] = ['Todos', 'Info', 'Advertencia', 'Crítico'];
-
-const SEV_DOT_COLOR: Record<AuditSeveridad, string> = {
-  info: 'var(--brand)',
-  warn: 'var(--warn-text)',
-  crit: 'var(--err-text)',
-};
+const SEVERITIES: AuditSeverity[] = ['info', 'warn', 'crit'];
 
 export function AuditoriaPage() {
-  const [query, setQuery] = useState('');
-  const [sevFilter, setSevFilter] = useState<SevFilter>('Todos');
-  const [page, setPage] = useState(0);
+  const [severity, setSeverity] = useState<'' | AuditSeverity>('');
+  const [action, setAction] = useState<'' | AuditAction>('');
+  const [range, setRange] = useState<DateRange | undefined>();
+  const [page, setPage] = useState(1);
 
-  const sevValue = SEV_MAP[sevFilter];
-  const filtered = AUDITORIA.filter((ev) => {
-    const matchSev = sevValue ? ev.severidad === sevValue : true;
-    const matchQ = query.trim()
-      ? ev.actor_nombre.toLowerCase().includes(query.toLowerCase()) ||
-        ev.accion.toLowerCase().includes(query.toLowerCase())
-      : true;
-    return matchSev && matchQ;
+  const actionOptions = useMemo(() => auditActionOptions(), []);
+
+  // `from`/`to` son opcionales e independientes, y usan el mismo formato con
+  // offset explícito que las métricas.
+  const from = range?.from
+    ? toArOffsetIso(localDayKey(range.from), '00:00')
+    : undefined;
+  const to = range?.to
+    ? toArOffsetIso(localDayKey(range.to), '23:59:59')
+    : range?.from
+      ? toArOffsetIso(localDayKey(range.from), '23:59:59')
+      : undefined;
+
+  const query = useAuditEvents({
+    severity: severity || undefined,
+    action: action || undefined,
+    from,
+    to,
+    page,
+    pageSize: PAGE_SIZE,
   });
 
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const pageData = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const events = query.data?.items ?? [];
+  const total = query.data?.total ?? 0;
 
-  function handleFilterChange(f: SevFilter) {
-    setSevFilter(f);
-    setPage(0);
-  }
-
-  function handleSearch(val: string) {
-    setQuery(val);
-    setPage(0);
+  function resetTo(fn: () => void) {
+    fn();
+    setPage(1);
   }
 
   return (
-    <div style={{ padding: 32 }}>
+    <div>
       <SectionHeader
         title="Auditoría"
-        subtitle="Registro de eventos del sistema"
+        subtitle="Traza de cambios de configuración y de ciclo de vida del estacionamiento"
       />
 
-      {/* Search + chips row */}
+      {/* Filtros */}
       <div
         style={{
           display: 'flex',
@@ -74,160 +79,190 @@ export function AuditoriaPage() {
           alignItems: 'center',
         }}
       >
-        <div style={{ flex: '1 1 240px', maxWidth: 340 }}>
-          <Input
-            placeholder="Buscar por actor o acción..."
-            value={query}
-            onChange={(e) => handleSearch(e.target.value)}
-            icon={<IconSearch size={15} />}
-          />
-        </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {SEV_FILTERS.map((f) => (
+          <button
+            type="button"
+            onClick={() => resetTo(() => setSeverity(''))}
+            style={chipStyle(severity === '')}
+          >
+            Todas
+          </button>
+          {SEVERITIES.map((option) => (
             <button
-              key={f}
+              key={option}
               type="button"
-              onClick={() => handleFilterChange(f)}
-              style={{
-                padding: '5px 14px',
-                borderRadius: 999,
-                border: '1px solid',
-                fontSize: 13,
-                fontWeight: 500,
-                cursor: 'pointer',
-                transition: 'all 150ms',
-                borderColor: sevFilter === f ? 'var(--brand)' : 'var(--border)',
-                background:
-                  sevFilter === f ? 'var(--brand-soft)' : 'transparent',
-                color: sevFilter === f ? 'var(--brand)' : 'var(--text-2)',
-              }}
+              onClick={() => resetTo(() => setSeverity(option))}
+              style={chipStyle(severity === option)}
             >
-              {f}
+              {SEVERITY_LABELS[option]}
             </button>
           ))}
         </div>
+
+        <select
+          className="pk-input"
+          aria-label="Filtrar por acción"
+          value={action}
+          onChange={(event) =>
+            resetTo(() => setAction(event.target.value as '' | AuditAction))
+          }
+          style={{ width: 260 }}
+        >
+          <option value="">Todas las acciones</option>
+          {actionOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
+        <DateRangeFilter
+          value={range}
+          onChange={(value) => resetTo(() => setRange(value))}
+          placeholder="Filtrar por fecha"
+        />
       </div>
 
-      {/* Timeline */}
-      <div className="pk-card" style={{ padding: '8px 0' }}>
-        {pageData.length === 0 ? (
-          <div
-            style={{
-              padding: '32px 24px',
-              textAlign: 'center',
-              color: 'var(--text-3)',
-              fontSize: 14,
-            }}
-          >
-            No hay eventos que coincidan con los filtros.
-          </div>
-        ) : (
-          <div style={{ position: 'relative' }}>
-            {/* Vertical line */}
-            <div
-              style={{
-                position: 'absolute',
-                left: 28,
-                top: 0,
-                bottom: 0,
-                width: 1,
-                background: 'var(--border-soft)',
-              }}
-            />
-            {pageData.map((ev, i) => (
+      {query.isError ? (
+        <div className="pk-card">
+          <EmptyState
+            title="No se pudo cargar la auditoría"
+            description={translateApiError(query.error, {
+              endpoint: 'audit.list',
+            })}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="pk-card" style={{ padding: '8px 0' }}>
+            {query.isLoading ? (
+              <div style={{ padding: '16px 20px' }}>
+                <Skeleton height={120} />
+              </div>
+            ) : events.length === 0 ? (
+              <EmptyState
+                title="No hay eventos"
+                description="Ningún evento coincide con los filtros elegidos."
+              />
+            ) : (
               <div
-                key={ev.id}
                 style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 16,
-                  padding: '12px 20px',
-                  borderBottom:
-                    i < pageData.length - 1
-                      ? '1px solid var(--border-soft)'
-                      : 'none',
                   position: 'relative',
+                  opacity: query.isFetching ? 0.6 : 1,
+                  transition: 'opacity 150ms',
                 }}
               >
-                {/* Dot */}
+                {/* Línea vertical del timeline */}
                 <div
                   style={{
-                    width: 10,
-                    height: 10,
-                    borderRadius: '50%',
-                    background: SEV_DOT_COLOR[ev.severidad],
-                    flexShrink: 0,
-                    marginTop: 4,
-                    zIndex: 1,
-                    boxShadow: `0 0 0 3px var(--card)`,
+                    position: 'absolute',
+                    left: 28,
+                    top: 0,
+                    bottom: 0,
+                    width: 1,
+                    background: 'var(--border-soft)',
                   }}
                 />
-                {/* Content */}
-                <div style={{ flex: 1, minWidth: 0 }}>
+                {events.map((event, index) => (
                   <div
+                    key={event.id}
                     style={{
-                      fontSize: 14,
-                      color: 'var(--text-1)',
-                      lineHeight: 1.4,
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 16,
+                      padding: '12px 20px',
+                      borderBottom:
+                        index < events.length - 1
+                          ? '1px solid var(--border-soft)'
+                          : 'none',
+                      position: 'relative',
                     }}
                   >
-                    <strong style={{ fontWeight: 600 }}>
-                      {ev.actor_nombre}
-                    </strong>{' '}
-                    <span style={{ color: 'var(--text-2)' }}>{ev.accion}</span>
+                    <div
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        background: SEVERITY_DOT_COLOR[event.severity],
+                        flexShrink: 0,
+                        marginTop: 4,
+                        zIndex: 1,
+                        boxShadow: '0 0 0 3px var(--card)',
+                      }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: 14,
+                          color: 'var(--text-1)',
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        <strong style={{ fontWeight: 600 }}>
+                          {event.actorName ?? 'Sistema'}
+                        </strong>{' '}
+                        <span style={{ color: 'var(--text-2)' }}>
+                          {auditActionLabel(event.action)}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          marginTop: 4,
+                          fontSize: 12,
+                          color: 'var(--text-3)',
+                          fontFamily: 'var(--mono)',
+                        }}
+                      >
+                        {fmtDateTimeAr(event.createdAt)}
+                        {event.entityType ? ` · ${event.entityType}` : ''}
+                      </div>
+                    </div>
                   </div>
-                  <div
-                    style={{
-                      marginTop: 4,
-                      fontSize: 12,
-                      color: 'var(--text-3)',
-                      fontFamily: 'var(--mono)',
-                    }}
-                  >
-                    {ev.fecha_label} · {ev.ts}
-                  </div>
-                </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginTop: 16,
-          }}
-        >
-          <span style={{ fontSize: 13, color: 'var(--text-3)' }}>
-            Página {page + 1} de {totalPages} — {filtered.length} eventos
-          </span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<IconChevronLeft size={15} />}
-              onClick={() => setPage((p) => p - 1)}
-              disabled={page === 0}
-            >
-              Anterior
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setPage((p) => p + 1)}
-              disabled={page >= totalPages - 1}
-            >
-              Siguiente
-              <IconChevronRight size={15} />
-            </Button>
-          </div>
-        </div>
+          {total > PAGE_SIZE && (
+            <div className="pk-card" style={{ marginTop: 16 }}>
+              <Pagination
+                page={page}
+                pageSize={PAGE_SIZE}
+                total={total}
+                onPageChange={setPage}
+              />
+            </div>
+          )}
+
+          <p
+            style={{
+              marginTop: 16,
+              fontSize: 12,
+              color: 'var(--text-3)',
+              lineHeight: 1.5,
+            }}
+          >
+            La auditoría registra cambios de configuración y de ciclo de vida.
+            Los pagos, las entradas y las salidas no se auditan: para la
+            recaudación usá la sección de Ingresos.
+          </p>
+        </>
       )}
     </div>
   );
+}
+
+function chipStyle(active: boolean): React.CSSProperties {
+  return {
+    padding: '5px 14px',
+    borderRadius: 999,
+    border: '1px solid',
+    fontSize: 13,
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'all 150ms',
+    borderColor: active ? 'var(--brand)' : 'var(--border)',
+    background: active ? 'var(--brand-soft)' : 'transparent',
+    color: active ? 'var(--brand)' : 'var(--text-2)',
+  };
 }
