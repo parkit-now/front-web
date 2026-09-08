@@ -667,6 +667,15 @@
   background: #eef6ff;
 }
 
+.dt-table tbody tr.dt-row-clickable {
+  cursor: pointer;
+}
+
+.dt-table tbody tr.dt-row-clickable:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: -2px;
+}
+
 .dt-table .pinned-left {
   position: sticky;
   z-index: 2;

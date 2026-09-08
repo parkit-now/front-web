@@ -111,6 +111,7 @@ export function DataTable<TData>({
   onRefresh,
   refreshDisabled,
   serverState,
+  onRowClick,
 }: DataTableProps<TData>) {
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -445,7 +446,26 @@ export function DataTable<TData>({
               </tr>
             ) : (
               rows.map((row) => (
-                <tr key={row.id}>
+                <tr
+                  key={row.id}
+                  className={onRowClick ? 'dt-row-clickable' : undefined}
+                  role={onRowClick ? 'button' : undefined}
+                  tabIndex={onRowClick ? 0 : undefined}
+                  onClick={
+                    onRowClick ? () => onRowClick(row.original) : undefined
+                  }
+                  onKeyDown={
+                    onRowClick
+                      ? (event) => {
+                          if (event.key !== 'Enter' && event.key !== ' ') {
+                            return;
+                          }
+                          event.preventDefault();
+                          onRowClick(row.original);
+                        }
+                      : undefined
+                  }
+                >
                   {row.getVisibleCells().map((cell) => {
                     const pinned = cell.column.getIsPinned();
                     return (

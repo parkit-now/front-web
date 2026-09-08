@@ -8,6 +8,7 @@ import { PersonalPage } from './features/owner/sections/personal/PersonalPage';
 import { EstadisticasPage } from './features/owner/sections/estadisticas/EstadisticasPage';
 import { TransaccionesPage } from './features/owner/sections/transacciones/TransaccionesPage';
 import { AuditoriaPage } from './features/owner/sections/auditoria/AuditoriaPage';
+import { Auditoria2Page } from './features/owner/sections/auditoria2/Auditoria2Page';
 import { LprReviewPage } from './features/owner/sections/lpr-review/LprReviewPage';
 import { ConfigPage } from './features/owner/sections/config/ConfigPage';
 import { PaymentMethodsPage } from './features/owner/sections/payment-methods/PaymentMethodsPage';
@@ -73,6 +74,7 @@ const ownerSectionRoutes = [
   { path: 'estadisticas', element: <EstadisticasPage /> },
   { path: 'transacciones', element: <TransaccionesPage /> },
   { path: 'auditoria', element: <AuditoriaPage /> },
+  { path: 'auditoria2', element: <Auditoria2Page /> },
   { path: 'revision-lpr', element: <LprReviewPage /> },
   { path: 'tasas', element: <TasasPage /> },
   { path: 'vehiculos', element: <VehiculosPage /> },

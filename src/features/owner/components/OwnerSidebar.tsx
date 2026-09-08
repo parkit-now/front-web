@@ -46,6 +46,11 @@ const NAV_ITEMS: NavItem[] = [
     icon: <IconShield size={18} />,
   },
   {
+    segment: 'auditoria2',
+    label: 'Auditoría 2',
+    icon: <IconShield size={18} />,
+  },
+  {
     segment: 'revision-lpr',
     label: 'Patentes descartadas',
     icon: <IconCar size={18} />,

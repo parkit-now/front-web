@@ -33,4 +33,5 @@ export type DataTableProps<TData> = {
   onRefresh?: () => void;
   refreshDisabled?: boolean;
   serverState?: DataTableServerState;
+  onRowClick?: (row: TData) => void;
 };
