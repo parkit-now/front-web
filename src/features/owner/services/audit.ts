@@ -3,6 +3,7 @@ import { apiRequest } from '../../../lib/api/client';
 import { getSession } from '../../../lib/supabase/session';
 
 type GeneratedAuditEvent = components['schemas']['AuditEventDto'];
+export type CashSession = components['schemas']['CashSessionDto'];
 export type AuditSeverity = GeneratedAuditEvent['severity'];
 
 export type AuditEventMetadata = Record<string, unknown>;
@@ -37,6 +38,16 @@ export async function listAuditEvents(
   return apiRequest<AuditEvent[]>({
     method: 'GET',
     path: `/tenants/${tenantId}/audit?${search.toString()}`,
+    bearer: await bearer(),
+  });
+}
+
+export async function listCashSessions(
+  tenantId: string,
+): Promise<CashSession[]> {
+  return apiRequest<CashSession[]>({
+    method: 'GET',
+    path: `/tenants/${tenantId}/cash-sessions`,
     bearer: await bearer(),
   });
 }

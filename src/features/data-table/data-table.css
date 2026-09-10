@@ -178,6 +178,85 @@
   min-width: 0;
 }
 
+.dt-toolbar-leading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.dt-quick-switches {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dt-quick-switch {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #d7e2ef;
+  border-radius: 999px;
+  padding: 0 10px 0 12px;
+  background: #f8fbff;
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dt-quick-switch:hover {
+  border-color: #aac1de;
+  background: #fff;
+}
+
+.dt-quick-switch:has(input:disabled) {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.dt-quick-switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dt-quick-switch-track {
+  width: 34px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px;
+  background: #c8d5e5;
+  transition:
+    background-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.dt-quick-switch-track::after {
+  content: '';
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 5px rgba(31, 73, 125, 0.2);
+  transition: transform 0.16s ease;
+}
+
+.dt-quick-switch input:checked + .dt-quick-switch-track {
+  background: var(--color-brand);
+  box-shadow: 0 8px 16px rgba(14, 95, 216, 0.2);
+}
+
+.dt-quick-switch input:checked + .dt-quick-switch-track::after {
+  transform: translateX(14px);
+}
+
 .dt-toolbar-button,
 .dt-icon-button,
 .dt-secondary-action,
@@ -476,6 +555,22 @@
   min-height: 32px;
   color: #344054;
   font-size: 13px;
+}
+
+.dt-check-row span {
+  flex: 1;
+  min-width: 0;
+}
+
+.dt-check-row small {
+  min-width: 24px;
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: #eef5ff;
+  color: #31506f;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
 }
 
 .dt-check-row input {
@@ -932,6 +1027,9 @@
   .dt-toolbar-actions {
     justify-content: flex-start;
   }
+  .dt-toolbar-leading {
+    justify-content: flex-start;
+  }
   .dt-menu-panel {
     left: 0;
     right: auto;
@@ -953,6 +1051,14 @@
     display: flex;
     align-items: stretch;
     width: 100%;
+  }
+  .dt-toolbar-leading,
+  .dt-quick-switches {
+    width: 100%;
+  }
+  .dt-quick-switch {
+    flex: 1 1 160px;
+    justify-content: space-between;
   }
   .dt-search-cluster {
     min-width: 0;

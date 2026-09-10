@@ -352,6 +352,29 @@ h2 {
   font-weight: 700;
 }
 
+.audit2-table-badge {
+  width: fit-content;
+  height: auto;
+  min-height: 24px;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  line-height: 1.18;
+  letter-spacing: 0;
+  text-align: center;
+  white-space: normal;
+}
+
+.audit2-action-badge {
+  inline-size: 160px;
+  max-inline-size: 100%;
+}
+
+.audit2-origin-badge {
+  white-space: nowrap;
+}
+
 .audit2-drawer-body {
   display: grid;
   gap: 18px;

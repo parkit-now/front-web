@@ -31,8 +31,12 @@ describe('audit2 utils', () => {
           before: {
             plate: 'ABC123',
             amountPaid: 3000,
+            color: 'Rojo',
             ticketNumber: 7,
             cashSessionId: 'cash-1',
+            rateSnapshotName: 'Auto',
+            vehicleBrand: 'Ford',
+            vehicleModel: 'Focus',
             payments: [
               {
                 id: 'pay-1',
@@ -45,8 +49,12 @@ describe('audit2 utils', () => {
           after: {
             plate: 'XYZ999',
             amountPaid: 5000,
+            color: 'Azul',
             ticketNumber: 7,
             cashSessionId: 'cash-1',
+            rateSnapshotName: 'Auto',
+            vehicleBrand: 'Ford',
+            vehicleModel: 'Focus',
             payments: [
               {
                 id: 'pay-2',
@@ -70,9 +78,16 @@ describe('audit2 utils', () => {
     expect(row.originLabel).toBe('Historial');
     expect(row.plate).toBe('XYZ999');
     expect(row.ticketNumber).toBe('7');
-    expect(row.moneyImpact).toBe('$3.000 -> $5.000');
+    expect(row.moneyImpact).toBe('Cobrado $3.000 -> $5.000');
+    expect(row.cashSessionId).toBe('cash-1');
+    expect(row.paymentMethodNames).toEqual(['Efectivo', 'Mercado Pago']);
+    expect(row.rateNames).toEqual(['Auto']);
+    expect(row.vehicleBrands).toEqual(['Ford']);
+    expect(row.vehicleModels).toEqual(['Focus']);
+    expect(row.colors).toEqual(['Azul', 'Rojo']);
     expect(row.searchText).toContain('Error de tipeo');
     expect(row.searchText).toContain('payments');
+    expect(row.searchText).toContain('Mercado Pago');
 
     const comparisons = correctionComparisons(row);
     expect(comparisons).toContainEqual(
@@ -82,6 +97,113 @@ describe('audit2 utils', () => {
         changed: true,
       }),
     );
+  });
+
+  it('collapses rate snapshot fields into one Tarifa label', () => {
+    const row = buildAudit2Row(
+      event({
+        metadata: {
+          origin: 'history',
+          changedFields: [
+            'rateId',
+            'rateSnapshotName',
+            'rateSnapshotHourPriceArs',
+            'rateSnapshotStayPriceArs',
+            'rateSnapshotFractionPriceArs',
+            'plate',
+          ],
+          before: { plate: 'ABC123', rateSnapshotName: 'Pick up día' },
+          after: { plate: 'ABC124', rateSnapshotName: 'Día Auto' },
+        },
+      }),
+    );
+
+    expect(row.changedFieldLabels).toEqual(['Tarifa', 'Patente']);
+    expect(row.summary).toBe('Corrección de ABC124: Tarifa, Patente');
+  });
+
+  it('keeps suggested-only impact out of the impact column', () => {
+    const row = buildAudit2Row(
+      event({
+        metadata: {
+          origin: 'history',
+          changedFields: ['leftAt'],
+          economicImpact: {
+            suggestedBefore: 2000,
+            suggestedAfter: 3000,
+            suggestedDelta: 1000,
+            chargedBefore: 2000,
+            chargedAfter: 2000,
+            chargedDelta: 0,
+            deltaVsSuggestedAfter: 1000,
+          },
+          before: {
+            plate: 'ABC123',
+            amountPaid: 2000,
+            leftAt: '2026-09-08T12:00:00.000Z',
+          },
+          after: {
+            plate: 'ABC123',
+            amountPaid: 2000,
+            leftAt: '2026-09-08T13:00:00.000Z',
+          },
+        },
+      }),
+    );
+
+    expect(row.moneyImpact).toBe('-');
+    expect(row.impactAmount).toBeNull();
+    expect(row.economicImpact?.deltaVsSuggestedAfter).toBe(1000);
+  });
+
+  it('detects active-entry corrections for the include base switch', () => {
+    const row = buildAudit2Row(
+      event({
+        metadata: {
+          origin: 'history',
+          changedFields: ['plate'],
+          before: {
+            plate: 'ABC123',
+            enteredAt: '2026-09-08T12:00:00.000Z',
+            leftAt: null,
+          },
+          after: {
+            plate: 'ABC124',
+            enteredAt: '2026-09-08T12:00:00.000Z',
+            leftAt: null,
+          },
+        },
+      }),
+    );
+
+    expect(row.isActiveEntry).toBe(true);
+    expect(row.enteredAtLocalDate).toBe('2026-09-08');
+    expect(row.leftAtLocalDate).toBe('');
+  });
+
+  it('shows charged economic impact for entry corrections', () => {
+    const row = buildAudit2Row(
+      event({
+        metadata: {
+          origin: 'history',
+          changedFields: ['payments'],
+          economicImpact: {
+            suggestedBefore: 3000,
+            suggestedAfter: 3000,
+            suggestedDelta: 0,
+            chargedBefore: 3700,
+            chargedAfter: 3800,
+            chargedDelta: 100,
+            deltaVsSuggestedAfter: -800,
+          },
+          before: { plate: 'ABC123', amountPaid: 3700 },
+          after: { plate: 'ABC123', amountPaid: 3800 },
+        },
+      }),
+    );
+
+    expect(row.moneyImpact).toBe('Cobrado $3.700 -> $3.800');
+    expect(row.impactAmount).toBe(100);
   });
 
   it('maps entry.undercharged metadata into anomaly impact', () => {

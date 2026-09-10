@@ -45,21 +45,31 @@ export type Audit2Row = {
   actorRole: string;
   cashSessionId: string;
   changedFields: string[];
+  changedFieldLabels: string[];
+  colors: string[];
   createdAt: string;
   createdAtLocalDate: string;
+  economicImpact: AuditEconomicImpact | null;
+  enteredAtLocalDate: string;
   entityId: string | null;
   entityType: string;
   impactAmount: number | null;
+  isActiveEntry: boolean;
+  leftAtLocalDate: string;
   metadata: Record<string, unknown>;
   moneyImpact: string;
   origin: AuditOrigin;
   originLabel: string;
+  paymentMethodNames: string[];
   plate: string;
+  rateNames: string[];
   reason: string;
   searchText: string;
   severity: AuditSeverity;
   summary: string;
   ticketNumber: string;
+  vehicleBrands: string[];
+  vehicleModels: string[];
 };
 
 export type AuditComparisonRow = {
@@ -67,6 +77,16 @@ export type AuditComparisonRow = {
   before: string;
   after: string;
   changed: boolean;
+};
+
+export type AuditEconomicImpact = {
+  suggestedBefore: number | null;
+  suggestedAfter: number | null;
+  suggestedDelta: number | null;
+  chargedBefore: number | null;
+  chargedAfter: number | null;
+  chargedDelta: number | null;
+  deltaVsSuggestedAfter: number | null;
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -81,11 +101,19 @@ const FIELD_LABELS: Record<string, string> = {
   vehicleModel: 'Modelo',
   rateId: 'Tarifa',
   rateSnapshotName: 'Tarifa',
-  rateSnapshotHourPriceArs: 'Precio por hora',
-  rateSnapshotStayPriceArs: 'Estadía',
-  rateSnapshotFractionPriceArs: 'Fracción',
+  rateSnapshotHourPriceArs: 'Tarifa',
+  rateSnapshotStayPriceArs: 'Tarifa',
+  rateSnapshotFractionPriceArs: 'Tarifa',
   payments: 'Pagos',
 };
+
+const RATE_FIELDS = new Set([
+  'rateId',
+  'rateSnapshotName',
+  'rateSnapshotHourPriceArs',
+  'rateSnapshotStayPriceArs',
+  'rateSnapshotFractionPriceArs',
+]);
 
 const DISPLAY_FIELDS: Array<keyof EntrySnapshot> = [
   'plate',
@@ -173,6 +201,23 @@ function readSnapshot(
   };
 }
 
+function readEconomicImpact(
+  metadata: Record<string, unknown>,
+): AuditEconomicImpact | null {
+  const value = metadata.economicImpact;
+  if (!isRecord(value)) return null;
+  const impact = {
+    suggestedBefore: readNumber(value, 'suggestedBefore'),
+    suggestedAfter: readNumber(value, 'suggestedAfter'),
+    suggestedDelta: readNumber(value, 'suggestedDelta'),
+    chargedBefore: readNumber(value, 'chargedBefore'),
+    chargedAfter: readNumber(value, 'chargedAfter'),
+    chargedDelta: readNumber(value, 'chargedDelta'),
+    deltaVsSuggestedAfter: readNumber(value, 'deltaVsSuggestedAfter'),
+  };
+  return Object.values(impact).some((item) => item !== null) ? impact : null;
+}
+
 function readNullableString(
   record: Record<string, unknown>,
   key: string,
@@ -203,6 +248,39 @@ function dateKeyAr(value: string): string {
   return `${year}-${month}-${day}`;
 }
 
+function maybeDateKeyAr(value: string | null | undefined): string {
+  return value ? dateKeyAr(value) : '';
+}
+
+function uniqueStrings(values: Array<string | null | undefined>): string[] {
+  return Array.from(
+    new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]),
+  );
+}
+
+function snapshotValues(
+  before: EntrySnapshot,
+  after: EntrySnapshot,
+  key: keyof EntrySnapshot,
+): string[] {
+  const afterValue = after[key];
+  const beforeValue = before[key];
+  return uniqueStrings([
+    typeof afterValue === 'string' ? afterValue : null,
+    typeof beforeValue === 'string' ? beforeValue : null,
+  ]);
+}
+
+function paymentMethodNames(
+  before: EntrySnapshot,
+  after: EntrySnapshot,
+): string[] {
+  return uniqueStrings([
+    ...(after.payments ?? []).map((payment) => payment.paymentMethodName),
+    ...(before.payments ?? []).map((payment) => payment.paymentMethodName),
+  ]);
+}
+
 export function actionKindFor(action: string): AuditActionKind {
   if (action === 'entry.corrected') return 'entry.corrected';
   if (action === 'entry.undercharged') return 'entry.undercharged';
@@ -223,6 +301,17 @@ export function originLabelFor(origin: AuditOrigin): string {
 
 export function fieldLabel(field: string): string {
   return FIELD_LABELS[field] ?? field;
+}
+
+export function changedFieldLabels(fields: string[]): string[] {
+  const labels: string[] = [];
+  for (const field of fields) {
+    const label = RATE_FIELDS.has(field) ? 'Tarifa' : fieldLabel(field);
+    if (!labels.includes(label)) {
+      labels.push(label);
+    }
+  }
+  return labels;
 }
 
 function displayFieldValue(
@@ -264,6 +353,11 @@ export function paymentListLabel(payments?: PaymentSnapshot[]): string {
     .join(' · ');
 }
 
+function fmtSignedMoney0(value: number): string {
+  if (Math.abs(value) <= 0.005) return fmtMoney0(0);
+  return `${value > 0 ? '+' : '-'}${fmtMoney0(Math.abs(value))}`;
+}
+
 function amountTotal(snapshot: EntrySnapshot): number | null {
   if (typeof snapshot.amountPaid === 'number') return snapshot.amountPaid;
   if (!snapshot.payments?.length) return null;
@@ -277,7 +371,7 @@ function correctionSummary(
   changedFields: string[],
 ): string {
   const plate = after.plate ?? before.plate ?? readString(metadata, 'plate');
-  const labels = changedFields.map(fieldLabel);
+  const labels = changedFieldLabels(changedFields);
   const fields =
     labels.length === 0
       ? 'sin campos detectados'
@@ -312,6 +406,23 @@ function moneyImpactFor(
   }
 
   if (action === 'entry.corrected') {
+    const economicImpact = readEconomicImpact(metadata);
+    if (
+      economicImpact?.chargedDelta !== null &&
+      economicImpact?.chargedDelta !== undefined &&
+      Math.abs(economicImpact.chargedDelta) > 0.005
+    ) {
+      const chargedBefore = economicImpact.chargedBefore;
+      const chargedAfter = economicImpact.chargedAfter;
+      return {
+        label:
+          chargedBefore !== null && chargedAfter !== null
+            ? `Cobrado ${fmtMoney0(chargedBefore)} -> ${fmtMoney0(chargedAfter)}`
+            : `Cobrado ${fmtSignedMoney0(economicImpact.chargedDelta)}`,
+        amount: economicImpact.chargedDelta,
+      };
+    }
+
     const beforeTotal = amountTotal(before);
     const afterTotal = amountTotal(after);
     if (
@@ -320,14 +431,9 @@ function moneyImpactFor(
       beforeTotal !== afterTotal
     ) {
       return {
-        label: `${fmtMoney0(beforeTotal)} -> ${fmtMoney0(afterTotal)}`,
+        label: `Cobrado ${fmtMoney0(beforeTotal)} -> ${fmtMoney0(afterTotal)}`,
         amount: afterTotal - beforeTotal,
       };
-    }
-    if (
-      paymentListLabel(before.payments) !== paymentListLabel(after.payments)
-    ) {
-      return { label: 'Pagos modificados', amount: 0 };
     }
   }
 
@@ -339,6 +445,7 @@ export function buildAudit2Row(event: AuditEvent): Audit2Row {
   const before = readSnapshot(metadata, 'before');
   const after = readSnapshot(metadata, 'after');
   const changedFields = readStringArray(metadata, 'changedFields');
+  const labels = changedFieldLabels(changedFields);
   const origin = readOrigin(metadata);
   const kind = actionKindFor(event.action);
   const plate = after.plate ?? before.plate ?? readString(metadata, 'plate');
@@ -347,6 +454,7 @@ export function buildAudit2Row(event: AuditEvent): Audit2Row {
     before.ticketNumber ??
     readNumber(metadata, 'ticketNumber');
   const moneyImpact = moneyImpactFor(event.action, metadata, before, after);
+  const economicImpact = readEconomicImpact(metadata);
   const reason = readString(metadata, 'reason');
   const actorRole = readString(metadata, 'actorRole');
   const cashSessionId =
@@ -359,6 +467,13 @@ export function buildAudit2Row(event: AuditEvent): Audit2Row {
       : event.action === 'entry.undercharged'
         ? underchargeSummary(metadata)
         : actionLabelFor(event.action);
+  const rateNames = snapshotValues(before, after, 'rateSnapshotName');
+  const vehicleBrands = snapshotValues(before, after, 'vehicleBrand');
+  const vehicleModels = snapshotValues(before, after, 'vehicleModel');
+  const colors = snapshotValues(before, after, 'color');
+  const paymentMethods = paymentMethodNames(before, after);
+  const knownLeftAt = after.leftAt ?? before.leftAt;
+  const isActiveEntry = kind === 'entry.corrected' && knownLeftAt === null;
 
   return {
     id: event.id,
@@ -369,16 +484,24 @@ export function buildAudit2Row(event: AuditEvent): Audit2Row {
     actorRole: actorRole || '-',
     cashSessionId: cashSessionId || '-',
     changedFields,
+    changedFieldLabels: labels,
+    colors,
     createdAt: event.createdAt,
     createdAtLocalDate: dateKeyAr(event.createdAt),
+    economicImpact,
+    enteredAtLocalDate: maybeDateKeyAr(after.enteredAt ?? before.enteredAt),
     entityId: event.entityId,
     entityType: event.entityType,
     impactAmount: moneyImpact.amount,
+    isActiveEntry,
+    leftAtLocalDate: maybeDateKeyAr(after.leftAt ?? before.leftAt),
     metadata,
     moneyImpact: moneyImpact.label,
     origin,
     originLabel: originLabelFor(origin),
+    paymentMethodNames: paymentMethods,
     plate: plate || '-',
+    rateNames,
     reason: reason || '-',
     searchText: [
       event.action,
@@ -389,7 +512,13 @@ export function buildAudit2Row(event: AuditEvent): Audit2Row {
       ticket,
       reason,
       changedFields.join(' '),
+      labels.join(' '),
       originLabelFor(origin),
+      rateNames.join(' '),
+      vehicleBrands.join(' '),
+      vehicleModels.join(' '),
+      colors.join(' '),
+      paymentMethods.join(' '),
     ]
       .filter(Boolean)
       .join(' '),
@@ -397,6 +526,8 @@ export function buildAudit2Row(event: AuditEvent): Audit2Row {
     summary,
     ticketNumber:
       ticket === null || ticket === undefined ? '-' : String(ticket),
+    vehicleBrands,
+    vehicleModels,
   };
 }
 

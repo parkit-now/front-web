@@ -43,9 +43,26 @@ declare module '@tanstack/react-table' {
   }
 }
 
+const EMPTY_VISIBILITY: VisibilityState = {};
+
 const includesSomeFilter: FilterFn<unknown> = (row, columnId, value) => {
   if (!Array.isArray(value) || value.length === 0) return true;
-  return value.map(String).includes(String(row.getValue(columnId) ?? ''));
+  const selected = new Set(value.map(String));
+  const rowValue = row.getValue(columnId);
+  if (Array.isArray(rowValue)) {
+    return rowValue.some((item) => selected.has(String(item)));
+  }
+  if (rowValue === null || rowValue === undefined) {
+    return selected.has('');
+  }
+  if (
+    typeof rowValue === 'string' ||
+    typeof rowValue === 'number' ||
+    typeof rowValue === 'boolean'
+  ) {
+    return selected.has(String(rowValue));
+  }
+  return false;
 };
 
 /** Row values may already be a `YYYY-MM-DD`-sliced string (the common
@@ -102,21 +119,28 @@ export function DataTable<TData>({
   searchableKeys,
   filterableColumns = [],
   filterOptionsByColumn,
+  initialColumnFilters,
+  initialColumnVisibility = EMPTY_VISIBILITY,
   initialPageSize = 10,
   pageSizeOptions = [5, 10, 20, 30, 50],
   getRowId,
   templateScope,
   headerAction,
   toolbarExtra,
+  toolbarLeading,
   onRefresh,
   refreshDisabled,
   serverState,
   onRowClick,
 }: DataTableProps<TData>) {
   const [globalFilter, setGlobalFilter] = useState('');
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
+    initialColumnFilters ?? [],
+  );
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
+    initialColumnVisibility,
+  );
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
   const [columnPinning, setColumnPinning] = useState<{ left?: string[] }>({
     left: [],
@@ -231,9 +255,9 @@ export function DataTable<TData>({
 
       if (!sanitized) {
         setGlobalFilter('');
-        setColumnFilters([]);
+        setColumnFilters(initialColumnFilters ?? []);
         setSorting([]);
-        setColumnVisibility({});
+        setColumnVisibility(initialColumnVisibility);
         setColumnOrder([]);
         setColumnPinning({ left: [] });
         setPagination({ pageIndex: 0, pageSize: initialPageSize });
@@ -248,7 +272,12 @@ export function DataTable<TData>({
       setColumnPinning({ left: sanitized.columns.pinnedLeft });
       setPagination({ pageIndex: 0, pageSize: sanitized.pagination.pageSize });
     },
-    [initialPageSize, knownColumnIds],
+    [
+      initialColumnFilters,
+      initialColumnVisibility,
+      initialPageSize,
+      knownColumnIds,
+    ],
   );
 
   useEffect(() => {
@@ -360,6 +389,10 @@ export function DataTable<TData>({
           ) : null}
         </div>
 
+        {toolbarLeading ? (
+          <div className="dt-toolbar-leading">{toolbarLeading}</div>
+        ) : null}
+
         <div className="dt-toolbar-actions">
           <FilterPanel
             table={table}
@@ -378,7 +411,7 @@ export function DataTable<TData>({
             table={table}
             columnOrder={columnOrder}
             onResetColumns={() => {
-              setColumnVisibility({});
+              setColumnVisibility(initialColumnVisibility);
               setColumnOrder([]);
               setColumnPinning({ left: [] });
             }}

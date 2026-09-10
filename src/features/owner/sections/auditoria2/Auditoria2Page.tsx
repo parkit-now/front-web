@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { ColumnDef } from '@tanstack/react-table';
+import type { ColumnDef, ColumnFiltersState } from '@tanstack/react-table';
 import { DataTable } from '../../../../features/data-table';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
@@ -9,23 +9,35 @@ import { Badge } from '../../../../shared/components/ui/Badge';
 import { Button } from '../../../../shared/components/ui/Button';
 import { Drawer } from '../../../../shared/components/ui/Drawer';
 import { EmptyState } from '../../../../shared/components/ui/EmptyState';
-import {
-  IconAlert,
-  IconEye,
-  IconRefresh,
-} from '../../../../shared/components/icons';
+import { IconAlert, IconRefresh } from '../../../../shared/components/icons';
 import { fmtDateTimeAr, fmtMoney0 } from '../../../../shared/utils/fmt';
 import { useSucursal } from '../../context/SucursalContext';
-import { listAuditEvents } from '../../services/audit';
+import {
+  listAuditEvents,
+  listCashSessions,
+  type CashSession,
+} from '../../services/audit';
 import {
   buildAudit2Rows,
   correctionComparisons,
-  fieldLabel,
   metadataEntries,
   type Audit2Row,
 } from './audit2Utils';
 
 const FETCH_LIMIT = 500;
+const AUDIT2_INITIAL_COLUMN_VISIBILITY = {
+  cashSessionId: false,
+  colors: false,
+  enteredAtLocalDate: false,
+  leftAtLocalDate: false,
+  paymentMethodNames: false,
+  rateNames: false,
+  vehicleBrands: false,
+  vehicleModels: false,
+};
+const AUDIT2_INITIAL_COLUMN_FILTERS: ColumnFiltersState = [
+  { id: 'severity', value: ['warn', 'crit'] },
+];
 
 function severityVariant(
   severity: Audit2Row['severity'],
@@ -66,6 +78,46 @@ function metadataNumber(
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function cashSessionLabel(session: CashSession): string {
+  const opened = fmtDateTimeAr(session.openedAt);
+  return session.closedAt ? `Caja ${opened}` : `Caja actual · ${opened}`;
+}
+
+function fallbackCashSessionLabel(cashSessionId: string): string {
+  if (cashSessionId === '-') return 'Sin caja';
+  return `Caja ${cashSessionId.slice(0, 8)}`;
+}
+
+function fmtSignedMoney0(value: number): string {
+  if (Math.abs(value) <= 0.005) return fmtMoney0(0);
+  return `${value > 0 ? '+' : '-'}${fmtMoney0(Math.abs(value))}`;
+}
+
+function QuickSwitch({
+  checked,
+  disabled,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  label: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="dt-quick-switch">
+      <span>{label}</span>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span className="dt-quick-switch-track" aria-hidden />
+    </label>
+  );
+}
+
 function DetailLine({
   label,
   value,
@@ -83,15 +135,80 @@ function DetailLine({
 
 function CorrectionDetail({ row }: { row: Audit2Row }) {
   const comparisons = correctionComparisons(row);
+  const impact = row.economicImpact;
   return (
     <>
+      {impact ? (
+        <section className="audit2-detail-section">
+          <h3>Impacto estimado</h3>
+          <div className="audit2-money-grid">
+            <div>
+              <span>Sugerido antes</span>
+              <strong>
+                {impact.suggestedBefore === null
+                  ? '-'
+                  : fmtMoney0(impact.suggestedBefore)}
+              </strong>
+            </div>
+            <div>
+              <span>Sugerido después</span>
+              <strong>
+                {impact.suggestedAfter === null
+                  ? '-'
+                  : fmtMoney0(impact.suggestedAfter)}
+              </strong>
+            </div>
+            <div>
+              <span>Impacto horario/tarifa</span>
+              <strong>
+                {impact.suggestedDelta === null
+                  ? '-'
+                  : fmtSignedMoney0(impact.suggestedDelta)}
+              </strong>
+            </div>
+            <div>
+              <span>Cobrado antes</span>
+              <strong>
+                {impact.chargedBefore === null
+                  ? '-'
+                  : fmtMoney0(impact.chargedBefore)}
+              </strong>
+            </div>
+            <div>
+              <span>Cobrado después</span>
+              <strong>
+                {impact.chargedAfter === null
+                  ? '-'
+                  : fmtMoney0(impact.chargedAfter)}
+              </strong>
+            </div>
+            <div>
+              <span>Cambio cobrado</span>
+              <strong>
+                {impact.chargedDelta === null
+                  ? '-'
+                  : fmtSignedMoney0(impact.chargedDelta)}
+              </strong>
+            </div>
+            <div>
+              <span>Diferencia vs sugerido</span>
+              <strong>
+                {impact.deltaVsSuggestedAfter === null
+                  ? '-'
+                  : fmtSignedMoney0(impact.deltaVsSuggestedAfter)}
+              </strong>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <section className="audit2-detail-section">
         <h3>Campos modificados</h3>
         <div className="audit2-chip-list">
-          {row.changedFields.length > 0 ? (
-            row.changedFields.map((field) => (
+          {row.changedFieldLabels.length > 0 ? (
+            row.changedFieldLabels.map((field) => (
               <Badge key={field} variant="brand">
-                {fieldLabel(field)}
+                {field}
               </Badge>
             ))
           ) : (
@@ -250,6 +367,7 @@ export function Auditoria2Page() {
   const { sucursalId } = useSucursal();
   const userId = useCurrentUserId();
   const [selected, setSelected] = useState<Audit2Row | null>(null);
+  const [onlyCurrentCashSession, setOnlyCurrentCashSession] = useState(false);
 
   const auditQuery = useQuery({
     queryKey: ['audit2', sucursalId],
@@ -258,12 +376,60 @@ export function Auditoria2Page() {
     staleTime: 30_000,
   });
 
-  const rows = useMemo(
+  const cashSessionsQuery = useQuery({
+    queryKey: ['audit2-cash-sessions', sucursalId],
+    queryFn: () => listCashSessions(sucursalId),
+    enabled: Boolean(sucursalId),
+    staleTime: 30_000,
+  });
+
+  const allRows = useMemo(
     () => buildAudit2Rows(auditQuery.data ?? []),
     [auditQuery.data],
   );
 
+  const activeCashSession = useMemo(
+    () => cashSessionsQuery.data?.find((session) => !session.closedAt) ?? null,
+    [cashSessionsQuery.data],
+  );
+
+  useEffect(() => {
+    if (!activeCashSession) {
+      setOnlyCurrentCashSession(false);
+    }
+  }, [activeCashSession]);
+
+  const rows = useMemo(() => {
+    return allRows.filter((row) => {
+      if (onlyCurrentCashSession) {
+        return activeCashSession
+          ? row.cashSessionId === activeCashSession.id
+          : false;
+      }
+      return true;
+    });
+  }, [activeCashSession, allRows, onlyCurrentCashSession]);
+
   const criticalCount = rows.filter((row) => row.actionKind !== 'other').length;
+
+  const cashSessionOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    (cashSessionsQuery.data ?? []).forEach((session) => {
+      byId.set(session.id, cashSessionLabel(session));
+    });
+    allRows.forEach((row) => {
+      if (!byId.has(row.cashSessionId)) {
+        byId.set(
+          row.cashSessionId,
+          fallbackCashSessionLabel(row.cashSessionId),
+        );
+      }
+    });
+    return Array.from(byId.entries()).map(([value, label]) => ({
+      value,
+      label,
+    }));
+  }, [allRows, cashSessionsQuery.data]);
 
   const columns = useMemo<ColumnDef<Audit2Row, unknown>[]>(
     () => [
@@ -279,11 +445,57 @@ export function Auditoria2Page() {
         ),
       },
       {
+        id: 'enteredAtLocalDate',
+        header: 'Ingreso',
+        accessorKey: 'enteredAtLocalDate',
+        filterFn: 'dateRange',
+      },
+      {
+        id: 'leftAtLocalDate',
+        header: 'Egreso',
+        accessorKey: 'leftAtLocalDate',
+        filterFn: 'dateRange',
+      },
+      {
+        id: 'cashSessionId',
+        header: 'Caja',
+        accessorKey: 'cashSessionId',
+      },
+      {
+        id: 'paymentMethodNames',
+        header: 'Medio de pago',
+        accessorKey: 'paymentMethodNames',
+      },
+      {
+        id: 'rateNames',
+        header: 'Tarifa',
+        accessorKey: 'rateNames',
+      },
+      {
+        id: 'vehicleBrands',
+        header: 'Marca',
+        accessorKey: 'vehicleBrands',
+      },
+      {
+        id: 'vehicleModels',
+        header: 'Modelo',
+        accessorKey: 'vehicleModels',
+      },
+      {
+        id: 'colors',
+        header: 'Color',
+        accessorKey: 'colors',
+      },
+      {
         id: 'severity',
         header: 'Severidad',
         accessorKey: 'severity',
+        size: 128,
         cell: ({ row }) => (
-          <Badge variant={severityVariant(row.original.severity)}>
+          <Badge
+            variant={severityVariant(row.original.severity)}
+            className="audit2-table-badge"
+          >
             {severityLabel(row.original.severity)}
           </Badge>
         ),
@@ -292,8 +504,12 @@ export function Auditoria2Page() {
         id: 'actionKind',
         header: 'Acción',
         accessorKey: 'actionKind',
+        size: 172,
         cell: ({ row }) => (
-          <Badge variant={actionBadgeVariant(row.original.actionKind)}>
+          <Badge
+            variant={actionBadgeVariant(row.original.actionKind)}
+            className="audit2-table-badge audit2-action-badge"
+          >
             {row.original.actionLabel}
           </Badge>
         ),
@@ -312,10 +528,14 @@ export function Auditoria2Page() {
         id: 'origin',
         header: 'Rol / origen',
         accessorKey: 'origin',
+        size: 152,
         cell: ({ row }) => (
           <div className="audit2-stack">
             <span>{row.original.actorRole}</span>
-            <Badge variant={originBadgeVariant(row.original.origin)}>
+            <Badge
+              variant={originBadgeVariant(row.original.origin)}
+              className="audit2-table-badge audit2-origin-badge"
+            >
               {row.original.originLabel}
             </Badge>
           </div>
@@ -351,7 +571,8 @@ export function Auditoria2Page() {
             className="audit2-mono"
             style={{
               color:
-                row.original.impactAmount && row.original.impactAmount > 0
+                row.original.impactAmount &&
+                Math.abs(row.original.impactAmount) > 0.005
                   ? 'var(--warn-text)'
                   : 'var(--text-2)',
               fontWeight: 700,
@@ -359,26 +580,6 @@ export function Auditoria2Page() {
           >
             {row.original.moneyImpact}
           </span>
-        ),
-      },
-      {
-        id: 'detail',
-        header: () => <div style={{ textAlign: 'center' }}>Detalle</div>,
-        enableSorting: false,
-        enableHiding: false,
-        cell: ({ row }) => (
-          <button
-            type="button"
-            className="pk-btn pk-btn-ghost pk-btn-icon"
-            title="Ver detalle"
-            aria-label={`Ver detalle de ${row.original.actionLabel}`}
-            onClick={(event) => {
-              event.stopPropagation();
-              setSelected(row.original);
-            }}
-          >
-            <IconEye size={16} />
-          </button>
         ),
       },
     ],
@@ -431,12 +632,21 @@ export function Auditoria2Page() {
         searchPlaceholder="Buscar por actor, patente, ticket, razón o campos"
         searchableKeys={['searchText']}
         filterableColumns={[
+          'createdAtLocalDate',
+          'enteredAtLocalDate',
+          'leftAtLocalDate',
+          'cashSessionId',
+          'paymentMethodNames',
+          'rateNames',
+          'vehicleBrands',
+          'vehicleModels',
+          'colors',
           'severity',
           'actionKind',
           'origin',
-          'createdAtLocalDate',
         ]}
         filterOptionsByColumn={{
+          cashSessionId: cashSessionOptions,
           severity: [
             { value: 'info', label: 'Info' },
             { value: 'warn', label: 'Advertencia' },
@@ -453,11 +663,26 @@ export function Auditoria2Page() {
             { value: 'unknown', label: 'Sin origen' },
           ],
         }}
+        initialColumnFilters={AUDIT2_INITIAL_COLUMN_FILTERS}
+        initialColumnVisibility={AUDIT2_INITIAL_COLUMN_VISIBILITY}
         getRowId={(row) => row.id}
         initialPageSize={10}
-        onRefresh={() => void auditQuery.refetch()}
-        refreshDisabled={auditQuery.isFetching}
+        onRefresh={() => {
+          void auditQuery.refetch();
+          void cashSessionsQuery.refetch();
+        }}
+        refreshDisabled={auditQuery.isFetching || cashSessionsQuery.isFetching}
         onRowClick={setSelected}
+        toolbarLeading={
+          <div className="dt-quick-switches">
+            <QuickSwitch
+              label="Solo caja actual"
+              checked={onlyCurrentCashSession}
+              disabled={!activeCashSession}
+              onChange={setOnlyCurrentCashSession}
+            />
+          </div>
+        }
         templateScope={
           userId && sucursalId
             ? { userId, tenantId: sucursalId, tableKey: 'owner-audit2' }
