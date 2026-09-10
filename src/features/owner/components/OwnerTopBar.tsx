@@ -14,8 +14,6 @@ const SECTION_TITLES: Record<string, string> = {
   estadisticas: 'Estadísticas',
   transacciones: 'Transacciones',
   auditoria: 'Auditoría',
-  auditoria2: 'Auditoría 2',
-  'revision-lpr': 'Patentes descartadas',
   tasas: 'Tasas',
   vehiculos: 'Vehículos',
   'metodos-de-pago': 'Métodos de pago',

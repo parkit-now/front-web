@@ -56,8 +56,6 @@ const SECTIONS = [
   'estadisticas',
   'transacciones',
   'auditoria',
-  'auditoria2',
-  'revision-lpr',
   'tasas',
   'vehiculos',
   'metodos-de-pago',

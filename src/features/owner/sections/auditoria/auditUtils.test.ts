@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { AuditEvent } from '../../services/audit';
 import {
-  buildAudit2Row,
+  buildAuditRow,
   correctionComparisons,
   paymentListLabel,
-} from './audit2Utils';
+} from './auditUtils';
 
 function event(overrides: Partial<AuditEvent>): AuditEvent {
   return {
@@ -19,9 +19,9 @@ function event(overrides: Partial<AuditEvent>): AuditEvent {
   };
 }
 
-describe('audit2 utils', () => {
+describe('audit utils', () => {
   it('maps entry.corrected metadata into a searchable row and comparison detail', () => {
-    const row = buildAudit2Row(
+    const row = buildAuditRow(
       event({
         metadata: {
           origin: 'history',
@@ -100,7 +100,7 @@ describe('audit2 utils', () => {
   });
 
   it('collapses rate snapshot fields into one Tarifa label', () => {
-    const row = buildAudit2Row(
+    const row = buildAuditRow(
       event({
         metadata: {
           origin: 'history',
@@ -123,7 +123,7 @@ describe('audit2 utils', () => {
   });
 
   it('keeps suggested-only impact out of the impact column', () => {
-    const row = buildAudit2Row(
+    const row = buildAuditRow(
       event({
         metadata: {
           origin: 'history',
@@ -157,7 +157,7 @@ describe('audit2 utils', () => {
   });
 
   it('detects active-entry corrections for the include base switch', () => {
-    const row = buildAudit2Row(
+    const row = buildAuditRow(
       event({
         metadata: {
           origin: 'history',
@@ -182,7 +182,7 @@ describe('audit2 utils', () => {
   });
 
   it('shows charged economic impact for entry corrections', () => {
-    const row = buildAudit2Row(
+    const row = buildAuditRow(
       event({
         metadata: {
           origin: 'history',
@@ -207,7 +207,7 @@ describe('audit2 utils', () => {
   });
 
   it('maps entry.undercharged metadata into anomaly impact', () => {
-    const row = buildAudit2Row(
+    const row = buildAuditRow(
       event({
         action: 'entry.undercharged',
         metadata: {
@@ -230,7 +230,7 @@ describe('audit2 utils', () => {
   });
 
   it('keeps generic events usable when metadata is missing or unexpected', () => {
-    const row = buildAudit2Row(
+    const row = buildAuditRow(
       event({
         action: 'entity.profile_updated',
         actorName: null,

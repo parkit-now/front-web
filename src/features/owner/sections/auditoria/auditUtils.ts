@@ -36,7 +36,7 @@ export type EntrySnapshot = {
   payments?: PaymentSnapshot[];
 };
 
-export type Audit2Row = {
+export type AuditRow = {
   id: string;
   action: string;
   actionLabel: string;
@@ -440,7 +440,7 @@ function moneyImpactFor(
   return { label: '-', amount: null };
 }
 
-export function buildAudit2Row(event: AuditEvent): Audit2Row {
+export function buildAuditRow(event: AuditEvent): AuditRow {
   const metadata = metadataRecord(event.metadata);
   const before = readSnapshot(metadata, 'before');
   const after = readSnapshot(metadata, 'after');
@@ -531,11 +531,11 @@ export function buildAudit2Row(event: AuditEvent): Audit2Row {
   };
 }
 
-export function buildAudit2Rows(events: AuditEvent[]): Audit2Row[] {
-  return events.map(buildAudit2Row);
+export function buildAuditRows(events: AuditEvent[]): AuditRow[] {
+  return events.map(buildAuditRow);
 }
 
-export function correctionComparisons(row: Audit2Row): AuditComparisonRow[] {
+export function correctionComparisons(row: AuditRow): AuditComparisonRow[] {
   const before = readSnapshot(row.metadata, 'before');
   const after = readSnapshot(row.metadata, 'after');
   const changed = new Set(row.changedFields);
