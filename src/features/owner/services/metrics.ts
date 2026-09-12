@@ -12,23 +12,39 @@ export type TopPlatesResponse = components['schemas']['TopPlatesResponseDto'];
 export type TopPlate = components['schemas']['TopPlateDto'];
 export type MetricsSummary = components['schemas']['MetricsSummaryDto'];
 
-type RevenueQuery = operations['metricsGetRevenue']['parameters']['query'];
+type RevenueQuery = NonNullable<
+  operations['metricsGetRevenue']['parameters']['query']
+>;
 
 export type Granularity = NonNullable<RevenueQuery['granularity']>;
 export type VehicleTypeFilter = NonNullable<RevenueQuery['vehicleType']>;
 export type TopPlatesOrderBy = NonNullable<
-  operations['metricsGetTopPlates']['parameters']['query']['orderBy']
+  NonNullable<
+    operations['metricsGetTopPlates']['parameters']['query']
+  >['orderBy']
 >;
 
-/** Ventana temporal común a todos los endpoints de métricas. */
-export interface MetricsWindow {
+/**
+ * Qué recorte pedir: una ventana temporal **o** una caja.
+ *
+ * El contrato publica `from`/`to` como opcionales porque OpenAPI no puede decir
+ * "requeridos salvo que venga `cashSessionId`". Este tipo sí lo dice: una query
+ * sin ventana y sin caja no compila, en vez de salir con un 400 en runtime.
+ *
+ * Con caja no se manda ventana a propósito: el backend la deriva del turno y la
+ * ensancha para cubrir los cobros que el escritorio sincronizó tarde. La que
+ * usó vuelve en el `from`/`to` de la respuesta.
+ */
+export type MetricsScope =
+  | { from: string; to: string; cashSessionId?: never }
+  | { cashSessionId: string; from?: never; to?: never };
+
+/** Recorte común a todos los endpoints de métricas con ventana. */
+export type MetricsWindow = MetricsScope & {
   tenantId: string;
-  /** ISO-8601 **con offset explícito** (ver `ar-datetime.ts`). */
-  from: string;
-  to: string;
   tz?: string;
   vehicleType?: VehicleTypeFilter;
-}
+};
 
 async function bearer(): Promise<string> {
   const session = await getSession();
@@ -44,8 +60,12 @@ async function bearer(): Promise<string> {
  */
 function windowParams(input: MetricsWindow): URLSearchParams {
   const params = new URLSearchParams();
-  params.set('from', input.from);
-  params.set('to', input.to);
+  if (input.cashSessionId !== undefined) {
+    params.set('cashSessionId', input.cashSessionId);
+  } else {
+    params.set('from', input.from);
+    params.set('to', input.to);
+  }
   params.set('tz', input.tz ?? AR_TZ);
   if (input.vehicleType) params.set('vehicleType', input.vehicleType);
   return params;
@@ -64,11 +84,11 @@ function metricsPath(
  * Serie temporal del dashboard de ingresos.
  *
  * Devuelve las dos series en el mismo payload (`revenue` y `vehiclesIn`), así
- * que el switch $/autos de la UI no necesita refetchear.
+ * que las pestañas $/autos de la UI no necesitan refetchear.
  *
- * Con `paymentMethod` presente el backend cambia `revenueSource` a
+ * Con `paymentMethod` o `cashSessionId` el backend cambia `revenueSource` a
  * `paymentTransactions`, y ese subconjunto es más chico que el total: la
- * recaudación cerrada con `amountPaid` directo no tiene método asociado.
+ * recaudación cerrada con `amountPaid` directo no tiene método ni caja.
  */
 export async function getRevenueSeries(
   input: MetricsWindow & {
@@ -91,7 +111,8 @@ export async function getRevenueSeries(
  * Desglose por método de pago (el gráfico de torta).
  *
  * `unallocated` (= `total - allocated`) es la plata sin desglose; hay que
- * renderizarla como una porción más o las tajadas no cierran contra el KPI.
+ * renderizarla como una porción más o las tajadas no cierran contra el KPI. Con
+ * caja da siempre 0: un cierre escribe todos sus pagos con la misma caja.
  */
 export async function getRevenueByPaymentMethod(
   input: MetricsWindow,
@@ -112,7 +133,7 @@ export async function getRevenueByPaymentMethod(
  * criterio de orden es un re-sort en cliente mientras no cambie `limit`.
  *
  * Solo cuenta estadías **cerradas** en la ventana: un auto todavía adentro no
- * tiene monto final ni duración.
+ * tiene monto final ni duración. Con caja, solo las que cobró ese turno.
  */
 export async function getTopPlates(
   input: MetricsWindow & { orderBy?: TopPlatesOrderBy; limit?: number },

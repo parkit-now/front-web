@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { SectionHeader } from '../../../../shared/components/SectionHeader';
-import { Switch } from '../../../../shared/components/ui/Switch';
+import { Tabs } from '../../../../shared/components/ui/Tabs';
 import { Skeleton } from '../../../../shared/components/ui/Skeleton';
 import { EmptyState } from '../../../../shared/components/ui/EmptyState';
 import {
@@ -18,25 +18,58 @@ import {
   useRevenueByPaymentMethod,
   useRevenueSeries,
   useTopPlates,
+  type RevenueFilters,
 } from '../../hooks/useMetrics';
+import { useCashSessions } from '../../hooks/useCashSessions';
 import { BarChart } from './BarChart';
 import { DonutChart } from './DonutChart';
 import { TopPlatesTable } from './TopPlatesTable';
 import {
   GRANULARITY_LABELS,
+  HOUR_MAX_SPAN_HOURS,
   PRESET_LABELS,
+  clampGranularity,
   granularityIsTooFine,
+  hourGranularityAllowed,
   resolveRange,
   type PresetOption,
 } from './filters';
 import {
   buildPieSlices,
+  formatAxisValue,
   formatBucketLabel,
+  formatCashSessionLabel,
+  formatWindowLabel,
   hasInconsistentUnallocated,
 } from './transform';
 
-const PRESETS: PresetOption[] = ['hoy', '7d', '30d', 'custom'];
+const PRESETS: PresetOption[] = ['hoy', '7d', '30d', 'custom', 'caja'];
 const GRANULARITIES: Granularity[] = ['hour', 'day', 'week', 'month'];
+
+/** Las dos series del mismo payload; el tab no dispara otra request. */
+type SerieTab = 'ingresos' | 'autos';
+
+const SERIE_TABS = [
+  { id: 'ingresos', label: 'Ingresos' },
+  { id: 'autos', label: 'Autos ingresados' },
+];
+
+const RANGE_ERRORS: Record<string, { title: string; description: string }> = {
+  incomplete: {
+    title: 'Elegí un rango de fechas',
+    description:
+      'Seleccioná al menos una fecha para ver los ingresos del período.',
+  },
+  inverted: {
+    title: 'El rango está invertido',
+    description:
+      'La fecha y hora de inicio tienen que ser anteriores a las de fin.',
+  },
+  'no-session': {
+    title: 'Elegí una caja',
+    description: 'Seleccioná un turno para ver la recaudación de esa caja.',
+  },
+};
 
 function Chip({
   active,
@@ -146,36 +179,56 @@ export function EstadisticasPage() {
   // Nombre del tipo, o '' para no filtrar. Es texto libre desde que el contrato
   // dejó de exponer `vehicleType` como enum.
   const [vehicleType, setVehicleType] = useState('');
-  const [showVehicles, setShowVehicles] = useState(false);
+  const [cashSessionId, setCashSessionId] = useState('');
+  const [serie, setSerie] = useState<SerieTab>('ingresos');
 
   // Instante contra el que se resuelven los presets. Solo se refresca cuando el
   // usuario elige un rango, así la ventana no cambia en cada render.
   const [anchor, setAnchor] = useState(() => Date.now());
 
-  const resolved = useMemo(
-    () =>
-      resolveRange({ preset, range: customRange, fromTime, toTime }, anchor),
-    [preset, customRange, fromTime, toTime, anchor],
+  const cashSessionsQuery = useCashSessions(preset === 'caja');
+  const cashSessions = cashSessionsQuery.data ?? [];
+  // Referencia estable mientras no cambie la lista, así `resolved` no se
+  // recalcula en cada render.
+  const cashSession = cashSessions.find(
+    (session) => session.id === cashSessionId,
   );
 
-  const granularity =
+  const resolved = useMemo(
+    () =>
+      resolveRange(
+        { preset, range: customRange, fromTime, toTime, cashSession },
+        anchor,
+      ),
+    [preset, customRange, fromTime, toTime, cashSession, anchor],
+  );
+
+  const wantedGranularity =
     manualGranularity ?? (resolved.ok ? resolved.granularity : 'day');
+  const granularity = clampGranularity(resolved, wantedGranularity);
+  // La elección manual sobrevive al ensanchado de un rango personalizado, así
+  // que hay que avisar cuando se degradó sola.
+  const granularityWasClamped = granularity !== wantedGranularity;
+  const hourAllowed = hourGranularityAllowed(resolved);
   const tooFine = granularityIsTooFine(resolved, granularity);
 
   // El tope de buckets lo rechaza el backend con un 400; si ya sabemos que no
-  // entra, dejamos `from`/`to` vacíos y los hooks no disparan la request.
+  // entra, los filtros quedan en `null` y los hooks no disparan la request.
   const canQuery = resolved.ok && !tooFine;
 
-  const filters = useMemo(
-    () => ({
-      from: canQuery && resolved.ok ? resolved.from : '',
-      to: canQuery && resolved.ok ? resolved.to : '',
+  const filters = useMemo<RevenueFilters | null>(() => {
+    if (!canQuery || !resolved.ok) return null;
+    const common = {
       granularity,
       paymentMethod: paymentMethod || undefined,
       vehicleType: vehicleType || undefined,
-    }),
-    [canQuery, resolved, granularity, paymentMethod, vehicleType],
-  );
+    };
+    // Con caja no se manda ventana: la deriva el backend (ver `MetricsScope`).
+    return resolved.cashSessionId
+      ? { ...common, cashSessionId: resolved.cashSessionId }
+      : { ...common, from: resolved.from, to: resolved.to };
+  }, [canQuery, resolved, granularity, paymentMethod, vehicleType]);
+  const isCashSession = Boolean(filters?.cashSessionId);
 
   const seriesQuery = useRevenueSeries(filters);
   const breakdownQuery = useRevenueByPaymentMethod(filters);
@@ -207,9 +260,9 @@ export function EstadisticasPage() {
   const values = useMemo(() => {
     const buckets = series?.buckets ?? [];
     return buckets.map((bucket) =>
-      showVehicles ? bucket.vehiclesIn : bucket.revenue,
+      serie === 'autos' ? bucket.vehiclesIn : bucket.revenue,
     );
-  }, [series, showVehicles]);
+  }, [series, serie]);
 
   const labels = useMemo(
     () =>
@@ -294,6 +347,49 @@ export function EstadisticasPage() {
           </div>
         )}
 
+        {preset === 'caja' && (
+          <div
+            style={{
+              display: 'flex',
+              gap: 12,
+              flexWrap: 'wrap',
+              alignItems: 'center',
+            }}
+          >
+            <label style={{ fontSize: 13, color: 'var(--text-2)' }}>
+              Caja{' '}
+              <select
+                className="pk-input"
+                value={cashSessionId}
+                onChange={(event) => setCashSessionId(event.target.value)}
+                disabled={cashSessionsQuery.isLoading}
+                style={{ width: 240, display: 'inline-block' }}
+              >
+                <option value="">Elegí un turno</option>
+                {cashSessions.map((session) => (
+                  <option key={session.id} value={session.id}>
+                    {formatCashSessionLabel(session)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {cashSessionsQuery.isError && (
+              <span style={{ fontSize: 12, color: 'var(--err-text)' }}>
+                {translateApiError(cashSessionsQuery.error, {
+                  endpoint: 'cashSessions.list',
+                })}
+              </span>
+            )}
+            {!cashSessionsQuery.isLoading &&
+              !cashSessionsQuery.isError &&
+              cashSessions.length === 0 && (
+                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                  Este estacionamiento todavía no tiene cajas registradas.
+                </span>
+              )}
+          </div>
+        )}
+
         <div
           style={{
             display: 'flex',
@@ -349,14 +445,26 @@ export function EstadisticasPage() {
               }
               style={{ width: 150, display: 'inline-block' }}
             >
-              {GRANULARITIES.map((option) => (
-                <option key={option} value={option}>
-                  {GRANULARITY_LABELS[option]}
-                </option>
-              ))}
+              {GRANULARITIES.map((option) => {
+                const disabled = option === 'hour' && !hourAllowed;
+                return (
+                  <option key={option} value={option} disabled={disabled}>
+                    {GRANULARITY_LABELS[option]}
+                    {disabled ? ` (hasta ${HOUR_MAX_SPAN_HOURS} h)` : ''}
+                  </option>
+                );
+              })}
             </select>
           </label>
         </div>
+
+        {granularityWasClamped && (
+          <Note>
+            La agrupación por hora se usa en períodos de hasta{' '}
+            {HOUR_MAX_SPAN_HOURS} horas: como el rango elegido es más largo, el
+            gráfico volvió a agrupar por día.
+          </Note>
+        )}
 
         {vehicleType && (
           <Note>
@@ -374,16 +482,8 @@ export function EstadisticasPage() {
       {!resolved.ok && (
         <div className="pk-card">
           <EmptyState
-            title={
-              resolved.reason === 'incomplete'
-                ? 'Elegí un rango de fechas'
-                : 'El rango está invertido'
-            }
-            description={
-              resolved.reason === 'incomplete'
-                ? 'Seleccioná al menos una fecha para ver los ingresos del período.'
-                : 'La fecha y hora de inicio tienen que ser anteriores a las de fin.'
-            }
+            title={RANGE_ERRORS[resolved.reason].title}
+            description={RANGE_ERRORS[resolved.reason].description}
           />
         </div>
       )}
@@ -422,7 +522,11 @@ export function EstadisticasPage() {
             <KpiCard
               title="Total ingresos"
               value={fmtMoney0(series?.totals.revenue ?? 0)}
-              sub="recaudado en el período"
+              sub={
+                isCashSession
+                  ? 'cobrado por esta caja'
+                  : 'recaudado en el período'
+              }
               loading={seriesQuery.isLoading}
             />
             <KpiCard
@@ -441,41 +545,14 @@ export function EstadisticasPage() {
 
           {/* Gráfico */}
           <div className="pk-card pk-card-pad" style={{ marginBottom: 24 }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 12,
-                marginBottom: 12,
-                flexWrap: 'wrap',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: 'var(--text-2)',
-                }}
-              >
-                {showVehicles ? 'Autos ingresados' : 'Ingresos'} por período
-              </span>
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  fontSize: 13,
-                  color: 'var(--text-2)',
-                }}
-              >
-                Ver cantidad de autos
-                <Switch
-                  checked={showVehicles}
-                  onChange={setShowVehicles}
-                  aria-label="Alternar entre ingresos y cantidad de autos"
-                />
-              </label>
+            {/* Las dos series vienen en el mismo payload: cambiar de pestaña no
+                dispara otra request. */}
+            <div style={{ marginBottom: 16 }}>
+              <Tabs
+                tabs={SERIE_TABS}
+                active={serie}
+                onChange={(id) => setSerie(id as SerieTab)}
+              />
             </div>
 
             {seriesQuery.isLoading ? (
@@ -486,7 +563,19 @@ export function EstadisticasPage() {
                 description="No hay movimientos registrados en el rango elegido."
               />
             ) : (
-              <BarChart data={values} labels={labels} height={220} />
+              <BarChart
+                data={values}
+                labels={labels}
+                height={240}
+                formatValue={
+                  serie === 'autos'
+                    ? (value) => value.toLocaleString('es-AR')
+                    : fmtMoney0
+                }
+                formatTick={(value) =>
+                  formatAxisValue(value, serie === 'autos' ? 'count' : 'money')
+                }
+              />
             )}
 
             <Note>
@@ -496,13 +585,36 @@ export function EstadisticasPage() {
               recaudación al segundo, así que las dos series no coinciden.
             </Note>
 
-            {series?.revenueSource === 'paymentTransactions' && (
+            {isCashSession && series && (
+              // La ventana sale de la respuesta, no del turno: el backend la
+              // ensancha para cubrir los cobros sincronizados después del cierre.
               <Note>
-                Al filtrar por método de pago solo se cuenta la recaudación con
-                detalle de pagos registrado. El total es menor que el del
-                período sin filtrar.
+                Cobros de esta caja entre{' '}
+                <strong>{formatWindowLabel(series.from, series.to)}</strong>.
+                Puede terminar unos minutos después del cierre del turno porque
+                incluye los cobros que el escritorio sincronizó más tarde. En
+                "Autos ingresados" solo cuentan los que además entraron en esa
+                ventana, y las estadías cerradas sin detalle de pago no tienen
+                caja y no aparecen.
               </Note>
             )}
+
+            {/* Solo difiere cuando `useRevenueSeries` reintentó por día. */}
+            {isCashSession && series && series.granularity !== granularity && (
+              <Note>
+                La ventana de esta caja tiene demasiadas horas para agruparla
+                por hora, así que el gráfico se agrupó por día.
+              </Note>
+            )}
+
+            {!isCashSession &&
+              series?.revenueSource === 'paymentTransactions' && (
+                <Note>
+                  Al filtrar por método de pago solo se cuenta la recaudación
+                  con detalle de pagos registrado. El total es menor que el del
+                  período sin filtrar.
+                </Note>
+              )}
           </div>
 
           {/* Torta por método de pago */}

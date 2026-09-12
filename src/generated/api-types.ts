@@ -657,7 +657,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List all cash sessions (most recent first) */
+        /**
+         * List cash sessions (most recent first)
+         * @description Optionally only the shifts overlapping `[from, to)`: a shift that opened before `from` but was still running at `from` is included.
+         *
+         *     **Capped at `limit` (default 100).** It used to return every shift the lot ever had — about a thousand rows a year to fill a picker. Offline clients should keep syncing through `/changes`, which pages by `syncSeq`.
+         */
         get: operations["CashSessionsController_findAll"];
         put?: never;
         /** Open a new cash session (client-provided UUIDv7) */
@@ -956,7 +961,9 @@ export interface paths {
          *
          *     Both the money series and the vehicle-count series come back together, so the dashboard’s $/cars toggle needs no second request. Note they use different time anchors — see `totals`.
          *
-         *     Optional filters narrow to a payment method or a vehicle type; `paymentMethod` switches the revenue source, reported in `revenueSource`.
+         *     Optional filters narrow to a payment method, a vehicle type or a cash session; `paymentMethod` and `cashSessionId` switch the revenue source, reported in `revenueSource`.
+         *
+         *     With `cashSessionId` the window may be omitted: it is derived from the shift and widened to cover every payment the shift collected, so the totals are exactly what that drawer took. The window used comes back in `from`/`to`. See the parameter for details.
          */
         get: operations["metricsGetRevenue"];
         put?: never;
@@ -979,6 +986,8 @@ export interface paths {
          * @description One slice per payment method over the window, largest first.
          *
          *     Also returns `unallocated`: revenue with no itemised transactions behind it, because the stay was closed through the offline `amountPaid` fallback. Slices plus `unallocated` add up to `total`, so the chart reconciles with the revenue KPI instead of quietly falling short of it.
+         *
+         *     With `cashSessionId`: what that shift collected, cash vs. transfer. Every stay of the shift has its payments itemised by construction, so `unallocated` is 0 and `total` matches the revenue series for the same shift.
          */
         get: operations["metricsGetPaymentMethodBreakdown"];
         put?: never;
@@ -1022,7 +1031,7 @@ export interface paths {
          * Highest-value plates over a window
          * @description Ranks plates by revenue, visit count or time parked — every metric comes back regardless, so switching the ranking is a re-sort rather than another request.
          *
-         *     Counts only stays that ended inside the window: a vehicle still parked has no final amount or duration yet.
+         *     Counts only stays that ended inside the window: a vehicle still parked has no final amount or duration yet. With `cashSessionId`, only the stays that shift collected.
          */
         get: operations["metricsGetTopPlates"];
         put?: never;
@@ -2892,7 +2901,7 @@ export interface components {
              */
             granularity: "hour" | "day" | "week" | "month";
             /**
-             * @description Table the revenue was summed from. Switches to `paymentTransactions` when `paymentMethod` is set.
+             * @description Table the revenue was summed from. Switches to `paymentTransactions` when `paymentMethod` or `cashSessionId` is set.
              * @example entries
              * @enum {string}
              */
@@ -5268,7 +5277,14 @@ export interface operations {
     };
     CashSessionsController_findAll: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only shifts still running after this instant (they overlap the window). ISO-8601 with explicit offset. */
+                from?: string;
+                /** @description Max shifts to return, most recent first. The endpoint used to return every shift ever; it now caps at this many. */
+                limit?: components["schemas"]["Object"];
+                /** @description Only shifts opened before this instant (exclusive). ISO-8601 with explicit offset. */
+                to?: string;
+            };
             header?: never;
             path: {
                 /** @description Parking lot tenant ID */
@@ -5284,6 +5300,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CashSessionDto"][];
+                };
+            };
+            /** @description `from` is not before `to`, a date-time lacks an explicit offset, or `limit` is out of range. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
                 };
             };
         };
@@ -5764,13 +5789,27 @@ export interface operations {
     };
     metricsGetRevenue: {
         parameters: {
-            query: {
+            query?: {
+                /**
+                 * @description Restrict to what one cash session (shift) **collected** — the figures for a cash-up.
+                 *
+                 *     Matches `payment_transactions.cashSessionId`: the drawer that took the money when the stay was closed. **Not** `entries.cashSessionId`, which records the drawer a car *entered* under and is reassigned to the next shift for every car still inside when a shift closes.
+                 *
+                 *     With it, `from`/`to` become optional. A bound you send is used verbatim; a missing one is derived from the shift (`openedAt` → `closedAt`, or now if still open), **widened to cover every payment the shift collected**: the offline desktop can sync a close late with a `leftAt` outside its own shift, and clipping to the shift would drop it. The window actually used comes back in the response `from`/`to`.
+                 *
+                 *     Revenue then comes from the transactions, as with `paymentMethod` (reported in `revenueSource`), and the bucket limit applies to the derived window like to any other — prefer `granularity=hour` for a shift.
+                 *
+                 *     `404 CASH_SESSION_NOT_FOUND` when the session does not exist in this parking lot.
+                 */
+                cashSessionId?: string;
                 /**
                  * @description Start of the window (inclusive), ISO-8601 **with an explicit offset**.
                  *
+                 *     **Required unless `cashSessionId` is given**, in which case it defaults to the start of the shift — see `cashSessionId`.
+                 *
                  *     The offset is mandatory: a naive `2026-08-07T13:00:00` would be resolved against the server clock, silently shifting the numbers by the Argentine offset. Send `-03:00` for Argentine wall-clock time.
                  */
-                from: string;
+                from?: string;
                 /** @description Bucket width. Buckets follow the civil calendar of `tz`, so a DST day stays one bucket. */
                 granularity?: "hour" | "day" | "week" | "month";
                 /**
@@ -5779,8 +5818,8 @@ export interface operations {
                  *     Setting it switches `revenue` to sum `payment_transactions` instead of `entries.amountPaid` — the transactions table is the only place the per-method split exists. The response reports this in `revenueSource`.
                  */
                 paymentMethod?: string;
-                /** @description End of the window (exclusive), ISO-8601 with explicit offset. */
-                to: string;
+                /** @description End of the window (exclusive), ISO-8601 with explicit offset. **Required unless `cashSessionId` is given.** */
+                to?: string;
                 /** @description IANA timezone used to delimit civil days (e.g. `America/Argentina/Buenos_Aires`). Defaults to Argentina. */
                 tz?: string;
                 /**
@@ -5809,7 +5848,7 @@ export interface operations {
                     "application/json": components["schemas"]["RevenueResponseDto"];
                 };
             };
-            /** @description `from` is not before `to`, a date-time lacks an explicit offset, or the range and granularity together exceed the bucket limit. */
+            /** @description `from`/`to` missing without a `cashSessionId`, `from` not before `to`, a date-time without an explicit offset, or a malformed `cashSessionId`. Also when the range and granularity together exceed the bucket limit. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5827,19 +5866,42 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
+            /** @description `cashSessionId` does not exist in this parking lot (`CASH_SESSION_NOT_FOUND`). A session of another lot gets the same answer. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
         };
     };
     metricsGetPaymentMethodBreakdown: {
         parameters: {
-            query: {
+            query?: {
+                /**
+                 * @description Restrict to what one cash session (shift) **collected** — the figures for a cash-up.
+                 *
+                 *     Matches `payment_transactions.cashSessionId`: the drawer that took the money when the stay was closed. **Not** `entries.cashSessionId`, which records the drawer a car *entered* under and is reassigned to the next shift for every car still inside when a shift closes.
+                 *
+                 *     With it, `from`/`to` become optional. A bound you send is used verbatim; a missing one is derived from the shift (`openedAt` → `closedAt`, or now if still open), **widened to cover every payment the shift collected**: the offline desktop can sync a close late with a `leftAt` outside its own shift, and clipping to the shift would drop it. The window actually used comes back in the response `from`/`to`.
+                 *
+                 *     Revenue then comes from the transactions, as with `paymentMethod` (reported in `revenueSource`), and the bucket limit applies to the derived window like to any other — prefer `granularity=hour` for a shift.
+                 *
+                 *     `404 CASH_SESSION_NOT_FOUND` when the session does not exist in this parking lot.
+                 */
+                cashSessionId?: string;
                 /**
                  * @description Start of the window (inclusive), ISO-8601 **with an explicit offset**.
                  *
+                 *     **Required unless `cashSessionId` is given**, in which case it defaults to the start of the shift — see `cashSessionId`.
+                 *
                  *     The offset is mandatory: a naive `2026-08-07T13:00:00` would be resolved against the server clock, silently shifting the numbers by the Argentine offset. Send `-03:00` for Argentine wall-clock time.
                  */
-                from: string;
-                /** @description End of the window (exclusive), ISO-8601 with explicit offset. */
-                to: string;
+                from?: string;
+                /** @description End of the window (exclusive), ISO-8601 with explicit offset. **Required unless `cashSessionId` is given.** */
+                to?: string;
                 /** @description IANA timezone used to delimit civil days (e.g. `America/Argentina/Buenos_Aires`). Defaults to Argentina. */
                 tz?: string;
                 /**
@@ -5868,7 +5930,7 @@ export interface operations {
                     "application/json": components["schemas"]["PaymentMethodBreakdownDto"];
                 };
             };
-            /** @description `from` is not before `to`, or a date-time lacks an explicit offset. */
+            /** @description `from`/`to` missing without a `cashSessionId`, `from` not before `to`, a date-time without an explicit offset, or a malformed `cashSessionId`. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5879,6 +5941,15 @@ export interface operations {
             };
             /** @description Caller is an `operator` (`ENTITY_INSUFFICIENT_ROLE`) or has no membership in this lot (`ENTITY_NO_ACCESS`). */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description `cashSessionId` does not exist in this parking lot (`CASH_SESSION_NOT_FOUND`). A session of another lot gets the same answer. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5924,13 +5995,27 @@ export interface operations {
     };
     metricsGetTopPlates: {
         parameters: {
-            query: {
+            query?: {
+                /**
+                 * @description Restrict to what one cash session (shift) **collected** — the figures for a cash-up.
+                 *
+                 *     Matches `payment_transactions.cashSessionId`: the drawer that took the money when the stay was closed. **Not** `entries.cashSessionId`, which records the drawer a car *entered* under and is reassigned to the next shift for every car still inside when a shift closes.
+                 *
+                 *     With it, `from`/`to` become optional. A bound you send is used verbatim; a missing one is derived from the shift (`openedAt` → `closedAt`, or now if still open), **widened to cover every payment the shift collected**: the offline desktop can sync a close late with a `leftAt` outside its own shift, and clipping to the shift would drop it. The window actually used comes back in the response `from`/`to`.
+                 *
+                 *     Revenue then comes from the transactions, as with `paymentMethod` (reported in `revenueSource`), and the bucket limit applies to the derived window like to any other — prefer `granularity=hour` for a shift.
+                 *
+                 *     `404 CASH_SESSION_NOT_FOUND` when the session does not exist in this parking lot.
+                 */
+                cashSessionId?: string;
                 /**
                  * @description Start of the window (inclusive), ISO-8601 **with an explicit offset**.
                  *
+                 *     **Required unless `cashSessionId` is given**, in which case it defaults to the start of the shift — see `cashSessionId`.
+                 *
                  *     The offset is mandatory: a naive `2026-08-07T13:00:00` would be resolved against the server clock, silently shifting the numbers by the Argentine offset. Send `-03:00` for Argentine wall-clock time.
                  */
-                from: string;
+                from?: string;
                 /** @description How many plates to return. */
                 limit?: number;
                 /**
@@ -5939,8 +6024,8 @@ export interface operations {
                  *     Every metric is returned regardless, so switching the ranking is a re-sort rather than a different dataset.
                  */
                 orderBy?: "revenue" | "visits" | "duration";
-                /** @description End of the window (exclusive), ISO-8601 with explicit offset. */
-                to: string;
+                /** @description End of the window (exclusive), ISO-8601 with explicit offset. **Required unless `cashSessionId` is given.** */
+                to?: string;
                 /** @description IANA timezone used to delimit civil days (e.g. `America/Argentina/Buenos_Aires`). Defaults to Argentina. */
                 tz?: string;
                 /**
@@ -5969,7 +6054,7 @@ export interface operations {
                     "application/json": components["schemas"]["TopPlatesResponseDto"];
                 };
             };
-            /** @description `from` is not before `to`, or a date-time lacks an explicit offset. */
+            /** @description `from`/`to` missing without a `cashSessionId`, `from` not before `to`, a date-time without an explicit offset, or a malformed `cashSessionId`. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5980,6 +6065,15 @@ export interface operations {
             };
             /** @description Caller is an `operator` (`ENTITY_INSUFFICIENT_ROLE`) or has no membership in this lot (`ENTITY_NO_ACCESS`). */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description `cashSessionId` does not exist in this parking lot (`CASH_SESSION_NOT_FOUND`). A session of another lot gets the same answer. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

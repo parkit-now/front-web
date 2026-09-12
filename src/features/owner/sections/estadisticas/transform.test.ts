@@ -3,9 +3,13 @@ import type { PaymentMethodBreakdown, TopPlate } from '../../services/metrics';
 import {
   UNALLOCATED_LABEL,
   buildPieSlices,
+  formatAxisValue,
   formatBucketLabel,
+  formatCashSessionLabel,
   formatMinutes,
+  formatWindowLabel,
   hasInconsistentUnallocated,
+  niceTicks,
   sortTopPlates,
 } from './transform';
 
@@ -58,6 +62,98 @@ describe('formatBucketLabel', () => {
   it('no reinterpreta la clave como fecha local', () => {
     // Parsear '2026-01-01' con `new Date()` en un huso al oeste daría 31/12.
     expect(formatBucketLabel('2026-01-01', 'day')).toBe('01/01');
+  });
+});
+
+describe('niceTicks', () => {
+  it('lleva el techo a un múltiplo redondo por encima del máximo', () => {
+    const { top, ticks } = niceTicks(47312);
+    expect(top).toBe(60000);
+    expect(ticks).toEqual([0, 20000, 40000, 60000]);
+  });
+
+  it('el techo nunca queda por debajo del máximo', () => {
+    for (const max of [1, 7, 13, 99, 101, 4321, 999999]) {
+      expect(niceTicks(max).top).toBeGreaterThanOrEqual(max);
+    }
+  });
+
+  it('arranca siempre en cero', () => {
+    expect(niceTicks(4321).ticks[0]).toBe(0);
+  });
+
+  it('sirve para series chicas sin repetir ticks', () => {
+    const { ticks } = niceTicks(3);
+    expect(ticks).toEqual([0, 1, 2, 3]);
+    expect(new Set(ticks).size).toBe(ticks.length);
+  });
+
+  it('no pone medios en el eje de una serie de enteros', () => {
+    expect(niceTicks(1).ticks).toEqual([0, 1]);
+  });
+
+  it('no arrastra error de coma flotante en pasos decimales', () => {
+    // 0 + 0.2 * 3 da 0.6000000000000001 si se acumula sumando.
+    expect(niceTicks(0.7).ticks).toEqual([0, 0.2, 0.4, 0.6, 0.8]);
+  });
+
+  it('una serie toda en cero da un eje de 0 a 1', () => {
+    expect(niceTicks(0)).toEqual({ top: 1, ticks: [0, 1] });
+  });
+});
+
+describe('formatAxisValue', () => {
+  it('abrevia los miles', () => {
+    expect(formatAxisValue(45300, 'money')).toBe('$45,3 k');
+  });
+
+  it('abrevia los millones', () => {
+    expect(formatAxisValue(2_400_000, 'money')).toBe('$2,4 M');
+  });
+
+  it('deja los valores chicos sin sufijo', () => {
+    expect(formatAxisValue(0, 'money')).toBe('$0');
+    expect(formatAxisValue(750, 'money')).toBe('$750');
+  });
+
+  it('omite el signo peso para los conteos', () => {
+    expect(formatAxisValue(12, 'count')).toBe('12');
+    expect(formatAxisValue(1500, 'count')).toBe('1,5 k');
+  });
+});
+
+describe('formatCashSessionLabel', () => {
+  it('muestra apertura y cierre del mismo día', () => {
+    expect(
+      formatCashSessionLabel({
+        openedAt: '2026-09-10T11:00:00.000Z', // 08:00 en Argentina
+        closedAt: '2026-09-10T23:00:00.000Z', // 20:00
+      }),
+    ).toBe('10/09 08:00 → 20:00');
+  });
+
+  it('repite el día cuando el turno cruzó la medianoche', () => {
+    expect(
+      formatCashSessionLabel({
+        openedAt: '2026-09-10T23:00:00.000Z', // 20:00 del 10
+        closedAt: '2026-09-11T09:00:00.000Z', // 06:00 del 11
+      }),
+    ).toBe('10/09 20:00 → 11/09 06:00');
+  });
+
+  it('marca el turno todavía abierto', () => {
+    expect(
+      formatCashSessionLabel({ openedAt: '2026-09-10T11:00:00.000Z' }),
+    ).toBe('10/09 08:00 → abierta');
+  });
+});
+
+describe('formatWindowLabel', () => {
+  it('rotula la ventana efectiva que devuelve el backend, con segundos', () => {
+    // La ventana de una caja puede terminar unos minutos después del cierre.
+    expect(
+      formatWindowLabel('2026-09-10T12:00:00.000Z', '2026-09-10T20:07:50.000Z'),
+    ).toBe('10/09 09:00 → 17:07');
   });
 });
 

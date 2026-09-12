@@ -67,6 +67,7 @@ export type EndpointKey =
   | 'metrics.byPaymentMethod'
   | 'metrics.topPlates'
   | 'metrics.summary'
+  | 'cashSessions.list'
   | 'staff.list'
   | 'audit.list';
 
@@ -153,6 +154,11 @@ const CODE_MESSAGES: Record<string, string> = {
   // Servicios del estacionamiento.
   SERVICE_INVALID_CODE: 'El servicio seleccionado no es válido.',
   SERVICE_NOT_FOUND: 'No encontramos el servicio.',
+
+  // Cajas. El mismo code cubre una caja inexistente y una de otra sucursal, a
+  // propósito: distinguirlos le confirmaría a un tercero que el id existe.
+  CASH_SESSION_NOT_FOUND:
+    'La caja seleccionada no existe o no pertenece a este estacionamiento.',
 
   // Validacion (envoltorio — el detalle por campo se traduce con
   // translateValidationCode).
