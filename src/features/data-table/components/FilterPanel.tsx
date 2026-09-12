@@ -28,6 +28,10 @@ type FilterPanelProps<TData> = {
   filterOptionsByColumn?: Record<string, DataTableFilterOption[]>;
 };
 
+type FacetedFilterOption = DataTableFilterOption & {
+  count: number;
+};
+
 function resolveColumnLabel<TData>(column: Column<TData, unknown>): string {
   const header = column.columnDef.header;
   return typeof header === 'string' && header.trim().length > 0
@@ -52,24 +56,40 @@ function dateRangeValue(
 function getOptions<TData>(
   column: Column<TData, unknown>,
   filterOptionsByColumn?: Record<string, DataTableFilterOption[]>,
-): DataTableFilterOption[] {
-  const predefined = filterOptionsByColumn?.[column.id];
-  if (predefined) return predefined;
-
-  const values = Array.from(column.getFacetedUniqueValues().keys())
-    .map((value) => String(value ?? ''))
-    .filter((value) => value.trim().length > 0);
-  const unique = Array.from(new Set(values)).sort((left, right) =>
-    left.localeCompare(right, 'es'),
+): FacetedFilterOption[] {
+  const countsByValue = new Map<string, number>();
+  column.getFacetedUniqueValues().forEach((count, value) => {
+    const values = Array.isArray(value) ? value : [value];
+    values.forEach((item) => {
+      const key = String(item ?? '');
+      countsByValue.set(key, (countsByValue.get(key) ?? 0) + count);
+    });
+  });
+  const facetedValues = Array.from(countsByValue.entries()).map(
+    ([value, count]) => ({ value, count }),
   );
+  const predefined = filterOptionsByColumn?.[column.id];
+  if (predefined) {
+    return predefined
+      .map((option) => ({
+        ...option,
+        count:
+          facetedValues.find((faceted) => faceted.value === option.value)
+            ?.count ?? 0,
+      }))
+      .filter((option) => option.count > 0);
+  }
 
-  return unique.map((value) => ({ value, label: value }));
+  return facetedValues
+    .filter((option) => option.value.trim().length > 0 && option.count > 0)
+    .sort((left, right) => left.value.localeCompare(right.value, 'es'))
+    .map((option) => ({ ...option, label: option.value }));
 }
 
 function filterOptionsBySearch(
-  options: DataTableFilterOption[],
+  options: FacetedFilterOption[],
   search: string,
-): DataTableFilterOption[] {
+): FacetedFilterOption[] {
   const query = normalizeText(search);
   if (!query) return options;
   return options.filter((option) =>
@@ -315,6 +335,7 @@ export function FilterPanel<TData>({
                                     }
                                   />
                                   <span>{option.label}</span>
+                                  <small>{option.count}</small>
                                 </label>
                               ))
                             )}

@@ -8,6 +8,7 @@ import {
   type MeResponseDto,
   type SessionDto,
 } from '../api/auth';
+import { isSessionRejected } from '../api/session-errors';
 import { supabase } from './client';
 
 function resolveRedirectUrl(): string | undefined {
@@ -139,13 +140,48 @@ export function homePathForMe(me: MeResponseDto): string {
   return '/app';
 }
 
-/** Fetches `/auth/me` with the session bearer; null when unauthenticated. */
+/**
+ * Pide `/auth/me` con el bearer de la sesión. Devuelve `null` cuando la sesión
+ * no sirve — no hay token, o el backend la rechaza con 401 —, que es
+ * exactamente lo que los loaders del router leen como "andá al login".
+ *
+ * POR QUÉ UN 401 ACÁ NO SE ARREGLA CON UN REFRESH
+ *
+ * supabase-js sólo refresca cuando `expires_at` YA venció. Este caso es el
+ * contrario: el token está vigente para el cliente y muerto para el servidor
+ * (usuario desaprovisionado, secreto del JWT rotado, sesión revocada del lado
+ * del backend). El cliente no tiene forma de enterarse solo; el 401 es el
+ * único aviso que llega.
+ *
+ * Y POR QUÉ ADEMÁS SE LIMPIA LA SESIÓN LOCAL
+ *
+ * No alcanza con devolver `null`. Si la sesión muerta siguiera guardada,
+ * `AuthPage` la lee al montar y llama a `resolveHomePath`, que para un `admin`
+ * responde `/ops` sin consultar `/auth/me` (el rol sale del propio JWT). El
+ * loader de `/ops` vuelve a pedir `/auth/me`, vuelve a comer el 401 y redirige
+ * a `/login`: loop infinito. Borrar la sesión lo corta de raíz.
+ *
+ * `scope: 'local'` y no el `signOut()` completo: el token ya está muerto, así
+ * que revocarlo contra el backend es un round-trip que sólo puede fallar.
+ *
+ * Cualquier OTRO error se propaga tal cual. Un 500 o un `TypeError` de red no
+ * son una sesión inválida, y desloguear por un hipo del backend le haría
+ * perder la sesión a alguien que la tiene perfectamente bien. Ese camino lo
+ * atajan los `errorElement` del router.
+ */
 export async function fetchMe(
   session: Session | null,
 ): Promise<MeResponseDto | null> {
   const accessToken = session?.access_token;
   if (!accessToken) return null;
-  return getMe(accessToken);
+
+  try {
+    return await getMe(accessToken);
+  } catch (error) {
+    if (!isSessionRejected(error)) throw error;
+    await supabase.auth.signOut({ scope: 'local' });
+    return null;
+  }
 }
 
 /**

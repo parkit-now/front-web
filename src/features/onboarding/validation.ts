@@ -7,16 +7,14 @@ export function normalizeCuit(value: string): string {
 
 // ── Step 1: parking lot (sucursal) data ──────────────────────────────────────
 
-export type SucursalField = 'name' | 'address';
+export type SucursalField = 'name' | 'address' | 'totalSpots';
 export type SucursalFieldErrors = Partial<Record<SucursalField, string>>;
 
-/** Spot counts are kept as strings in the form and parsed before submit. */
+/** El total se guarda como string en el form y se parsea antes de enviar. */
 export type SucursalFormValues = {
   name: string;
   address: string;
-  carSpots: string;
-  motorcycleSpots: string;
-  bicycleSpots: string;
+  totalSpots: string;
 };
 
 export function validateName(value: string): string | null {
@@ -33,8 +31,8 @@ export function validateAddress(value: string): string | null {
   return null;
 }
 
-/** Parses an optional spot count: empty → undefined; otherwise a non-negative integer. */
-export function parseSpots(value: string): number | undefined {
+/** Plazas totales: vacío → undefined; si no, un entero no negativo. */
+export function parseTotalSpots(value: string): number | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   const parsed = Number(trimmed);
@@ -42,7 +40,23 @@ export function parseSpots(value: string): number | undefined {
   return Math.floor(parsed);
 }
 
-/** Validates the required sucursal fields (name + address). Spots are optional. */
+/**
+ * Las plazas son opcionales, pero un valor MAL ESCRITO no es lo mismo que uno
+ * ausente: antes, "abc" caía a `undefined` en `parseSpots` y el solicitante
+ * nunca se enteraba de que su capacidad declarada se había perdido. Con un solo
+ * campo, validarlo sale gratis.
+ */
+export function validateTotalSpots(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
+    return 'Ingresá un número entero de plazas (o dejalo vacío)';
+  }
+  return null;
+}
+
+/** Valida los campos obligatorios (nombre + domicilio) y el formato del total. */
 export function validateSucursalForm(
   values: SucursalFormValues,
 ): SucursalFieldErrors {
@@ -51,6 +65,8 @@ export function validateSucursalForm(
   if (nameError) errors.name = nameError;
   const addressError = validateAddress(values.address);
   if (addressError) errors.address = addressError;
+  const spotsError = validateTotalSpots(values.totalSpots);
+  if (spotsError) errors.totalSpots = spotsError;
   return errors;
 }
 

@@ -1,33 +1,25 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button } from '../../../../shared/components/ui/Button';
+import { Link } from 'react-router-dom';
 import { Switch } from '../../../../shared/components/ui/Switch';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
+import { ApiError } from '../../../../lib/api/client';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useSucursal } from '../../context/SucursalContext';
 import {
   listServices,
   updateService,
   type ServiceCode,
-  type UpdateServiceInput,
 } from '../../services/services';
+import {
+  listVehicleTypes,
+  updateVehicleType,
+  type VehicleType,
+} from '../../services/vehicle-types';
 
 const SERVICE_LABELS: Record<ServiceCode, string> = {
   ADVANCE_RESERVATION: 'Reserva anticipada',
-  VEHICLE_CAR: 'Autos',
-  VEHICLE_BICYCLE: 'Bicicletas',
-  VEHICLE_MOTORCYCLE: 'Motos',
-  VEHICLE_PICKUP: 'Camionetas',
-  VEHICLE_TRUCK: 'Camiones',
 };
-
-const VEHICLE_CODES: ServiceCode[] = [
-  'VEHICLE_CAR',
-  'VEHICLE_MOTORCYCLE',
-  'VEHICLE_BICYCLE',
-  'VEHICLE_PICKUP',
-  'VEHICLE_TRUCK',
-];
 
 export function ConfigServicios() {
   const { showToast } = useToast();
@@ -35,76 +27,69 @@ export function ConfigServicios() {
   const queryClient = useQueryClient();
   const canEdit = sucursal?.role === 'owner';
 
-  const queryKey = ['services', sucursalId];
+  const servicesKey = ['services', sucursalId];
   const { data, isLoading } = useQuery({
-    queryKey,
+    queryKey: servicesKey,
     queryFn: () => listServices(sucursalId),
     enabled: Boolean(sucursalId),
   });
-  // Stable reference so the sync effect below doesn't loop while data is undefined.
   const services = useMemo(() => data ?? [], [data]);
-
   const byCode = new Map(services.map((s) => [s.code, s]));
 
-  // Editable spot inputs, keyed by vehicle code, synced from the server.
-  const [spotInputs, setSpotInputs] = useState<Record<string, string>>({});
-  useEffect(() => {
-    setSpotInputs(
-      Object.fromEntries(services.map((s) => [s.code, String(s.spots)])),
-    );
-  }, [services]);
+  // "Qué vehículos acepta la playa" ya no es un enum de cinco códigos fijos:
+  // son los tipos por estacionamiento, que el dueño administra en su propia
+  // sección. Acá sólo se prende y apaga el flag `accepted`.
+  const typesKey = ['vehicle-types', sucursalId];
+  const typesQuery = useQuery({
+    queryKey: typesKey,
+    queryFn: () => listVehicleTypes(sucursalId),
+    enabled: Boolean(sucursalId),
+  });
+  const types = useMemo(() => typesQuery.data ?? [], [typesQuery.data]);
+
+  const [busyTypeId, setBusyTypeId] = useState<string | null>(null);
 
   const mutation = useMutation({
-    mutationFn: ({
-      code,
-      body,
-    }: {
-      code: ServiceCode;
-      body: UpdateServiceInput;
-    }) => updateService(sucursalId, code, body),
+    mutationFn: (code: ServiceCode) =>
+      updateService(sucursalId, code, { enabled: !isEnabled(code) }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey });
+      void queryClient.invalidateQueries({ queryKey: servicesKey });
+    },
+    onError: (error) =>
+      showToast({ message: translateApiError(error), kind: 'error' }),
+  });
+
+  /**
+   * El toggle de un tipo lleva `expectedVersion`, así que puede dar 409 — algo
+   * que esta pantalla nunca tuvo cuando los "vehículos aceptados" eran códigos
+   * fijos sin control de versión. Sin esta rama, un toggle stale falla con un
+   * mensaje genérico y sin refrescar la lista.
+   */
+  const acceptedMutation = useMutation({
+    mutationFn: (type: VehicleType) =>
+      updateVehicleType(sucursalId, type.id, type.version, {
+        accepted: !type.accepted,
+      }),
+    onSettled: () => setBusyTypeId(null),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: typesKey });
     },
     onError: (error) => {
-      showToast({
-        message: translateApiError(error, { endpoint: 'services.toggle' }),
-        kind: 'error',
-      });
+      if (error instanceof ApiError && error.status === 409) {
+        void queryClient.invalidateQueries({ queryKey: typesKey });
+        showToast({
+          message:
+            'El tipo fue modificado por otra persona. Actualizamos la lista, probá de nuevo.',
+          kind: 'error',
+        });
+        return;
+      }
+      showToast({ message: translateApiError(error), kind: 'error' });
     },
   });
 
   function isEnabled(code: ServiceCode): boolean {
     return byCode.get(code)?.enabled ?? false;
-  }
-
-  function serverSpots(code: ServiceCode): number {
-    return byCode.get(code)?.spots ?? 0;
-  }
-
-  function handleToggle(code: ServiceCode) {
-    if (!canEdit) return;
-    mutation.mutate({ code, body: { enabled: !isEnabled(code) } });
-  }
-
-  function handleSaveSpots(code: ServiceCode) {
-    if (!canEdit) return;
-    const raw = spotInputs[code] ?? '0';
-    const spots = Number(raw);
-    if (!Number.isFinite(spots) || spots < 0) {
-      showToast({
-        message: 'Las plazas deben ser un número mayor o igual a 0.',
-        kind: 'error',
-      });
-      return;
-    }
-    mutation.mutate({ code, body: { spots: Math.floor(spots) } });
-  }
-
-  function spotsDirty(code: ServiceCode): boolean {
-    const raw = spotInputs[code];
-    if (raw === undefined) return false;
-    const n = Number(raw);
-    return Number.isFinite(n) && n >= 0 && Math.floor(n) !== serverSpots(code);
   }
 
   if (isLoading) {
@@ -129,11 +114,10 @@ export function ConfigServicios() {
           Servicios
         </h2>
         <p style={{ margin: 0, fontSize: 13, color: 'var(--text-3)' }}>
-          Activá las prestaciones y asigná las plazas por tipo de vehículo.
+          Activá las prestaciones y elegí qué vehículos acepta la playa.
         </p>
       </div>
 
-      {/* Reserva anticipada (feature flag, sin plazas). */}
       <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <h3 style={sectionTitle}>Reservas</h3>
         <div
@@ -163,86 +147,83 @@ export function ConfigServicios() {
           </div>
           <Switch
             checked={isEnabled('ADVANCE_RESERVATION')}
-            onChange={() => handleToggle('ADVANCE_RESERVATION')}
+            onChange={() => mutation.mutate('ADVANCE_RESERVATION')}
             disabled={!canEdit || mutation.isPending}
             aria-label={SERVICE_LABELS.ADVANCE_RESERVATION}
           />
         </div>
       </section>
 
-      {/* Vehículos aceptados, cada uno con sus plazas. */}
       <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <h3 style={sectionTitle}>Vehículos aceptados</h3>
-        <div className="pk-card" style={{ overflow: 'hidden' }}>
-          {VEHICLE_CODES.map((code, i) => (
-            <div
-              key={code}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '14px 20px',
-                borderBottom:
-                  i < VEHICLE_CODES.length - 1
-                    ? '1px solid var(--border-soft)'
-                    : undefined,
-              }}
-            >
-              <span
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  fontSize: 14,
-                  fontWeight: 500,
-                  color: 'var(--text-1)',
-                }}
-              >
-                {SERVICE_LABELS[code]}
-              </span>
 
-              <label
+        {typesQuery.isLoading && (
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-3)' }}>
+            Cargando tipos de vehículo...
+          </p>
+        )}
+
+        {!typesQuery.isLoading && typesQuery.isError && (
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--err-text)' }}>
+            No pudimos cargar los tipos de vehículo.
+          </p>
+        )}
+
+        {!typesQuery.isLoading && !typesQuery.isError && types.length === 0 && (
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-3)' }}>
+            Todavía no configuraste tipos de vehículo.
+          </p>
+        )}
+
+        {types.length > 0 && (
+          <div className="pk-card" style={{ overflow: 'hidden' }}>
+            {types.map((type, i) => (
+              <div
+                key={type.id}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 6,
-                  fontSize: 13,
-                  color: 'var(--text-3)',
+                  gap: 12,
+                  padding: '14px 20px',
+                  borderBottom:
+                    i < types.length - 1
+                      ? '1px solid var(--border-soft)'
+                      : undefined,
                 }}
               >
-                Plazas
-                <input
-                  type="number"
-                  min={0}
-                  className="pk-input"
-                  style={{ width: 80 }}
-                  value={spotInputs[code] ?? ''}
-                  disabled={!canEdit}
-                  onChange={(e) =>
-                    setSpotInputs((m) => ({ ...m, [code]: e.target.value }))
-                  }
-                />
-              </label>
-
-              {canEdit && spotsDirty(code) && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleSaveSpots(code)}
-                  disabled={mutation.isPending}
+                <span
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontSize: 14,
+                    fontWeight: 500,
+                    color: 'var(--text-1)',
+                  }}
                 >
-                  Guardar
-                </Button>
-              )}
+                  {type.name}
+                </span>
+                <Switch
+                  checked={type.accepted}
+                  onChange={() => {
+                    setBusyTypeId(type.id);
+                    acceptedMutation.mutate(type);
+                  }}
+                  disabled={
+                    !canEdit ||
+                    (acceptedMutation.isPending && busyTypeId === type.id)
+                  }
+                  aria-label={type.name}
+                />
+              </div>
+            ))}
+          </div>
+        )}
 
-              <Switch
-                checked={isEnabled(code)}
-                onChange={() => handleToggle(code)}
-                disabled={!canEdit || mutation.isPending}
-                aria-label={SERVICE_LABELS[code]}
-              />
-            </div>
-          ))}
-        </div>
+        {/* Esta vista sólo prende y apaga. Sin este link no hay camino desde
+            "quiero una categoría Utilitario" hasta el ABM que la crea. */}
+        <p style={{ margin: 0, fontSize: 12 }}>
+          <Link to="../tipos-de-vehiculo">Administrar tipos de vehículo</Link>
+        </p>
       </section>
     </div>
   );

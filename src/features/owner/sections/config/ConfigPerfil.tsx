@@ -11,6 +11,7 @@ import {
   type EntityProfile,
   type UpdateEntityProfileInput,
 } from '../../services/entities';
+import { parseCapacityTotal } from './capacity';
 
 interface PerfilForm {
   name: string;
@@ -20,6 +21,8 @@ interface PerfilForm {
   phone: string;
   address: string;
   status: 'active' | 'maintenance';
+  /** Plazas totales. String porque es el valor crudo del input. */
+  capacityTotal: string;
 }
 
 function toForm(p: EntityProfile): PerfilForm {
@@ -31,6 +34,7 @@ function toForm(p: EntityProfile): PerfilForm {
     phone: p.phone ?? '',
     address: p.address ?? '',
     status: p.status,
+    capacityTotal: String(p.capacity.total),
   };
 }
 
@@ -46,6 +50,9 @@ export function ConfigPerfil() {
   });
 
   const [form, setForm] = useState<PerfilForm | null>(null);
+  const [capacityError, setCapacityError] = useState<string | undefined>(
+    undefined,
+  );
 
   // Sync the editable form whenever the active lot's profile (re)loads.
   useEffect(() => {
@@ -88,9 +95,21 @@ export function ConfigPerfil() {
 
   function handleSave() {
     if (!form) return;
+
+    // La capacidad volvió acá desde la pestaña Servicios: con UN número es una
+    // propiedad del estacionamiento, y este formulario ya hace PATCH al
+    // endpoint que es dueño de `settings.capacity`. Cuando eran tres números
+    // por tipo, cada fila era un PATCH distinto y necesitaba su propio botón.
+    const capacity = parseCapacityTotal(form.capacityTotal);
+    if ('error' in capacity) {
+      setCapacityError(capacity.error);
+      return;
+    }
+    setCapacityError(undefined);
+
     // Build the payload, omitting fields the backend would reject when empty.
-    // Per-type spot capacity is configured in the Services tab now.
     const body: UpdateEntityProfileInput = {
+      capacity: { total: capacity.total },
       name: form.name,
       legalName: form.legalName,
       phone: form.phone,
@@ -164,6 +183,21 @@ export function ConfigPerfil() {
           type="tel"
           value={form.phone}
           onChange={textHandler('phone')}
+          disabled={busy}
+        />
+        {/* Un solo número: las plazas no dependen de la carrocería. Qué
+            vehículos acepta la playa se configura en Servicios. */}
+        <Input
+          label="Capacidad total (plazas)"
+          type="number"
+          min={0}
+          inputMode="numeric"
+          value={form.capacityTotal}
+          error={capacityError}
+          onChange={(e) => {
+            setField('capacityTotal', e.target.value);
+            if (capacityError) setCapacityError(undefined);
+          }}
           disabled={busy}
         />
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
