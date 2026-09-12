@@ -5,24 +5,33 @@ import { getSession } from '../../../lib/supabase/session';
 export type EntitySummary = components['schemas']['EntitySummaryDto'];
 export type EntityCapacity = components['schemas']['EntityCapacityDto'];
 
+/** Closed set of retention windows a lot can pick — mirrors the backend DTO/CHECK. */
+export type LprImageRetentionDays = 30 | 60 | 90;
+
 /**
  * TODO(sync-types): the backend `EntityProfileDto` / `UpdateEntityProfileDto`
- * already carry `lprImageRetentionDays` (owner-configurable LPR image
- * retention window, 30-365 days), but the generated OpenAPI types are stale.
- * Drop this local extension once `make sync-types` runs against the updated
- * backend.
+ * already carry `lprImageRetentionDays` (owner-configurable, one of 30/60/90),
+ * but the generated OpenAPI types are stale (generated against `develop`,
+ * which doesn't have this backend PR yet). Drop this local extension once
+ * `make sync-types` runs against a backend that has both this feature AND
+ * everything currently on `develop` — running it against just this feature's
+ * backend branch regresses unrelated types other files depend on.
  */
-type LprRetentionFields = { lprImageRetentionDays: number };
+type LprRetentionFields = { lprImageRetentionDays: LprImageRetentionDays };
 
 export type EntityProfile = components['schemas']['EntityProfileDto'] &
   LprRetentionFields;
 export type UpdateEntityProfileInput =
   components['schemas']['UpdateEntityProfileDto'] & Partial<LprRetentionFields>;
 
-/** Allowed range for `lprImageRetentionDays`, mirrored from the backend DTO/CHECK. */
-export const LPR_IMAGE_RETENTION_DAYS_MIN = 30;
-export const LPR_IMAGE_RETENTION_DAYS_MAX = 365;
-export const LPR_IMAGE_RETENTION_DAYS_DEFAULT = 90;
+/**
+ * Privacy-by-design: a short, defensible default plus a handful of vetted
+ * options, not a knob that lets an owner push the window to an arbitrary
+ * ceiling with no documented reason.
+ */
+export const LPR_IMAGE_RETENTION_DAYS_OPTIONS: readonly LprImageRetentionDays[] =
+  [30, 60, 90];
+export const LPR_IMAGE_RETENTION_DAYS_DEFAULT: LprImageRetentionDays = 30;
 export type PaymentMethodSummary =
   components['schemas']['PaymentMethodSummaryDto'];
 export type TogglePaymentMethodInput =

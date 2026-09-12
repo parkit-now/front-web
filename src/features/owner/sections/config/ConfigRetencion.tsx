@@ -7,9 +7,9 @@ import { useSucursal } from '../../context/SucursalContext';
 import {
   getEntityProfile,
   updateEntityProfile,
-  LPR_IMAGE_RETENTION_DAYS_MIN,
-  LPR_IMAGE_RETENTION_DAYS_MAX,
+  LPR_IMAGE_RETENTION_DAYS_OPTIONS,
   LPR_IMAGE_RETENTION_DAYS_DEFAULT,
+  type LprImageRetentionDays,
 } from '../../services/entities';
 
 export function ConfigRetencion() {
@@ -26,13 +26,15 @@ export function ConfigRetencion() {
   });
 
   // Editable copy of the retention window, synced from the server value.
-  const [days, setDays] = useState('');
+  const [days, setDays] = useState<LprImageRetentionDays>(
+    LPR_IMAGE_RETENTION_DAYS_DEFAULT,
+  );
   useEffect(() => {
-    if (profile) setDays(String(profile.lprImageRetentionDays));
+    if (profile) setDays(profile.lprImageRetentionDays);
   }, [profile]);
 
   const mutation = useMutation({
-    mutationFn: (value: number) =>
+    mutationFn: (value: LprImageRetentionDays) =>
       updateEntityProfile(sucursalId, { lprImageRetentionDays: value }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey });
@@ -49,17 +51,13 @@ export function ConfigRetencion() {
     },
   });
 
-  const parsed = Number(days);
-  const valid =
-    Number.isInteger(parsed) &&
-    parsed >= LPR_IMAGE_RETENTION_DAYS_MIN &&
-    parsed <= LPR_IMAGE_RETENTION_DAYS_MAX;
-  const dirty =
-    profile !== undefined && parsed !== profile.lprImageRetentionDays;
+  // A closed set of options selected via <select>: always a valid value by
+  // construction, nothing to validate beyond whether it changed.
+  const dirty = profile !== undefined && days !== profile.lprImageRetentionDays;
 
   function handleSave() {
-    if (!canEdit || !valid || !dirty) return;
-    mutation.mutate(parsed);
+    if (!canEdit || !dirty) return;
+    mutation.mutate(days);
   }
 
   if (isLoading || !profile) {
@@ -105,27 +103,28 @@ export function ConfigRetencion() {
         <label className="pk-label" htmlFor="lpr-retention-days">
           Días de retención (eventos registrados)
         </label>
-        <input
+        <select
           id="lpr-retention-days"
-          type="number"
-          min={LPR_IMAGE_RETENTION_DAYS_MIN}
-          max={LPR_IMAGE_RETENTION_DAYS_MAX}
           className="pk-input"
-          style={{ width: 120 }}
+          style={{ width: 160 }}
           value={days}
           disabled={!canEdit || busy}
-          onChange={(e) => setDays(e.target.value)}
-        />
+          onChange={(e) =>
+            setDays(Number(e.target.value) as LprImageRetentionDays)
+          }
+        >
+          {LPR_IMAGE_RETENTION_DAYS_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option} días
+              {option === LPR_IMAGE_RETENTION_DAYS_DEFAULT
+                ? ' (por defecto)'
+                : ''}
+            </option>
+          ))}
+        </select>
         <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-          Entre {LPR_IMAGE_RETENTION_DAYS_MIN} y {LPR_IMAGE_RETENTION_DAYS_MAX}{' '}
-          días. Por defecto {LPR_IMAGE_RETENTION_DAYS_DEFAULT}.
+          Por defecto {LPR_IMAGE_RETENTION_DAYS_DEFAULT} días.
         </span>
-        {!valid && days.trim() !== '' && (
-          <span style={{ fontSize: 12, color: 'var(--danger, #c0392b)' }}>
-            Ingresá un número entero entre {LPR_IMAGE_RETENTION_DAYS_MIN} y{' '}
-            {LPR_IMAGE_RETENTION_DAYS_MAX}.
-          </span>
-        )}
       </div>
 
       <p style={{ margin: 0, fontSize: 13, color: 'var(--text-3)' }}>
@@ -146,7 +145,7 @@ export function ConfigRetencion() {
             variant="primary"
             onClick={handleSave}
             loading={busy}
-            disabled={!valid || !dirty}
+            disabled={!dirty}
           >
             Guardar cambios
           </Button>
