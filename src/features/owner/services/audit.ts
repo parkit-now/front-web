@@ -1,17 +1,35 @@
-import type { components, operations } from '../../../generated/api-types';
+import type { components } from '../../../generated/api-types';
 import { apiRequest } from '../../../lib/api/client';
 import { getSession } from '../../../lib/supabase/session';
 
-export type AuditEvent = components['schemas']['AuditEventDto'];
+type GeneratedAuditEvent = components['schemas']['AuditEventDto'];
 export type PaginatedAudit = components['schemas']['PaginatedAuditDto'];
+export type AuditSeverity = GeneratedAuditEvent['severity'];
 
-type AuditQuery = NonNullable<
-  operations['entitiesListAudit']['parameters']['query']
->;
+export type AuditEventMetadata = Record<string, unknown>;
 
-export type AuditSeverity = NonNullable<AuditQuery['severity']>;
-/** Catálogo cerrado: un valor fuera de la lista responde 400, no lista vacía. */
-export type AuditAction = NonNullable<AuditQuery['action']>;
+export type AuditEvent = GeneratedAuditEvent & {
+  metadata?: unknown;
+};
+
+// Las cajas se piden por `services/cash-sessions.ts`, que es el mismo endpoint
+// y además acepta `limit`. Se re-exporta para no cambiar los imports de la
+// página de auditoría.
+export { listCashSessions } from './cash-sessions';
+export type { CashSession } from './cash-sessions';
+
+/** Tope de página del backend: pedir más devuelve 400. */
+const AUDIT_PAGE_SIZE = 100;
+const AUDIT_MAX_ITEMS = 500;
+
+export type ListAuditEventsParams = {
+  /**
+   * Techo de eventos a traer, no un query param: se pagina de a
+   * `AUDIT_PAGE_SIZE` hasta alcanzarlo.
+   */
+  limit?: number;
+  severity?: AuditSeverity;
+};
 
 async function bearer(): Promise<string> {
   const session = await getSession();
@@ -22,40 +40,48 @@ async function bearer(): Promise<string> {
 }
 
 /**
- * Traza de auditoría de la sucursal, más reciente primero.
+ * Traza de auditoría de la sucursal, más reciente primero. Accesible a
+ * cualquier miembro, no solo al dueño.
  *
- * Accesible a **cualquier miembro** de la sucursal, no solo al dueño.
- *
- * Registra cambios de configuración y ciclo de vida (ediciones de perfil,
- * toggles de métodos de pago, onboarding, revisión de eventos LPR, acciones de
- * admin). **No** registra pagos, entradas/salidas ni alertas por exceso de
- * tiempo: eso no existe en la base.
- *
- * `from`/`to` usan el mismo formato con offset explícito que métricas, y son
- * opcionales e independientes entre sí.
+ * El endpoint es **paginado** (`{ items, page, pageSize, total }`) y su
+ * `pageSize` está topeado en 100, así que se recorren páginas hasta `limit` —
+ * el mismo patrón que `listDismissedLprEventsForAudit` usa para los eventos LPR
+ * en `AuditoriaPage.tsx`. La página filtra y pagina en cliente sobre el
+ * resultado, por eso se devuelve un array plano.
  */
-export async function listAuditEvents(input: {
-  tenantId: string;
-  severity?: AuditSeverity;
-  action?: AuditAction;
-  from?: string;
-  to?: string;
-  page?: number;
-  pageSize?: number;
-}): Promise<PaginatedAudit> {
-  const params = new URLSearchParams();
-  if (input.severity) params.set('severity', input.severity);
-  if (input.action) params.set('action', input.action);
-  if (input.from) params.set('from', input.from);
-  if (input.to) params.set('to', input.to);
-  if (input.page !== undefined) params.set('page', String(input.page));
-  if (input.pageSize !== undefined)
-    params.set('pageSize', String(input.pageSize));
+export async function listAuditEvents(
+  tenantId: string,
+  params: ListAuditEventsParams = {},
+): Promise<AuditEvent[]> {
+  const maxItems = params.limit ?? AUDIT_MAX_ITEMS;
+  const token = await bearer();
 
-  const qs = params.toString();
-  return apiRequest<PaginatedAudit>({
-    method: 'GET',
-    path: `/tenants/${encodeURIComponent(input.tenantId)}/audit${qs ? `?${qs}` : ''}`,
-    bearer: await bearer(),
-  });
+  const fetchPage = (page: number) => {
+    const search = new URLSearchParams();
+    search.set('page', String(page));
+    search.set('pageSize', String(AUDIT_PAGE_SIZE));
+    if (params.severity) {
+      search.set('severity', params.severity);
+    }
+
+    return apiRequest<PaginatedAudit>({
+      method: 'GET',
+      path: `/tenants/${tenantId}/audit?${search.toString()}`,
+      bearer: token,
+    });
+  };
+
+  const firstPage = await fetchPage(1);
+  const items = [...firstPage.items];
+  const pageCount = Math.min(
+    Math.ceil(firstPage.total / AUDIT_PAGE_SIZE),
+    Math.ceil(maxItems / AUDIT_PAGE_SIZE),
+  );
+
+  for (let page = 2; page <= pageCount; page += 1) {
+    const nextPage = await fetchPage(page);
+    items.push(...nextPage.items);
+  }
+
+  return items.slice(0, maxItems);
 }

@@ -1,4 +1,8 @@
-import type { ColumnDef } from '@tanstack/react-table';
+import type {
+  ColumnDef,
+  ColumnFiltersState,
+  VisibilityState,
+} from '@tanstack/react-table';
 import type { ReactNode } from 'react';
 import type { TableTemplateScope } from '../table-view-template';
 
@@ -25,13 +29,17 @@ export type DataTableProps<TData> = {
   searchableKeys?: string[];
   filterableColumns?: string[];
   filterOptionsByColumn?: Record<string, DataTableFilterOption[]>;
+  initialColumnFilters?: ColumnFiltersState;
+  initialColumnVisibility?: VisibilityState;
   initialPageSize?: number;
   pageSizeOptions?: number[];
   getRowId?: (row: TData, index: number) => string;
   templateScope?: TableTemplateScope;
   headerAction?: ReactNode;
   toolbarExtra?: ReactNode;
+  toolbarLeading?: ReactNode;
   onRefresh?: () => void;
   refreshDisabled?: boolean;
   serverState?: DataTableServerState;
+  onRowClick?: (row: TData) => void;
 };

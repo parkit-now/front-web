@@ -57,6 +57,7 @@ export type EndpointKey =
   | 'entities.profile'
   | 'entities.update'
   | 'entities.payment'
+  | 'entities.audit'
   | 'schedules.list'
   | 'schedules.create'
   | 'schedules.update'
