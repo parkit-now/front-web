@@ -15,10 +15,17 @@ export type UpdateApplicationInput =
  * Typed view of `Application.declaredEntity`, the opaque JSON snapshot the
  * applicant declares before approval. Every field is optional because a draft
  * may be partially filled.
+ *
+ * OJO: es una columna JSON sin esquema. Conviven dos formas — la vieja trae
+ * sólo `address` (string plano) y la nueva trae `location` con los campos
+ * separados. Los borradores en vuelo son de la forma vieja, así que `location`
+ * puede no estar y hay que leer las dos (lo mismo hace `readDeclaredAddress()`
+ * del backend).
  */
 export type DeclaredEntity = {
   name?: string;
   address?: string;
+  location?: components['schemas']['UpdateEntityAddressDto'];
   legalName?: string;
   cuit?: string;
   email?: string;
