@@ -1,3 +1,9 @@
+import {
+  missingAddressFields,
+  type AddressFormValue,
+  type AddressTextField,
+} from '../../shared/components/AddressPicker/addressUtils';
+
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Keeps only the digits — the backend expects an 11-digit CUIT. */
@@ -7,14 +13,22 @@ export function normalizeCuit(value: string): string {
 
 // ── Step 1: parking lot (sucursal) data ──────────────────────────────────────
 
-export type SucursalField = 'name' | 'address' | 'totalSpots';
+export type SucursalField = 'name' | 'address';
 export type SucursalFieldErrors = Partial<Record<SucursalField, string>>;
 
-/** El total se guarda como string en el form y se parsea antes de enviar. */
+/** Los campos de texto libre del paso 1. La dirección va aparte (ver abajo). */
+export type SucursalTextField = 'name';
+
+/**
+ * `address` es la dirección ESTRUCTURADA que maneja el `AddressPicker`.
+ *
+ * `totalSpots` YA NO está: las plazas salieron del alta. La capacidad se
+ * configura después desde `/app/config`, cuando el dueño ya sabe el número
+ * real en vez de estimarlo para poder avanzar de paso.
+ */
 export type SucursalFormValues = {
   name: string;
-  address: string;
-  totalSpots: string;
+  address: AddressFormValue;
 };
 
 export function validateName(value: string): string | null {
@@ -24,39 +38,74 @@ export function validateName(value: string): string | null {
   return null;
 }
 
-export function validateAddress(value: string): string | null {
-  if (!value.trim()) {
-    return 'Ingresá el domicilio';
-  }
-  return null;
-}
+/** Etiquetas para nombrar en el error EXACTAMENTE lo que falta completar. */
+export const ADDRESS_FIELD_LABELS: Record<AddressTextField, string> = {
+  formatted: 'la dirección',
+  streetName: 'la calle',
+  streetNumber: 'la altura',
+  floor: 'el piso',
+  cityName: 'la localidad',
+  stateName: 'la provincia',
+  postalCode: 'el código postal',
+};
 
-/** Plazas totales: vacío → undefined; si no, un entero no negativo. */
-export function parseTotalSpots(value: string): number | undefined {
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed) || parsed < 0) return undefined;
-  return Math.floor(parsed);
+/**
+ * El domicilio pasó a ser OBLIGATORIO en el alta.
+ *
+ * 🔴 "Obligatorio" es que los CAMPOS estén completos, NO que Georef haya
+ * funcionado. Una API pública del Estado caída no puede frenar el alta de un
+ * cliente: por eso se exige el CONTENIDO (calle, altura, localidad,
+ * provincia), que se puede escribir a mano, y no el origen del dato.
+ *
+ * ⚠️ El mínimo es EL MISMO venga de donde venga. Antes había un atajo: si
+ * `geocodingSource === 'georef'` y había línea de display, pasaba sin mirar
+ * los campos. Eso dejaba el formulario al revés de como tiene que estar —
+ * más exigente con la persona que carga a mano que con la API:
+ *
+ *   - Georef resuelve a medias más seguido de lo que parece. Buscar una calle
+ *     sin altura ("Av. Cabildo, CABA") devuelve un candidato con `altura:
+ *     null` y `nomenclatura` igual de linda. Con el atajo, esa dirección
+ *     pasaba el alta y llegaba a Mercado Pago sin `street_number`.
+ *   - Los cuatro campos no son una preferencia nuestra: son los que MP pide
+ *     para la ubicación del `Store`. Que el dato lo haya escrito una persona o
+ *     una API no cambia lo que MP necesita.
+ *
+ * Lo que sigue SIN exigirse: coordenadas (sin Georef no hay, y obligar a
+ * arrastrar el pin sería el mismo portón por otra puerta), piso y código
+ * postal (Georef no devuelve el CP: exigirlo haría la carga manual más
+ * estricta que el propio autocompletado).
+ *
+ * La obligatoriedad es del FORMULARIO, no del esquema: las columnas de
+ * `tenants` siguen siendo nullable y hay tenants viejos con `null`.
+ */
+export function validateAddress(value: AddressFormValue): string | null {
+  const missing = missingAddressFields(value);
+  if (missing.length === 0) return null;
+  return describeMissingAddressFields(missing);
 }
 
 /**
- * Las plazas son opcionales, pero un valor MAL ESCRITO no es lo mismo que uno
- * ausente: antes, "abc" caía a `undefined` en `parseSpots` y el solicitante
- * nunca se enteraba de que su capacidad declarada se había perdido. Con un solo
- * campo, validarlo sale gratis.
+ * Arma el mensaje que NOMBRA los campos que faltan ("falta la calle, la altura
+ * y la provincia").
+ *
+ * Está separado de `validateAddress` porque hay DOS caminos que llegan a este
+ * mismo error: la validación local del wizard y el 422
+ * `ONBOARDING_NOT_SUBMITTABLE` que devuelve el backend al enviar (ver
+ * `errors.ts`). Que los dos digan exactamente lo mismo no es prolijidad: si el
+ * servidor rechaza con otras palabras, la persona cree que es otro problema.
  */
-export function validateTotalSpots(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
-    return 'Ingresá un número entero de plazas (o dejalo vacío)';
-  }
-  return null;
+export function describeMissingAddressFields(
+  missing: readonly AddressTextField[],
+): string {
+  const labels = missing.map((field) => ADDRESS_FIELD_LABELS[field]);
+  const list =
+    labels.length === 1
+      ? labels[0]
+      : `${labels.slice(0, -1).join(', ')} y ${labels[labels.length - 1]}`;
+  return `Ingresá el domicilio del estacionamiento: falta ${list}`;
 }
 
-/** Valida los campos obligatorios (nombre + domicilio) y el formato del total. */
+/** Valida los dos campos obligatorios del paso 1: nombre y domicilio. */
 export function validateSucursalForm(
   values: SucursalFormValues,
 ): SucursalFieldErrors {
@@ -65,8 +114,6 @@ export function validateSucursalForm(
   if (nameError) errors.name = nameError;
   const addressError = validateAddress(values.address);
   if (addressError) errors.address = addressError;
-  const spotsError = validateTotalSpots(values.totalSpots);
-  if (spotsError) errors.totalSpots = spotsError;
   return errors;
 }
 

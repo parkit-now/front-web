@@ -19,7 +19,7 @@ export function WelcomeScreen({ onStart }: Props) {
           <span className="welcome-step-number">1</span>
           <div>
             <strong>Datos de la sucursal</strong>
-            <p>Nombre, domicilio y plazas del estacionamiento.</p>
+            <p>Nombre y domicilio del estacionamiento.</p>
           </div>
         </div>
         <div className="welcome-step">

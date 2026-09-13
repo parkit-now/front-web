@@ -8,7 +8,20 @@ export type AuditSeverity = GeneratedAuditEvent['severity'];
 
 export type AuditEventMetadata = Record<string, unknown>;
 
-export type AuditEvent = GeneratedAuditEvent & {
+/**
+ * `metadata` se RE-DECLARA (por eso el `Omit`) en vez de intersecarse.
+ *
+ * El backend publica `metadata` como un objeto sin propiedades, y
+ * openapi-typescript lo traduce a `Record<string, never>`: un objeto que sólo
+ * puede estar VACÍO. Intersecarlo con `unknown` deja un tipo que rechaza
+ * cualquier metadata real (`{ plate: 'ABC123' }` no es asignable a `never`).
+ *
+ * Acá la forma real es opaca a propósito — cada acción de auditoría trae la
+ * suya y `auditUtils.ts` la lee campo por campo con guardas. Salió a la luz al
+ * correr `make sync-types` contra el backend actual: el `api-types.ts`
+ * commiteado era anterior a que `AuditEventDto` declarara `metadata`.
+ */
+export type AuditEvent = Omit<GeneratedAuditEvent, 'metadata'> & {
   metadata?: unknown;
 };
 

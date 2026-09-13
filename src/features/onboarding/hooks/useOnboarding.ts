@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { translateApiError } from '../../../lib/api/translate';
+import { mapSubmitError } from '../errors';
 import { useToast } from '../../../lib/notifications/ToastProvider';
 import {
   createApplication,
@@ -126,10 +127,11 @@ export function useOnboarding(): UseOnboardingResult {
       invalidate();
     },
     onError: (error) => {
-      showToast({
-        message: translateApiError(error, { endpoint: 'onboarding.submit' }),
-        kind: 'error',
-      });
+      // `mapSubmitError` (y no `translateApiError` pelado): el 422
+      // `ONBOARDING_NOT_SUBMITTABLE` trae en `validationsErrors` QUÉ campo de
+      // la dirección falta, y decirlo es la diferencia entre "completá los
+      // datos requeridos" y "falta la calle y la altura".
+      showToast({ message: mapSubmitError(error), kind: 'error' });
     },
   });
 

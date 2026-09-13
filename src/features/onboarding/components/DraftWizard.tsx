@@ -1,4 +1,9 @@
 import { useEffect, useState } from 'react';
+import {
+  addressFromLocation,
+  toDeclaredLocation,
+  type AddressFormValue,
+} from '../../../shared/components/AddressPicker/addressUtils';
 import type {
   Application,
   CreateApplicationInput,
@@ -7,14 +12,15 @@ import type {
 import { readDeclaredEntity } from '../services/onboarding';
 import {
   normalizeCuit,
-  parseTotalSpots,
   validateContactForm,
   validateSucursalForm,
   type ContactFieldErrors,
   type ContactFormValues,
   type SucursalFieldErrors,
   type SucursalFormValues,
+  type SucursalTextField,
 } from '../validation';
+import { RequiredMark } from '../../../shared/components/ui/RequiredMark';
 import { DocumentsStep } from './DocumentsStep';
 import { SucursalStep } from './SucursalStep';
 
@@ -35,7 +41,7 @@ type Props = {
 
 /**
  * Three-step wizard to register a single parking lot:
- *   1. Sucursal (name, address, spot counts)
+ *   1. Sucursal (nombre y domicilio)
  *   2. Contacto (legal name, CUIT, email, phone)
  *   3. Documentación (optional uploads)
  *
@@ -62,8 +68,10 @@ export function DraftWizard({
 
   const [sucursal, setSucursal] = useState<SucursalFormValues>(() => ({
     name: declared.name ?? '',
-    address: declared.address ?? '',
-    totalSpots: declared.totalSpots != null ? String(declared.totalSpots) : '',
+    // Un borrador viejo sólo tiene `address` como string plano: entra como la
+    // línea de display y el resto de los campos quedan vacíos, en vez de
+    // perderse.
+    address: addressFromLocation(declared.location, declared.address),
   }));
   const [sucursalErrors, setSucursalErrors] = useState<SucursalFieldErrors>({});
 
@@ -87,10 +95,27 @@ export function DraftWizard({
   const busy = creating || saving || submitting;
   const canSubmit = !!application && !busy && !uploadingDocument;
 
-  function updateSucursal(field: keyof SucursalFormValues, value: string) {
+  function updateSucursal(field: SucursalTextField, value: string) {
     setSucursal((prev) => ({ ...prev, [field]: value }));
     if (field in sucursalErrors) {
       setSucursalErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
+  }
+
+  /**
+   * Igual que `updateSucursal` y `updateContact`: tocar el campo LIMPIA su
+   * error.
+   *
+   * No es cosmético. El error del domicilio se dispara al apretar "Siguiente"
+   * y nombra lo que falta ("falta la calle, la altura…"); sin limpiarlo, la
+   * persona busca la dirección, Georef la resuelve, aparece el pin… y el
+   * cartel rojo sigue ahí hasta el próximo submit. El formulario le dice que
+   * está mal algo que ya está bien.
+   */
+  function updateAddress(address: AddressFormValue) {
+    setSucursal((prev) => ({ ...prev, address }));
+    if (sucursalErrors.address) {
+      setSucursalErrors((prev) => ({ ...prev, address: undefined }));
     }
   }
 
@@ -103,15 +128,23 @@ export function DraftWizard({
 
   /** Full declared-entity payload, used for both POST (create) and PATCH (save). */
   function buildPayload(): CreateApplicationInput {
-    const totalSpots = parseTotalSpots(sucursal.totalSpots);
+    // `location` se omite cuando no se cargó NADA: el DTO la tiene como
+    // opcional y mandar un objeto con todo en `null` sólo ensucia el JSON
+    // declarado. Ya no se manda el `address` plano — `location.formatted`
+    // le gana en el backend y es el mismo valor.
+    const location = toDeclaredLocation(sucursal.address);
     return {
       name: sucursal.name.trim(),
-      address: sucursal.address.trim(),
       legalName: contact.legalName.trim(),
       cuit: normalizeCuit(contact.cuit),
       email: contact.email.trim(),
       phone: contact.phone.trim(),
-      ...(totalSpots != null ? { totalSpots } : {}),
+      ...(location ? { location } : {}),
+      // `totalSpots` NO se manda más: las plazas salieron del alta y se
+      // configuran en `/app/config`. El backend lo sigue tolerando
+      // (`entity.totalSpots ?? 0` en `approve()`) y el PATCH hace MERGE contra
+      // el `declaredEntity` guardado, así que un borrador viejo que ya lo
+      // tenía NO lo pierde al editarlo con el wizard nuevo.
     };
   }
 
@@ -237,6 +270,7 @@ export function DraftWizard({
             errors={sucursalErrors}
             disabled={busy}
             onChange={updateSucursal}
+            onAddressChange={updateAddress}
           />
           <div className="onboarding-actions">
             <div className="action-left" />
@@ -260,11 +294,15 @@ export function DraftWizard({
         <div className="onboarding-section">
           <h3>Datos de contacto</h3>
           <p className="section-hint">
-            Datos legales y de contacto del titular del estacionamiento.
+            Datos legales y de contacto del titular del estacionamiento. Los
+            campos con <RequiredMark /> son obligatorios.
           </p>
           <div className="onboarding-grid">
             <div className="onboarding-field full-width">
-              <label htmlFor="contact-legalName">Razón social</label>
+              <label htmlFor="contact-legalName">
+                Razón social
+                <RequiredMark />
+              </label>
               <input
                 id="contact-legalName"
                 type="text"
@@ -272,6 +310,8 @@ export function DraftWizard({
                 onChange={(e) => updateContact('legalName', e.target.value)}
                 placeholder="Estacionamientos del Centro S.A."
                 disabled={busy}
+                required
+                aria-required
                 className={contactErrors.legalName ? 'input-error' : undefined}
                 aria-invalid={contactErrors.legalName ? true : undefined}
               />
@@ -281,7 +321,10 @@ export function DraftWizard({
             </div>
 
             <div className="onboarding-field">
-              <label htmlFor="contact-cuit">CUIT</label>
+              <label htmlFor="contact-cuit">
+                CUIT
+                <RequiredMark />
+              </label>
               <input
                 id="contact-cuit"
                 type="text"
@@ -290,6 +333,8 @@ export function DraftWizard({
                 onChange={(e) => updateContact('cuit', e.target.value)}
                 placeholder="30123456789"
                 disabled={busy}
+                required
+                aria-required
                 className={contactErrors.cuit ? 'input-error' : undefined}
                 aria-invalid={contactErrors.cuit ? true : undefined}
               />
@@ -299,7 +344,10 @@ export function DraftWizard({
             </div>
 
             <div className="onboarding-field">
-              <label htmlFor="contact-email">Email de contacto</label>
+              <label htmlFor="contact-email">
+                Email de contacto
+                <RequiredMark />
+              </label>
               <input
                 id="contact-email"
                 type="email"
@@ -307,6 +355,8 @@ export function DraftWizard({
                 onChange={(e) => updateContact('email', e.target.value)}
                 placeholder="contacto@estacionamiento.com"
                 disabled={busy}
+                required
+                aria-required
                 className={contactErrors.email ? 'input-error' : undefined}
                 aria-invalid={contactErrors.email ? true : undefined}
               />
@@ -316,7 +366,10 @@ export function DraftWizard({
             </div>
 
             <div className="onboarding-field">
-              <label htmlFor="contact-phone">Teléfono</label>
+              <label htmlFor="contact-phone">
+                Teléfono
+                <RequiredMark />
+              </label>
               <input
                 id="contact-phone"
                 type="tel"
@@ -324,6 +377,8 @@ export function DraftWizard({
                 onChange={(e) => updateContact('phone', e.target.value)}
                 placeholder="+54 11 4567 8900"
                 disabled={busy}
+                required
+                aria-required
                 className={contactErrors.phone ? 'input-error' : undefined}
                 aria-invalid={contactErrors.phone ? true : undefined}
               />
