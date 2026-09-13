@@ -8,6 +8,15 @@ import {
   IconEye,
   IconInbox,
 } from '../../../../shared/components/icons';
+import { AddressMap } from '../../../../shared/components/AddressPicker/AddressMap';
+import {
+  addressFromLocation,
+  describeGeocodingSource,
+  missingAddressFields,
+  REQUIRED_ADDRESS_FIELDS,
+  type AddressFormValue,
+  type AddressTextField,
+} from '../../../../shared/components/AddressPicker/addressUtils';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
 import {
@@ -17,7 +26,6 @@ import {
 } from '../../hooks/useApplications';
 import {
   getDocumentSignedUrl,
-  readDeclaredEntity,
   type ApplicationDocument,
 } from '../../services/applications';
 import { DocumentPreviewModal } from './DocumentPreviewModal';
@@ -45,6 +53,160 @@ const valueStyle: React.CSSProperties = {
   color: 'var(--text-1)',
   fontWeight: 500,
 };
+
+const sectionTitleStyle: React.CSSProperties = {
+  margin: '0 0 12px',
+  fontSize: 11,
+  fontWeight: 600,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  color: 'var(--text-3)',
+};
+
+/** Etiquetas del desglose, en el orden en que se lee una dirección argentina. */
+const ADDRESS_ROWS: { field: AddressTextField; label: string }[] = [
+  { field: 'streetName', label: 'Calle' },
+  { field: 'streetNumber', label: 'Altura' },
+  { field: 'cityName', label: 'Localidad' },
+  { field: 'stateName', label: 'Provincia' },
+  { field: 'floor', label: 'Piso / Depto' },
+  { field: 'postalCode', label: 'Código postal' },
+];
+
+/**
+ * Domicilio declarado, DESGLOSADO, para quien aprueba el alta.
+ *
+ * El panel mostraba una sola línea (`detail.address`) mientras el backend ya
+ * mandaba `location` con los campos separados. Eso convertía la revisión en un
+ * acto de fe: la jurisdicción fiscal del dueño en Mercado Pago la determinan
+ * `state_name`/`city_name` y las coordenadas, y ninguno de los dos se puede
+ * verificar leyendo "Av. Cabildo 2000, CABA".
+ *
+ * Tres decisiones de qué mostrar (y qué NO):
+ *
+ *  1. Los CUATRO campos que Mercado Pago necesita se muestran SIEMPRE, con "—"
+ *     en rojo cuando faltan. Un campo ausente es exactamente el dato que el
+ *     revisor tiene que ver antes de aprobar; ocultarlo por "estar vacío"
+ *     esconde el único problema que esta sección existe para mostrar. El piso
+ *     y el CP, que MP no usa, aparecen sólo si están.
+ *  2. El ORIGEN va como badge. "Normalizada con Georef" y "Cargada a mano" no
+ *     merecen la misma confianza: la segunda es texto libre que nadie validó.
+ *  3. El MAPA va, pero sólo si hay coordenadas. Un par "-34.56, -58.45" es
+ *     ilegible para un humano — y es el dato que decide dónde cae el `Store`.
+ *     Es read-only (`disabled`): el revisor verifica, no corrige.
+ */
+function DomicilioSection({ address }: { address: AddressFormValue }) {
+  const missing = new Set<AddressTextField>(missingAddressFields(address));
+  const sourceLabel = describeGeocodingSource(address.geocodingSource);
+  const hasPin = address.latitude !== null && address.longitude !== null;
+  const primary = address.formatted.trim();
+
+  return (
+    <section data-testid="solicitud-domicilio">
+      <p style={sectionTitleStyle}>Domicilio declarado</p>
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 10,
+          flexWrap: 'wrap',
+          marginBottom: 12,
+        }}
+      >
+        <p
+          data-testid="solicitud-domicilio-linea"
+          style={{
+            margin: 0,
+            fontSize: 14,
+            fontWeight: 600,
+            color: primary ? 'var(--text-1)' : 'var(--text-3)',
+          }}
+        >
+          {primary || 'Sin domicilio declarado'}
+        </p>
+        <span
+          data-testid="solicitud-domicilio-origen"
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            borderRadius: 999,
+            padding: '3px 8px',
+            color: sourceLabel ? 'var(--brand)' : 'var(--warn-text, #b54708)',
+            background: sourceLabel
+              ? 'rgba(14, 95, 216, 0.1)'
+              : 'var(--warn-bg, #fef0c7)',
+          }}
+        >
+          {sourceLabel ?? 'Sin normalizar'}
+        </span>
+      </div>
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '8px 24px',
+        }}
+      >
+        {ADDRESS_ROWS.filter(
+          ({ field }) =>
+            REQUIRED_ADDRESS_FIELDS.includes(
+              field as (typeof REQUIRED_ADDRESS_FIELDS)[number],
+            ) || address[field].trim().length > 0,
+        ).map(({ field, label }) => (
+          <div key={field}>
+            <p style={labelStyle}>{label}</p>
+            <p
+              data-testid={`solicitud-domicilio-${field}`}
+              style={{
+                ...valueStyle,
+                color: missing.has(field)
+                  ? 'var(--err-text, #b42318)'
+                  : valueStyle.color,
+              }}
+            >
+              {address[field].trim() || '— falta'}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <p style={labelStyle}>Ubicación</p>
+        {hasPin ? (
+          <>
+            <p data-testid="solicitud-domicilio-coords" style={valueStyle}>
+              {address.latitude?.toFixed(6)}, {address.longitude?.toFixed(6)}
+            </p>
+            <div style={{ marginTop: 8 }}>
+              <AddressMap
+                latitude={address.latitude}
+                longitude={address.longitude}
+                // El revisor VERIFICA; corregir la dirección de otro desde el
+                // panel de aprobación sería editar una declaración firmada.
+                disabled
+                onPinMove={() => {}}
+                height={180}
+              />
+            </div>
+          </>
+        ) : (
+          <p
+            data-testid="solicitud-domicilio-sin-coords"
+            style={{ ...valueStyle, color: 'var(--warn-text, #b54708)' }}
+          >
+            Sin coordenadas: Mercado Pago va a ubicar el local sólo por el texto
+            de la dirección.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
 
 export function SolicitudesPage() {
   const listQuery = useApplicationsList('pending');
@@ -106,7 +268,6 @@ export function SolicitudesPage() {
   }, [items, selectedId]);
 
   const detail = detailQuery.data ?? null;
-  const declared = readDeclaredEntity(detail);
   const processing = approveMutation.isPending || rejectMutation.isPending;
 
   function handleApprove() {
@@ -396,14 +557,16 @@ export function SolicitudesPage() {
                     ['Razón social', detail.legalName],
                     ['Email de contacto', detail.email],
                     ['CUIT', detail.cuit],
-                    ['Domicilio', detail.address ?? '—'],
                     ['Teléfono', detail.phone ?? '—'],
-                    [
-                      'Plazas declaradas',
-                      declared.totalSpots != null
-                        ? `${declared.totalSpots} plazas`
-                        : '—',
-                    ],
+                    // "Plazas declaradas" YA NO va. Las plazas salieron del
+                    // wizard (el dueño no puede saber la capacidad antes de
+                    // que la playa exista; la carga después en `/app/config`),
+                    // así que para toda solicitud nueva esta fila era un "—"
+                    // fijo: ruido en la única pantalla donde se decide aprobar
+                    // o rechazar. El dato sigue existiendo en el backend
+                    // (`declared_entity.totalSpots` para borradores viejos, y
+                    // `approve()` lo lee con `?? 0`): lo que se saca es la
+                    // fila, no el campo.
                     ['Documentos adjuntos', `${detail.docsCount} archivos`],
                   ].map(([label, value]) => (
                     <div key={label}>
@@ -413,6 +576,14 @@ export function SolicitudesPage() {
                   ))}
                 </div>
               </section>
+
+              <div className="pk-divider" />
+
+              {/* Domicilio estructurado — lo que determina la jurisdicción
+                  fiscal del Store en Mercado Pago. */}
+              <DomicilioSection
+                address={addressFromLocation(detail.location, detail.address)}
+              />
 
               <div className="pk-divider" />
 
