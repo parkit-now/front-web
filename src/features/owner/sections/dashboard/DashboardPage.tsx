@@ -30,8 +30,8 @@ export function DashboardPage() {
   const dismissedCount = dismissedQuery.data?.total ?? 0;
   const reviewPath =
     mode === 'admin'
-      ? `/ops/estacionamientos/${sucursalId}/revision-lpr`
-      : '/app/revision-lpr';
+      ? `/ops/estacionamientos/${sucursalId}/auditoria?tab=lpr`
+      : '/app/auditoria?tab=lpr';
 
   return (
     <div>

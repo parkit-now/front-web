@@ -3,10 +3,35 @@ import { apiRequest } from '../../../lib/api/client';
 import { getSession } from '../../../lib/supabase/session';
 
 export type EntitySummary = components['schemas']['EntitySummaryDto'];
-export type EntityProfile = components['schemas']['EntityProfileDto'];
 export type EntityCapacity = components['schemas']['EntityCapacityDto'];
+
+/** Closed set of retention windows a lot can pick — mirrors the backend DTO/CHECK. */
+export type LprImageRetentionDays = 30 | 60 | 90;
+
+/**
+ * TODO(sync-types): the backend `EntityProfileDto` / `UpdateEntityProfileDto`
+ * already carry `lprImageRetentionDays` (owner-configurable, one of 30/60/90),
+ * but the generated OpenAPI types are stale (generated against `develop`,
+ * which doesn't have this backend PR yet). Drop this local extension once
+ * `make sync-types` runs against a backend that has both this feature AND
+ * everything currently on `develop` — running it against just this feature's
+ * backend branch regresses unrelated types other files depend on.
+ */
+type LprRetentionFields = { lprImageRetentionDays: LprImageRetentionDays };
+
+export type EntityProfile = components['schemas']['EntityProfileDto'] &
+  LprRetentionFields;
 export type UpdateEntityProfileInput =
-  components['schemas']['UpdateEntityProfileDto'];
+  components['schemas']['UpdateEntityProfileDto'] & Partial<LprRetentionFields>;
+
+/**
+ * Privacy-by-design: a short, defensible default plus a handful of vetted
+ * options, not a knob that lets an owner push the window to an arbitrary
+ * ceiling with no documented reason.
+ */
+export const LPR_IMAGE_RETENTION_DAYS_OPTIONS: readonly LprImageRetentionDays[] =
+  [30, 60, 90];
+export const LPR_IMAGE_RETENTION_DAYS_DEFAULT: LprImageRetentionDays = 30;
 export type PaymentMethodSummary =
   components['schemas']['PaymentMethodSummaryDto'];
 export type TogglePaymentMethodInput =
@@ -46,7 +71,10 @@ export async function getEntityProfile(
   });
 }
 
-/** PATCH /tenants/:tenantId — owner-only edit of profile, status and capacity. */
+/**
+ * PATCH /tenants/:tenantId — owner-only edit of profile, status, capacity and
+ * the LPR image retention window (`lprImageRetentionDays`).
+ */
 export async function updateEntityProfile(
   tenantId: string,
   body: UpdateEntityProfileInput,
