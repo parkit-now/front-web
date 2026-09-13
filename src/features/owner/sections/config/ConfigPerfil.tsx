@@ -2,6 +2,12 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Input } from '../../../../shared/components/ui/Input';
 import { Button } from '../../../../shared/components/ui/Button';
+import { AddressPicker } from '../../../../shared/components/AddressPicker/AddressPicker';
+import {
+  addressFromLocation,
+  toUpdateAddressDto,
+  type AddressFormValue,
+} from '../../../../shared/components/AddressPicker/addressUtils';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useSucursal } from '../../context/SucursalContext';
@@ -19,7 +25,12 @@ interface PerfilForm {
   cuit: string;
   email: string;
   phone: string;
-  address: string;
+  /**
+   * Dirección estructurada. Reemplaza al `<Input label="Domicilio">` de una
+   * línea: Mercado Pago necesita calle, altura, localidad, provincia y
+   * coordenadas SEPARADAS para dar de alta el Store del cobro con QR.
+   */
+  address: AddressFormValue;
   status: 'active' | 'maintenance';
   /** Plazas totales. String porque es el valor crudo del input. */
   capacityTotal: string;
@@ -32,7 +43,10 @@ function toForm(p: EntityProfile): PerfilForm {
     cuit: p.cuit ?? '',
     email: p.email ?? '',
     phone: p.phone ?? '',
-    address: p.address ?? '',
+    // `p.location` puede venir con todo en `null` (tenants anteriores a la
+    // migración 20260913164617, sin backfill). El `p.address` de fallback
+    // rescata la dirección vieja de una línea en vez de mostrar vacío.
+    address: addressFromLocation(p.location, p.address),
     status: p.status,
     capacityTotal: String(p.capacity.total),
   };
@@ -88,7 +102,8 @@ export function ConfigPerfil() {
     setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
   }
 
-  function textHandler(field: keyof PerfilForm) {
+  /** Sólo para los campos de texto planos; la dirección tiene su propio setter. */
+  function textHandler(field: Exclude<keyof PerfilForm, 'address' | 'status'>) {
     return (e: React.ChangeEvent<HTMLInputElement>) =>
       setField(field, e.target.value);
   }
@@ -108,12 +123,16 @@ export function ConfigPerfil() {
     setCapacityError(undefined);
 
     // Build the payload, omitting fields the backend would reject when empty.
+    //
+    // Ya no se manda el `address` plano: el backend copia
+    // `location.formatted` a la columna `address` (`entities.service.ts`), y
+    // mandar los dos sólo abre la puerta a que queden distintos.
     const body: UpdateEntityProfileInput = {
       capacity: { total: capacity.total },
       name: form.name,
       legalName: form.legalName,
       phone: form.phone,
-      address: form.address,
+      location: toUpdateAddressDto(form.address),
       status: form.status,
     };
     const cuitDigits = form.cuit.replace(/\D/g, '');
@@ -214,14 +233,32 @@ export function ConfigPerfil() {
             <option value="maintenance">En mantenimiento</option>
           </select>
         </div>
-        <div style={{ gridColumn: '1 / -1' }}>
-          <Input
-            label="Domicilio"
-            value={form.address}
-            onChange={textHandler('address')}
-            disabled={busy}
-          />
-        </div>
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+          paddingTop: 12,
+          borderTop: '1px solid var(--border-soft)',
+        }}
+      >
+        <h3
+          style={{
+            margin: 0,
+            fontSize: 14,
+            fontWeight: 600,
+            color: 'var(--text-1)',
+          }}
+        >
+          Domicilio
+        </h3>
+        <AddressPicker
+          value={form.address}
+          disabled={busy}
+          onChange={(address) => setField('address', address)}
+        />
       </div>
 
       <div
