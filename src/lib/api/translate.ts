@@ -63,7 +63,14 @@ export type EndpointKey =
   | 'schedules.update'
   | 'schedules.delete'
   | 'services.list'
-  | 'services.toggle';
+  | 'services.toggle'
+  | 'metrics.revenue'
+  | 'metrics.byPaymentMethod'
+  | 'metrics.topPlates'
+  | 'metrics.summary'
+  | 'cashSessions.list'
+  | 'staff.list'
+  | 'audit.list';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;
@@ -148,6 +155,11 @@ const CODE_MESSAGES: Record<string, string> = {
   // Servicios del estacionamiento.
   SERVICE_INVALID_CODE: 'El servicio seleccionado no es válido.',
   SERVICE_NOT_FOUND: 'No encontramos el servicio.',
+
+  // Cajas. El mismo code cubre una caja inexistente y una de otra sucursal, a
+  // propósito: distinguirlos le confirmaría a un tercero que el id existe.
+  CASH_SESSION_NOT_FOUND:
+    'La caja seleccionada no existe o no pertenece a este estacionamiento.',
 
   // Validacion (envoltorio — el detalle por campo se traduce con
   // translateValidationCode).
@@ -241,6 +253,9 @@ const VALIDATION_CODE_MESSAGES: Record<string, string> = {
   isEmail: 'Email inválido.',
   isUUID: 'Identificador inválido.',
   isDate: 'Fecha inválida.',
+  // El backend exige offset explícito en las fechas de métricas: sin él
+  // resolvería el instante contra el reloj del servidor (UTC en producción).
+  isOffsetDateTime: 'La fecha debe incluir la zona horaria.',
   isIn: 'Valor no permitido.',
   isEnum: 'Valor no permitido.',
   minLength: 'Demasiado corto.',
