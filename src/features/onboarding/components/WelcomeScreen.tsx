@@ -7,7 +7,7 @@ export function WelcomeScreen({ onStart }: Props) {
     <div className="onboarding-card welcome-screen">
       <div className="welcome-header">
         <div className="brand-badge" aria-hidden="true">
-          P
+          <img src="/logo.jpeg" alt="" />
         </div>
         <h2>¡Bienvenido a Parkit!</h2>
         <p className="welcome-subtitle">

@@ -36,7 +36,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
         <div className="onboarding-topbar">
           <div className="brand-lockup" style={{ marginBottom: 0 }}>
             <div className="brand-badge" aria-hidden="true">
-              P
+              <img src="/logo.jpeg" alt="" />
             </div>
             <h1>Parkit</h1>
           </div>

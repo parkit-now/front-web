@@ -98,7 +98,7 @@ export function AuthPage() {
       <section className="auth-card">
         <div className="brand-lockup">
           <div className="brand-badge" aria-hidden="true">
-            P
+            <img src="/logo.jpeg" alt="" />
           </div>
           <h1>Parkit</h1>
         </div>
