@@ -6,9 +6,13 @@ export interface RateFormState {
   hourPriceArs: string;
   stayPriceArs: string;
   fractionPriceArs: string;
+  mediaEstadiaPriceArs: string;
+  autoFractionPrice: boolean;
 }
 
-export type RateFormErrors = Partial<Record<keyof RateFormState, string>>;
+export type RateFormErrors = Partial<
+  Record<Exclude<keyof RateFormState, 'autoFractionPrice'>, string>
+>;
 
 export interface RateFormPayload {
   shortcutNumber: number;
@@ -16,6 +20,8 @@ export interface RateFormPayload {
   hourPriceArs: number;
   stayPriceArs: number;
   fractionPriceArs: number;
+  mediaEstadiaPriceArs: number;
+  autoFractionPrice: boolean;
 }
 
 const MONEY_PATTERN = /^\d+(?:[.,]\d{1,2})?$/;
@@ -39,6 +45,16 @@ export function toMoneyInputString(value: number): string {
   return value.toFixed(2);
 }
 
+const FRACTIONS_PER_HOUR = 12;
+
+export function derivedFractionPrice(hourPriceRaw: string): string {
+  const hour = validateMoney(hourPriceRaw);
+  if (hour.error || hour.value === undefined) return '';
+  return toMoneyInputString(
+    Math.round((hour.value / FRACTIONS_PER_HOUR) * 100) / 100,
+  );
+}
+
 export function emptyRateForm(): RateFormState {
   return {
     shortcutNumber: '',
@@ -46,6 +62,8 @@ export function emptyRateForm(): RateFormState {
     hourPriceArs: '',
     stayPriceArs: '',
     fractionPriceArs: '',
+    mediaEstadiaPriceArs: '',
+    autoFractionPrice: true,
   };
 }
 
@@ -57,6 +75,8 @@ export function rateToForm(rate: Rate): RateFormState {
     hourPriceArs: toMoneyInputString(rate.hourPriceArs),
     stayPriceArs: toMoneyInputString(rate.stayPriceArs),
     fractionPriceArs: toMoneyInputString(rate.fractionPriceArs),
+    mediaEstadiaPriceArs: toMoneyInputString(rate.mediaEstadiaPriceArs),
+    autoFractionPrice: rate.autoFractionPrice,
   };
 }
 
@@ -82,6 +102,7 @@ export function canSubmitRateForm(form: RateFormState): boolean {
     !validateMoney(form.hourPriceArs).error &&
     !validateMoney(form.stayPriceArs).error &&
     !validateMoney(form.fractionPriceArs).error &&
+    !validateMoney(form.mediaEstadiaPriceArs).error &&
     Number.isInteger(shortcut) &&
     shortcut >= 1
   );
@@ -108,6 +129,18 @@ export function validateRateForm(
 
   const fraction = validateMoney(form.fractionPriceArs);
   if (fraction.error) errors.fractionPriceArs = fraction.error;
+
+  const mediaEstadia = validateMoney(form.mediaEstadiaPriceArs);
+  if (mediaEstadia.error) {
+    errors.mediaEstadiaPriceArs = mediaEstadia.error;
+  } else if (
+    !stay.error &&
+    mediaEstadia.value !== undefined &&
+    stay.value !== undefined &&
+    mediaEstadia.value > stay.value
+  ) {
+    errors.mediaEstadiaPriceArs = 'No puede superar el precio de la estadía.';
+  }
 
   const shortcutRaw = form.shortcutNumber.trim();
   const shortcutN = parseInt(shortcutRaw, 10);
@@ -142,6 +175,8 @@ export function validateRateForm(
       hourPriceArs: hour.value ?? 0,
       stayPriceArs: stay.value ?? 0,
       fractionPriceArs: fraction.value ?? 0,
+      mediaEstadiaPriceArs: mediaEstadia.value ?? 0,
+      autoFractionPrice: form.autoFractionPrice,
     },
   };
 }
@@ -164,6 +199,12 @@ export function diffRateUpdate(
   }
   if (payload.fractionPriceArs !== current.fractionPriceArs) {
     body.fractionPriceArs = payload.fractionPriceArs;
+  }
+  if (payload.mediaEstadiaPriceArs !== current.mediaEstadiaPriceArs) {
+    body.mediaEstadiaPriceArs = payload.mediaEstadiaPriceArs;
+  }
+  if (payload.autoFractionPrice !== current.autoFractionPrice) {
+    body.autoFractionPrice = payload.autoFractionPrice;
   }
   if (payload.shortcutNumber !== current.shortcutNumber) {
     body.shortcutNumber = payload.shortcutNumber;

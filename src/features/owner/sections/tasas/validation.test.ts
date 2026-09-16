@@ -18,6 +18,8 @@ function makeRate(overrides: Partial<Rate> = {}): Rate {
     hourPriceArs: 3600,
     stayPriceArs: 8000,
     fractionPriceArs: 300,
+    mediaEstadiaPriceArs: 4000,
+    autoFractionPrice: false,
     isActive: true,
     shortcutNumber: 1,
     version: 1,
@@ -93,6 +95,8 @@ describe('canSubmitRateForm', () => {
         hourPriceArs: '3600',
         stayPriceArs: '8000',
         fractionPriceArs: '300',
+        mediaEstadiaPriceArs: '4000',
+        autoFractionPrice: false,
       }),
     ).toBe(true);
   });
@@ -105,6 +109,8 @@ describe('canSubmitRateForm', () => {
         hourPriceArs: '3600',
         stayPriceArs: '8000',
         fractionPriceArs: '300',
+        mediaEstadiaPriceArs: '4000',
+        autoFractionPrice: false,
       }),
     ).toBe(false);
   });
@@ -117,6 +123,8 @@ describe('validateRateForm', () => {
     hourPriceArs: '4000',
     stayPriceArs: '9000',
     fractionPriceArs: '400',
+    mediaEstadiaPriceArs: '4000',
+    autoFractionPrice: false,
   };
 
   it('devuelve el payload numérico cuando todo está bien', () => {
@@ -131,7 +139,20 @@ describe('validateRateForm', () => {
       hourPriceArs: 4000,
       stayPriceArs: 9000,
       fractionPriceArs: 400,
+      mediaEstadiaPriceArs: 4000,
+      autoFractionPrice: false,
     });
+  });
+
+  it('rechaza una media estadía mayor que la estadía', () => {
+    const { errors, payload } = validateRateForm(
+      { ...validForm, mediaEstadiaPriceArs: '99000' },
+      { rates: [], editingId: null },
+    );
+    expect(errors.mediaEstadiaPriceArs).toBe(
+      'No puede superar el precio de la estadía.',
+    );
+    expect(payload).toBeUndefined();
   });
 
   it('exige el nombre y corta en 120 caracteres', () => {
@@ -198,6 +219,8 @@ describe('diffRateUpdate', () => {
     hourPriceArs: 3600,
     stayPriceArs: 8000,
     fractionPriceArs: 300,
+    mediaEstadiaPriceArs: 4000,
+    autoFractionPrice: false,
   };
 
   it('devuelve vacío cuando no cambió nada', () => {
@@ -215,5 +238,17 @@ describe('diffRateUpdate', () => {
   it('detecta el alta de un atajo que estaba en null', () => {
     const sinAtajo = makeRate({ shortcutNumber: null });
     expect(diffRateUpdate(payload, sinAtajo)).toEqual({ shortcutNumber: 1 });
+  });
+
+  it('manda la media estadía cuando cambió', () => {
+    expect(
+      diffRateUpdate({ ...payload, mediaEstadiaPriceArs: 4500 }, current),
+    ).toEqual({ mediaEstadiaPriceArs: 4500 });
+  });
+
+  it('manda el flag de autocálculo cuando se tilda', () => {
+    expect(
+      diffRateUpdate({ ...payload, autoFractionPrice: true }, current),
+    ).toEqual({ autoFractionPrice: true });
   });
 });

@@ -17,19 +17,17 @@ export function Logo({ size = 'md', variant = 'default' }: LogoProps) {
         style={{
           width: s.badge,
           height: s.badge,
-          background: 'linear-gradient(135deg, #0e5fd8, #1a7bff)',
           borderRadius: 8,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          background: '#fff',
+          overflow: 'hidden',
           flexShrink: 0,
         }}
       >
-        <span
-          style={{ color: '#fff', fontWeight: 700, fontSize: s.badge * 0.5 }}
-        >
-          P
-        </span>
+        <img
+          src="/logo.jpeg"
+          alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
       </div>
       <span
         style={{

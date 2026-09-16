@@ -8,6 +8,7 @@ import {
   emptyRateForm,
   nextFreeShortcut,
   rateToForm,
+  derivedFractionPrice,
   validateRateForm,
   type RateFormPayload,
   type RateFormErrors,
@@ -18,6 +19,25 @@ const GRID_3: CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
   gap: 10,
+};
+
+const GRID_2: CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  gap: 10,
+};
+
+const CHECKBOX_ROW: CSSProperties = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: 9,
+  marginTop: 12,
+  padding: '10px 12px',
+  border: '1px solid var(--border-1)',
+  borderRadius: 8,
+  fontSize: 13,
+  lineHeight: 1.35,
+  cursor: 'pointer',
 };
 
 interface RateFormModalProps {
@@ -58,8 +78,16 @@ export function RateFormModal({
     // abrir, y un refetch de la lista no tiene que pisar lo que el usuario tipeó.
   }, [open, rate]);
 
-  function set<K extends keyof RateFormState>(key: K, value: string): void {
-    setForm((prev) => ({ ...prev, [key]: value }));
+  type TextField = Exclude<keyof RateFormState, 'autoFractionPrice'>;
+
+  function set(key: TextField, value: string): void {
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+      ...(key === 'hourPriceArs' && prev.autoFractionPrice
+        ? { fractionPriceArs: derivedFractionPrice(value) }
+        : {}),
+    }));
     if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }));
   }
 
@@ -111,8 +139,9 @@ export function RateFormModal({
       <div style={GRID_3}>
         <Input
           id="rate-shortcut"
+          label="Nº atajo"
           inputMode="numeric"
-          placeholder="Nº atajo (ej. 1)"
+          placeholder="ej. 1"
           value={form.shortcutNumber}
           error={errors.shortcutNumber}
           autoFocus
@@ -122,7 +151,8 @@ export function RateFormModal({
         <div style={{ gridColumn: 'span 2' }}>
           <Input
             id="rate-name"
-            placeholder="Nombre (ej. DIA AUTO)"
+            label="Nombre"
+            placeholder="ej. DIA AUTO"
             value={form.name}
             error={errors.name}
             maxLength={120}
@@ -132,35 +162,82 @@ export function RateFormModal({
         </div>
       </div>
 
-      <div style={{ ...GRID_3, marginTop: 12 }}>
+      <div style={{ ...GRID_2, marginTop: 12 }}>
         <Input
           id="rate-hour-price"
+          label="Precio hora"
           inputMode="decimal"
-          placeholder="Precio hora"
+          placeholder="0,00"
           value={form.hourPriceArs}
           error={errors.hourPriceArs}
           onChange={(e) => set('hourPriceArs', e.target.value)}
           onKeyDown={handleKeyDown}
         />
         <Input
-          id="rate-stay-price"
+          id="rate-fraction-price"
+          label="Precio fracción (5 min)"
           inputMode="decimal"
-          placeholder="Precio estadía"
+          placeholder="0,00"
+          value={form.fractionPriceArs}
+          error={errors.fractionPriceArs}
+          disabled={form.autoFractionPrice}
+          onChange={(e) => set('fractionPriceArs', e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+        <Input
+          id="rate-media-estadia-price"
+          label="Precio media estadía (12 h)"
+          inputMode="decimal"
+          placeholder="0,00"
+          value={form.mediaEstadiaPriceArs}
+          error={errors.mediaEstadiaPriceArs}
+          onChange={(e) => set('mediaEstadiaPriceArs', e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+        <Input
+          id="rate-stay-price"
+          label="Precio estadía (24 h)"
+          inputMode="decimal"
+          placeholder="0,00"
           value={form.stayPriceArs}
           error={errors.stayPriceArs}
           onChange={(e) => set('stayPriceArs', e.target.value)}
           onKeyDown={handleKeyDown}
         />
-        <Input
-          id="rate-fraction-price"
-          inputMode="decimal"
-          placeholder="Precio fracción"
-          value={form.fractionPriceArs}
-          error={errors.fractionPriceArs}
-          onChange={(e) => set('fractionPriceArs', e.target.value)}
-          onKeyDown={handleKeyDown}
-        />
       </div>
+
+      <label style={CHECKBOX_ROW}>
+        <input
+          type="checkbox"
+          checked={form.autoFractionPrice}
+          style={{ width: 16, height: 16, margin: '1px 0 0' }}
+          onChange={(e) => {
+            const autoFractionPrice = e.target.checked;
+            setForm((prev) => ({
+              ...prev,
+              autoFractionPrice,
+              fractionPriceArs: autoFractionPrice
+                ? derivedFractionPrice(prev.hourPriceArs)
+                : prev.fractionPriceArs,
+            }));
+            setErrors((prev) => ({ ...prev, fractionPriceArs: undefined }));
+          }}
+        />
+        <span>
+          Autocalcular la fracción legal (hora ÷ 12)
+          <span
+            style={{
+              display: 'block',
+              marginTop: 2,
+              fontSize: 12,
+              color: 'var(--text-3)',
+            }}
+          >
+            La fracción de 5 minutos no puede costar más que un doceavo de la
+            hora.
+          </span>
+        </span>
+      </label>
 
       <p style={{ margin: '16px 0 0', fontSize: 12, color: 'var(--text-3)' }}>
         {isEdit
