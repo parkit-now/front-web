@@ -221,6 +221,13 @@ export function TasasPage() {
         ),
       },
       {
+        id: 'fractionPriceArs',
+        header: 'Fracción',
+        accessorKey: 'fractionPriceArs',
+        size: 140,
+        cell: ({ row }) => fmtMoney(row.original.fractionPriceArs),
+      },
+      {
         id: 'hourPriceArs',
         header: 'Hora',
         accessorKey: 'hourPriceArs',
@@ -228,18 +235,18 @@ export function TasasPage() {
         cell: ({ row }) => fmtMoney(row.original.hourPriceArs),
       },
       {
+        id: 'mediaEstadiaPriceArs',
+        header: 'Media estadía',
+        accessorKey: 'mediaEstadiaPriceArs',
+        size: 150,
+        cell: ({ row }) => fmtMoney(row.original.mediaEstadiaPriceArs),
+      },
+      {
         id: 'stayPriceArs',
         header: 'Estadía',
         accessorKey: 'stayPriceArs',
         size: 140,
         cell: ({ row }) => fmtMoney(row.original.stayPriceArs),
-      },
-      {
-        id: 'fractionPriceArs',
-        header: 'Fracción',
-        accessorKey: 'fractionPriceArs',
-        size: 140,
-        cell: ({ row }) => fmtMoney(row.original.fractionPriceArs),
       },
       {
         id: 'status',
