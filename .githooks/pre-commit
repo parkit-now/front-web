@@ -4,8 +4,30 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 export PATH="$PWD/node_modules/.bin:$HOME/.bun/bin:$PATH"
 
-echo "→ Prettier"
-bun run format >/dev/null
+# Prettier corre SOLO sobre los archivos staged.
+# Antes corría `bun run format` (todo el repo). Dos problemas: reescribía
+# archivos ajenos al commit y dejaba el árbol sucio, y como nunca los volvía a
+# stagear, el commit podía quedar igual con código sin formatear. Mismo arreglo
+# que ya se hizo en front-desktop.
+mapfile -d '' STAGED < <(git diff --cached --name-only --diff-filter=ACMR -z)
+
+FILES=()
+for file in "${STAGED[@]:-}"; do
+  [[ -n "$file" && -f "$file" ]] || continue
+  case "$file" in
+    *.ts | *.tsx | *.js | *.mjs | *.cjs | *.json | *.md | *.css | *.html)
+      FILES+=("$file")
+      ;;
+  esac
+done
+
+if [[ ${#FILES[@]} -gt 0 ]]; then
+  echo "→ Prettier (${#FILES[@]} archivo/s staged)"
+  prettier --write --ignore-unknown "${FILES[@]}"
+  git add -- "${FILES[@]}"
+else
+  echo "→ Prettier (sin archivos staged para formatear)"
+fi
 
 echo "→ ESLint"
 bun run lint
