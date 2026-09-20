@@ -272,7 +272,11 @@ export function MercadoPagoCard({
       <ConfirmDialog
         open={confirmUnlink}
         title="¿Desvincular Mercado Pago?"
-        message="Se da de baja el QR de la ventanilla y dejás de poder cobrar con Mercado Pago desde Parkit. Lo que ya cobraste queda como está. Podés volver a vincular cuando quieras, pero se genera un QR nuevo y vas a tener que imprimirlo de nuevo."
+        // Desvincular también apaga el medio de pago "Mercado Pago QR", así
+        // que el operario deja de verlo en el modal de egreso. Decirlo acá y
+        // no después: es un cambio en la ventanilla, y el dueño lo tiene que
+        // saber ANTES de apretar, no cuando lo llame el que está cobrando.
+        message="Se da de baja el QR de la ventanilla y dejás de poder cobrar con Mercado Pago desde Parkit. También se apaga el medio de pago Mercado Pago QR: el operario deja de verlo al cobrar. Lo que ya cobraste queda como está. Podés volver a vincular cuando quieras, pero se genera un QR nuevo y vas a tener que imprimirlo de nuevo."
         confirmLabel="Sí, desvincular"
         destructive
         loading={unlinking}
