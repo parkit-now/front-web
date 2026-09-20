@@ -271,6 +271,21 @@ export const IconZap = (p: IconProps) => (
     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
   </Icon>
 );
+/**
+ * El enchufe de Lucide (`plug`), no de Feather: Feather nunca tuvo uno.
+ * Path auténtico de `lucide-static`
+ * (https://cdn.jsdelivr.net/npm/lucide-static/icons/plug.svg). Lucide es el
+ * fork de Feather, así que el trazo y el viewBox 24x24 son los mismos que los
+ * de sus hermanos: entra sin tocarle nada.
+ */
+export const IconPlug = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 22v-5" />
+    <path d="M15 8V2" />
+    <path d="M17 8a1 1 0 0 1 1 1v4a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V9a1 1 0 0 1 1-1z" />
+    <path d="M9 8V2" />
+  </Icon>
+);
 export const IconAuto = IconCar;
 export const IconMoto = (p: IconProps) => (
   <Icon {...p}>
