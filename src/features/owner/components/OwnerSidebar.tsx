@@ -11,7 +11,7 @@ import {
   IconAuto,
   IconLayers,
   IconCreditCard,
-  IconMercadoPago,
+  IconZap,
   IconSettings,
   IconLogout,
 } from '../../../shared/components/icons';
@@ -60,10 +60,11 @@ const NAV_ITEMS: NavItem[] = [
   {
     segment: 'integraciones',
     label: 'Integraciones',
-    // Monocromo a propósito: acá el isotipo hereda `currentColor` como los
-    // otros 10 iconos del nav y acompaña el estado activo. Un celeste fijo
-    // rompería la lectura de la lista.
-    icon: <IconMercadoPago size={18} />,
+    // Genérico a propósito: la sección es "Integraciones", no "Mercado Pago".
+    // El isotipo de la marca acá diría que la sección ES Mercado Pago y
+    // mentiría apenas entre la segunda integración. El logo va en la tarjeta,
+    // que sí identifica a la marca.
+    icon: <IconZap size={18} />,
   },
   {
     segment: 'config',
