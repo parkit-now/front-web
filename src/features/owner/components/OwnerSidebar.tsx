@@ -11,7 +11,7 @@ import {
   IconAuto,
   IconLayers,
   IconCreditCard,
-  IconZap,
+  IconMercadoPago,
   IconSettings,
   IconLogout,
 } from '../../../shared/components/icons';
@@ -60,7 +60,10 @@ const NAV_ITEMS: NavItem[] = [
   {
     segment: 'integraciones',
     label: 'Integraciones',
-    icon: <IconZap size={18} />,
+    // Monocromo a propósito: acá el isotipo hereda `currentColor` como los
+    // otros 10 iconos del nav y acompaña el estado activo. Un celeste fijo
+    // rompería la lectura de la lista.
+    icon: <IconMercadoPago size={18} />,
   },
   {
     segment: 'config',

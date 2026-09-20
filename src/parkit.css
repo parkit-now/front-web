@@ -25,6 +25,13 @@
   --warn-bg: #fffaeb;
   --warn-border: #fedf89;
 
+  /* Marca de terceros. No es parte de la paleta de Parkit: vive acá para que
+     el celeste de Mercado Pago se escriba una sola vez y no quede un hex
+     suelto en medio de un componente. Se usa como `color` sobre el isotipo,
+     que hereda `currentColor`. */
+  --mp-brand: #009ee3;
+  --mp-brand-soft: #e6f6fd;
+
   /* Radii */
   --r-sm: 8px;
   --r-md: 12px;

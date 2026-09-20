@@ -11,7 +11,7 @@ import {
   IconDownload,
   IconMapPin,
   IconRefresh,
-  IconZap,
+  IconMercadoPago,
 } from '../../../../shared/components/icons';
 import { fmtDateTimeAr } from '../../../../shared/utils/fmt';
 import type { MpAccount } from '../../services/mercado-pago';
@@ -96,11 +96,14 @@ export function MercadoPagoCard({
                 width: 36,
                 height: 36,
                 borderRadius: 'var(--r-md)',
-                background: 'var(--brand-soft)',
-                color: 'var(--brand)',
+                // Acá el isotipo identifica a la marca, no a una sección de
+                // Parkit: va con el celeste de Mercado Pago en vez del azul
+                // de la app. El icono hereda este `color` vía `currentColor`.
+                background: 'var(--mp-brand-soft)',
+                color: 'var(--mp-brand)',
               }}
             >
-              <IconZap size={18} />
+              <IconMercadoPago size={20} />
             </span>
             <div>
               <h2
