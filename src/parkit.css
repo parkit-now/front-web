@@ -227,6 +227,94 @@ a {
   font-size: 13px;
 }
 
+/* Alert — aviso destacado reutilizable. Generaliza el patrón de
+   .dashboard-lpr-review-link (icono + copy + acción) para no seguir copiando
+   el mismo CSS en cada pantalla. */
+.pk-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-lg);
+  background: var(--card);
+  color: var(--text-1);
+  box-shadow: var(--shadow-card);
+}
+
+.pk-alert-info {
+  border-color: var(--brand-100);
+  background: var(--brand-soft);
+}
+
+.pk-alert-warn {
+  border-color: var(--warn-border);
+  background: var(--warn-bg);
+}
+
+.pk-alert-err {
+  border-color: var(--err-border);
+  background: var(--err-bg);
+}
+
+.pk-alert-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-md);
+  background: var(--card);
+  flex-shrink: 0;
+}
+
+.pk-alert-info .pk-alert-icon {
+  color: var(--brand);
+}
+
+.pk-alert-warn .pk-alert-icon {
+  color: var(--warn-text);
+}
+
+.pk-alert-err .pk-alert-icon {
+  color: var(--err-text);
+}
+
+/* flex-basis 200px (no `flex: 1`) es lo que dispara el wrap: el corte de línea
+   se decide con el tamaño hipotético, así que abajo de ~480px la acción baja de
+   renglón en vez de aplastar el texto. `min-width: 0` va igual para que una
+   palabra larga no desborde. */
+.pk-alert-copy {
+  display: flex;
+  flex: 1 1 200px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pk-alert-copy strong {
+  color: var(--text-1);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pk-alert-copy span {
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+/* margin-left: auto empuja la acción a la derecha. Cuando baja de renglón sigue
+   funcionando: al quedar sola en la línea el margen auto se come el espacio
+   libre y la deja alineada a la derecha. */
+.pk-alert-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .lpr-review-filters {
   display: flex;
   align-items: flex-end;
