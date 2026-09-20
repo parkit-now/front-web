@@ -157,12 +157,13 @@ export function MercadoPagoCard({
                 </Link>
               }
             />
+            {/* Sin botón de vincular a propósito: con la dirección incompleta
+                no hay nada que vincular, y un botón gris que no hace nada es
+                ruido que compite con el Alert. La única acción posible es la
+                del Alert ("Ir a Configuración"); el botón aparece recién
+                cuando la dirección está completa. El link de costos sí queda:
+                el dueño puede querer informarse mientras la carga. */}
             <CostsLink />
-            <div style={ROW}>
-              <Button variant="primary" disabled>
-                Vincular mi cuenta de Mercado Pago
-              </Button>
-            </div>
           </>
         )}
 
