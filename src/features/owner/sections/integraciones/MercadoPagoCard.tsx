@@ -9,6 +9,7 @@ import {
   IconAlert,
   IconCheckCircle,
   IconDownload,
+  IconExternalLink,
   IconMapPin,
   IconRefresh,
   IconMercadoPago,
@@ -38,6 +39,19 @@ const BROKEN_COPY: Record<'token_expired' | 'revoked', string> = {
   revoked:
     'Desde tu cuenta de Mercado Pago le quitaron el permiso a Parkit. Hasta que la vuelvas a vincular, el QR de la ventanilla no cobra.',
 };
+
+/**
+ * Costos públicos de Mercado Pago para cobros con QR en Argentina.
+ *
+ * Es la landing de "Cobrar con QR" de mercadopago.com.ar: abierta, sin login y
+ * con la tabla de costos por medio de pago (billetera, débito, crédito,
+ * cuotas). Las otras candidatas no sirven: `/costos` y `/comisiones` devuelven
+ * 200 pero con "La página que buscás ya no existe", y
+ * `/costs-section/release-options` redirige al login de Mercado Pago, así que
+ * un dueño que todavía no vinculó no ve nada.
+ */
+const MP_COSTS_URL =
+  'https://www.mercadopago.com.ar/herramientas-para-vender/cobrar-con-qr';
 
 const ROW: React.CSSProperties = {
   display: 'flex',
@@ -143,6 +157,7 @@ export function MercadoPagoCard({
                 </Link>
               }
             />
+            <CostsLink />
             <div style={ROW}>
               <Button variant="primary" disabled>
                 Vincular mi cuenta de Mercado Pago
@@ -159,6 +174,7 @@ export function MercadoPagoCard({
               <strong>la plata le entra directo a tu cuenta</strong>: Parkit no
               toca el dinero, sólo registra el cobro en la caja del turno.
             </p>
+            <CostsLink />
             {canManage ? (
               <div style={ROW}>
                 <Button variant="primary" loading={linking} onClick={onLink}>
@@ -266,6 +282,42 @@ export function MercadoPagoCard({
         onClose={() => setConfirmUnlink(false)}
       />
     </Card>
+  );
+}
+
+/**
+ * "Saber más sobre costos y comisiones", como link secundario.
+ *
+ * Va deliberadamente en texto y no con `.pk-btn`: al lado del botón primario
+ * de vincular, dos cajas compitiendo mandan señales cruzadas. Acá el dueño
+ * está decidiendo, no ejecutando.
+ *
+ * El subrayado se pone a mano porque `parkit.css` arranca con
+ * `a { text-decoration: none }`: sin esto el link no se distingue de un
+ * párrafo.
+ */
+function CostsLink() {
+  return (
+    <a
+      href={MP_COSTS_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        gap: 6,
+        fontSize: 13,
+        fontWeight: 500,
+        color: 'var(--text-2)',
+        textDecoration: 'underline',
+        textDecorationColor: 'var(--border)',
+        textUnderlineOffset: 3,
+      }}
+    >
+      Saber más sobre costos y comisiones
+      <IconExternalLink size={13} />
+    </a>
   );
 }
 
