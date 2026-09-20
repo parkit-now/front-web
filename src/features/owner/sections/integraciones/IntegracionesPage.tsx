@@ -7,16 +7,14 @@ import { Button } from '../../../../shared/components/ui/Button';
 import { SectionHeader } from '../../../../shared/components/SectionHeader';
 import { IconAlert } from '../../../../shared/components/icons';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
-import { ApiError } from '../../../../lib/api/client';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useSucursal } from '../../context/SucursalContext';
+import { mpAccountQueryKey, useMpAccount } from '../../hooks/useMpAccount';
 import { getEntityProfile } from '../../services/entities';
 import {
   createMpAuthorizationUrl,
-  getMpAccount,
   resyncMpPos,
   unlinkMpAccount,
-  type MpAccount,
 } from '../../services/mercado-pago';
 import { MercadoPagoCard } from './MercadoPagoCard';
 import { isAddressComplete, resolveMpCardState } from './validation';
@@ -36,36 +34,9 @@ export function IntegracionesPage() {
   // `role: 'owner'` para el admin global, así que el bypass entra por acá.
   const canManage = sucursal?.role === 'owner';
 
-  const accountQueryKey = ['mercado-pago', 'account', sucursalId];
-
-  /**
-   * OJO: "sin vincular" NO es un 200 con `null`, es un **404 `MP_NOT_LINKED`**.
-   *
-   * Ese 404 es el camino feliz de una playa nueva. Si lo dejáramos propagar,
-   * el dueño entraría por primera vez a Integraciones y lo recibiría un toast
-   * rojo diciéndole que algo falló. Lo atajamos acá y lo devolvemos como
-   * `null`, que es lo que la tarjeta entiende por "todavía no vinculaste".
-   */
-  const accountQuery = useQuery<MpAccount | null>({
-    queryKey: accountQueryKey,
-    queryFn: async () => {
-      try {
-        return await getMpAccount(sucursalId);
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 404) return null;
-        throw error;
-      }
-    },
-    enabled: Boolean(sucursalId),
-    // El `catch` de arriba ya se come el 404, así que react-query no debería
-    // verlo nunca. Lo dejamos explícito igual: ningún 4xx se arregla
-    // reintentando, y si alguien saca el `catch` no queremos tres viajes de
-    // ida y vuelta contra una playa que simplemente no vinculó nada.
-    retry: (failureCount, error) =>
-      error instanceof ApiError && error.status >= 400 && error.status < 500
-        ? false
-        : failureCount < 2,
-  });
+  // El 404 `MP_NOT_LINKED` traducido a `null` vive en el hook: Métodos de pago
+  // hace la misma consulta y la trampa tiene que estar escrita una sola vez.
+  const accountQuery = useMpAccount(sucursalId);
 
   // Misma `queryKey` que la pestaña Perfil: comparten caché, y cargar la
   // dirección desde Configuración se refleja acá sin pedirla de nuevo.
@@ -76,7 +47,9 @@ export function IntegracionesPage() {
   });
 
   function invalidate() {
-    void queryClient.invalidateQueries({ queryKey: accountQueryKey });
+    void queryClient.invalidateQueries({
+      queryKey: mpAccountQueryKey(sucursalId),
+    });
   }
 
   const linkMutation = useMutation({

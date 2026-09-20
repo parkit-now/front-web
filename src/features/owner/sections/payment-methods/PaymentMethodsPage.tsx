@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '../../../../shared/components/ui/Badge';
@@ -17,6 +18,7 @@ import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
 import { useSucursal } from '../../context/SucursalContext';
+import { useMpAccount } from '../../hooks/useMpAccount';
 import {
   createPaymentMethod,
   deletePaymentMethod,
@@ -25,6 +27,7 @@ import {
   type PaymentMethodSummary,
 } from '../../services/entities';
 import { PaymentMethodFormModal } from './PaymentMethodFormModal';
+import { resolvePaymentMethodLock } from './validation';
 
 function paymentMethodStatus(
   method: PaymentMethodSummary,
@@ -70,6 +73,17 @@ export function PaymentMethodsPage() {
     enabled: Boolean(sucursalId),
   });
   const medios = useMemo(() => listQuery.data ?? [], [listQuery.data]);
+
+  // Los medios integrados dependen de una cuenta que vive en otro lado, así
+  // que hay que ir a buscarla: la tabla sola no alcanza para saber si el
+  // interruptor de "Mercado Pago QR" todavía significa algo.
+  const mpAccountQuery = useMpAccount(sucursalId);
+  const mpAccountStatus = mpAccountQuery.data?.status ?? null;
+  // Si la consulta falló no sabemos nada: bloquear el interruptor de una playa
+  // que sí tiene Mercado Pago vinculado, y encima ofrecerle "Volver a
+  // vincular", es mentirle al dueño por un error de red. Ante la duda, no se
+  // bloquea.
+  const mpAccountKnown = mpAccountQuery.isSuccess;
 
   function invalidate() {
     void queryClient.invalidateQueries({ queryKey });
@@ -152,6 +166,10 @@ export function PaymentMethodsPage() {
         accessorKey: 'name',
         cell: ({ row }) => {
           const m = row.original;
+          const { integrationBacked } = resolvePaymentMethodLock({
+            type: m.type,
+            accountStatus: mpAccountStatus,
+          });
           return (
             <div
               style={{
@@ -172,6 +190,14 @@ export function PaymentMethodsPage() {
               </span>
               {m.isSystem && <Badge>Sistema</Badge>}
               {m.isDefault && <Badge variant="brand">Por defecto</Badge>}
+              {/*
+                El dueño puede renombrar el medio: "Mercado Pago QR" puede
+                terminar llamándose "QR" o "Celular". El badge es lo único que
+                queda diciendo de dónde salió, y por qué su interruptor a veces
+                no se puede tocar. Va en `brand` y no en `warn`: es un dato,
+                no un problema.
+              */}
+              {integrationBacked && <Badge variant="brand">Integrado</Badge>}
             </div>
           );
         },
@@ -207,6 +233,11 @@ export function PaymentMethodsPage() {
         enableHiding: false,
         cell: ({ row }) => {
           const m = row.original;
+          const { toggleLocked } = resolvePaymentMethodLock({
+            type: m.type,
+            accountStatus: mpAccountStatus,
+          });
+          const integrationLocked = mpAccountKnown && toggleLocked;
           return (
             <div
               style={{
@@ -278,6 +309,47 @@ export function PaymentMethodsPage() {
                   <IconLock size={13} />
                   <span style={{ minWidth: 52 }}>Siempre activo</span>
                 </span>
+              ) : integrationLocked ? (
+                // Sin cuenta viva detrás, prender este medio no habilita nada:
+                // el operario lo vería en el modal de egreso, lo elegiría, y
+                // el QR no cobraría con el cliente parado en la ventanilla.
+                // El arreglo no está acá, está en Integraciones, así que el
+                // interruptor se apaga y en su lugar va el camino de salida.
+                <span
+                  title="Mercado Pago no está vinculado. Volvé a vincular la cuenta para poder cobrar con el QR."
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    marginLeft: 4,
+                  }}
+                >
+                  <Switch
+                    checked={m.enabled}
+                    disabled
+                    onChange={() => {}}
+                    aria-label={`${m.name} necesita una cuenta de Mercado Pago vinculada`}
+                  />
+                  {/*
+                    Ruta relativa: `metodos-de-pago` e `integraciones` son
+                    hermanas, así que el mismo link sirve para el dueño
+                    (`/app/...`) y para el admin mirando una playa ajena
+                    (`/ops/estacionamientos/:tenantId/...`).
+                  */}
+                  <Link
+                    to="../integraciones"
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color: 'var(--brand)',
+                      textDecoration: 'underline',
+                      textUnderlineOffset: 3,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Volver a vincular
+                  </Link>
+                </span>
               ) : (
                 <span
                   title={m.enabled ? 'Desactivar' : 'Activar'}
@@ -310,7 +382,9 @@ export function PaymentMethodsPage() {
       },
     ],
     // Handlers close over stable mutate fns; isPending drives the "Marcar" button.
-    [toggleMutation.isPending],
+    // El estado de la cuenta de Mercado Pago decide el badge y el candado del
+    // interruptor, así que las columnas se rearman cuando cambia.
+    [toggleMutation.isPending, mpAccountStatus, mpAccountKnown],
   );
 
   return (
@@ -319,7 +393,11 @@ export function PaymentMethodsPage() {
         data={medios}
         columns={columns}
         title="Métodos de pago"
-        isLoading={listQuery.isLoading}
+        // Se espera también a la cuenta de Mercado Pago. Sin esto, una playa
+        // vinculada dibuja primero el interruptor bloqueado (todavía no
+        // sabemos que hay cuenta) y recién después lo libera: un parpadeo que
+        // le dice al dueño que se le cayó la integración cuando no pasó nada.
+        isLoading={listQuery.isLoading || mpAccountQuery.isLoading}
         emptyMessage={
           // Sin esta rama, una carga fallida se ve igual que "no hay métodos" y
           // el dueño puede creer que se le borró la configuración de cobros.
