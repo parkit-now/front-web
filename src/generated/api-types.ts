@@ -483,6 +483,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Finish the Mercado Pago linking flow
+         * @description Exchanges the `state` atomically (single use), verifies the caller still owns the entity that started the flow, swaps the `authorization_code` for OAuth tokens, provisions the Mercado Pago `Store` and `POS`, stores the encrypted tokens and creates the `mercadopago_qr` payment method.
+         *
+         *     The route deliberately carries no `:tenantId`: the entity comes from the stored `state`, because Mercado Pago requires a static `redirect_uri`.
+         *
+         *     Every `state` failure — unknown, already consumed, expired, or belonging to somebody else — answers the same generic `MP_OAUTH_STATE_INVALID`, so the endpoint cannot be used as an oracle to probe other people flows.
+         */
         post: operations["mercadoPagoOauthCallback"];
         delete?: never;
         options?: never;
