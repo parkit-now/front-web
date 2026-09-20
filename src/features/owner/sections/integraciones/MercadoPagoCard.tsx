@@ -272,12 +272,41 @@ export function MercadoPagoCard({
       <ConfirmDialog
         open={confirmUnlink}
         title="¿Desvincular Mercado Pago?"
-        // Desvincular también apaga el medio de pago "Mercado Pago QR", así
-        // que el operario deja de verlo en el modal de egreso. Decirlo acá y
-        // no después: es un cambio en la ventanilla, y el dueño lo tiene que
-        // saber ANTES de apretar, no cuando lo llame el que está cobrando.
-        message="Se da de baja el QR de la ventanilla y dejás de poder cobrar con Mercado Pago desde Parkit. También se apaga el medio de pago Mercado Pago QR: el operario deja de verlo al cobrar. Lo que ya cobraste queda como está. Podés volver a vincular cuando quieras, pero se genera un QR nuevo y vas a tener que imprimirlo de nuevo."
-        confirmLabel="Sí, desvincular"
+        // Tres párrafos ordenados de mayor a menor gravedad: qué perdés, qué
+        // conservás, cómo volvés. Quien lee sólo la primera línea ya se lleva
+        // lo importante, y el dato tranquilizador ("lo ya cobrado no se
+        // toca") no queda enterrado en el medio de un bloque corrido.
+        //
+        // Que desvincular también apague el medio de pago "Mercado Pago QR"
+        // va en el primer párrafo: es un cambio en la ventanilla y el dueño
+        // lo tiene que saber ANTES de apretar, no cuando lo llame el que
+        // está cobrando.
+        message={
+          <>
+            <p style={{ margin: 0 }}>
+              Al desvincular dejás de cobrar con Mercado Pago desde Parkit: se
+              da de baja el QR de la ventanilla y se apaga el medio de pago
+              Mercado Pago QR, así que el operario deja de verlo al cobrar.
+            </p>
+            <p
+              style={{
+                margin: '16px 0 0',
+                color: 'var(--text-1)',
+                fontWeight: 500,
+              }}
+            >
+              Lo que ya cobraste no se toca.
+            </p>
+            {/* Reversibilidad: importa, pero después. Un tono más abajo. */}
+            <p style={{ margin: '16px 0 0', color: 'var(--text-3)' }}>
+              Podés volver a vincular cuando quieras, pero se genera un QR nuevo
+              y vas a tener que imprimirlo y pegarlo otra vez.
+            </p>
+          </>
+        }
+        // El resto de los ConfirmDialog del repo usan el verbo pelado
+        // ("Eliminar", "Quitar", "Desactivar"), nunca "Sí, ...".
+        confirmLabel="Desvincular"
         destructive
         loading={unlinking}
         onConfirm={() => {
