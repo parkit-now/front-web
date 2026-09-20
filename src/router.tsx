@@ -10,6 +10,7 @@ import { TransaccionesPage } from './features/owner/sections/transacciones/Trans
 import { AuditoriaPage } from './features/owner/sections/auditoria/AuditoriaPage';
 import { ConfigPage } from './features/owner/sections/config/ConfigPage';
 import { PaymentMethodsPage } from './features/owner/sections/payment-methods/PaymentMethodsPage';
+import { IntegracionesPage } from './features/owner/sections/integraciones/IntegracionesPage';
 import { TasasPage } from './features/owner/sections/tasas/TasasPage';
 import { TiposVehiculoPage } from './features/owner/sections/tipos-de-vehiculo/TiposVehiculoPage';
 import { VehiculosPage } from './features/owner/sections/vehiculos/VehiculosPage';
@@ -81,6 +82,7 @@ const ownerSectionRoutes = [
   { path: 'vehiculos', element: <VehiculosPage /> },
   { path: 'tipos-de-vehiculo', element: <TiposVehiculoPage /> },
   { path: 'metodos-de-pago', element: <PaymentMethodsPage /> },
+  { path: 'integraciones', element: <IntegracionesPage /> },
   { path: 'config', element: <ConfigPage /> },
 ];
 

@@ -11,6 +11,7 @@ import {
   IconAuto,
   IconLayers,
   IconCreditCard,
+  IconZap,
   IconSettings,
   IconLogout,
 } from '../../../shared/components/icons';
@@ -55,6 +56,11 @@ const NAV_ITEMS: NavItem[] = [
     segment: 'metodos-de-pago',
     label: 'Métodos de pago',
     icon: <IconCreditCard size={18} />,
+  },
+  {
+    segment: 'integraciones',
+    label: 'Integraciones',
+    icon: <IconZap size={18} />,
   },
   {
     segment: 'config',
