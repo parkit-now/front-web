@@ -85,6 +85,26 @@ export function PaymentMethodsPage() {
   // bloquea.
   const mpAccountKnown = mpAccountQuery.isSuccess;
 
+  /**
+   * El bloqueo de una fila, ya combinado con lo que sabemos de la cuenta.
+   *
+   * `mpAccountKnown` se aplica UNA sola vez, acá, y no en cada control: si la
+   * consulta falló no sabemos si la cuenta está viva, y ante la duda no se
+   * bloquea nada. Repetir ese `&&` en cada rama del render es cómo se termina
+   * olvidando en una.
+   */
+  function resolveRowLock(m: PaymentMethodSummary) {
+    const lock = resolvePaymentMethodLock({
+      type: m.type,
+      accountStatus: mpAccountStatus,
+    });
+    return {
+      integrationBacked: lock.integrationBacked,
+      enableLocked: mpAccountKnown && lock.enableLocked,
+      setDefaultLocked: mpAccountKnown && lock.setDefaultLocked,
+    };
+  }
+
   function invalidate() {
     void queryClient.invalidateQueries({ queryKey });
   }
@@ -144,7 +164,15 @@ export function PaymentMethodsPage() {
   }
 
   function handleToggleEnabled(m: PaymentMethodSummary) {
-    if (m.isDefault && m.enabled) {
+    const { enableLocked } = resolveRowLock(m);
+    // El predeterminado no se apaga: dejaría un medio inactivo preseleccionado
+    // en el modal de egreso.
+    //
+    // Salvo que sea un medio integrado con la cuenta caída. Ahí el QR ya no
+    // cobra: el estado que la regla quiere evitar YA pasó, y el candado deja
+    // de protegerlo para pasar a encerrarlo. Apagarlo es la única salida que
+    // le queda al dueño, así que el bloqueo de la integración gana.
+    if (m.isDefault && m.enabled && !enableLocked) {
       showToast({
         message: 'No podés desactivar el método de pago predeterminado.',
         kind: 'error',
@@ -155,6 +183,19 @@ export function PaymentMethodsPage() {
   }
 
   function handleMakeDefault(m: PaymentMethodSummary) {
+    const { setDefaultLocked } = resolveRowLock(m);
+    // El botón ya viene deshabilitado; esto es el cerrojo, no el cartel. El
+    // backend NO valida `isDefault` contra la integración (sólo `enabled`), así
+    // que si esta guarda no está, marcar predeterminado es una puerta abierta a
+    // dejar un QR muerto preseleccionado en el egreso.
+    if (setDefaultLocked) {
+      showToast({
+        message:
+          'Mercado Pago no está vinculado. Volvé a vincular la cuenta antes de usar el QR como predeterminado.',
+        kind: 'error',
+      });
+      return;
+    }
     toggleMutation.mutate({ id: m.id, body: { isDefault: true } });
   }
 
@@ -166,10 +207,7 @@ export function PaymentMethodsPage() {
         accessorKey: 'name',
         cell: ({ row }) => {
           const m = row.original;
-          const { integrationBacked } = resolvePaymentMethodLock({
-            type: m.type,
-            accountStatus: mpAccountStatus,
-          });
+          const { integrationBacked } = resolveRowLock(m);
           return (
             <div
               style={{
@@ -233,11 +271,7 @@ export function PaymentMethodsPage() {
         enableHiding: false,
         cell: ({ row }) => {
           const m = row.original;
-          const { toggleLocked } = resolvePaymentMethodLock({
-            type: m.type,
-            accountStatus: mpAccountStatus,
-          });
-          const integrationLocked = mpAccountKnown && toggleLocked;
+          const { enableLocked, setDefaultLocked } = resolveRowLock(m);
           return (
             <div
               style={{
@@ -280,21 +314,45 @@ export function PaymentMethodsPage() {
                 </button>
               )}
               {!m.isDefault && m.enabled ? (
+                // El predeterminado llega PRESELECCIONADO al modal de egreso.
+                // Con la cuenta caída eso deja al operario arrancando cada
+                // cobro sobre un QR que no cobra: la misma puerta que el
+                // interruptor, y peor, porque no hace falta ni tocarlo.
+                //
+                // Va deshabilitado y no oculto a propósito: esconder el botón
+                // deja al dueño buscando una acción que ayer estaba. El
+                // tooltip dice qué pasó y adónde ir.
                 <button
                   type="button"
                   className="pk-btn pk-btn-ghost pk-btn-icon"
-                  title="Marcar como predeterminado"
-                  aria-label={`Marcar ${m.name} como predeterminado`}
-                  disabled={toggleMutation.isPending}
+                  title={
+                    setDefaultLocked
+                      ? 'Mercado Pago no está vinculado. Volvé a vincular la cuenta antes de usar el QR como predeterminado.'
+                      : 'Marcar como predeterminado'
+                  }
+                  aria-label={
+                    setDefaultLocked
+                      ? `${m.name} no se puede marcar como predeterminado sin una cuenta de Mercado Pago vinculada`
+                      : `Marcar ${m.name} como predeterminado`
+                  }
+                  disabled={toggleMutation.isPending || setDefaultLocked}
+                  style={setDefaultLocked ? { opacity: 0.35 } : undefined}
                   onClick={() => handleMakeDefault(m)}
                 >
                   <IconCheckCircle size={16} />
                 </button>
               ) : null}
-              {m.isDefault ? (
+              {m.isDefault && !enableLocked ? (
                 // The default can't be disabled (it'd leave a disabled method
                 // pre-selected at checkout). Communicate the rule instead of
                 // showing a dead toggle: lock + tooltip on how to unlock it.
+                //
+                // `&& !enableLocked` no es una guarda de más. Un medio
+                // integrado que quedó default y después se le cayó la cuenta
+                // entra por acá y se come el candado: el dueño ve "Siempre
+                // activo" sobre un QR muerto, sin interruptor y sin forma de
+                // apagarlo. El bloqueo de la integración gana y lo manda a la
+                // rama de abajo, que sí lo deja apagar.
                 <span
                   title="El medio predeterminado siempre está activo. Para desactivarlo, primero marcá otro como predeterminado."
                   style={{
@@ -309,14 +367,24 @@ export function PaymentMethodsPage() {
                   <IconLock size={13} />
                   <span style={{ minWidth: 52 }}>Siempre activo</span>
                 </span>
-              ) : integrationLocked ? (
+              ) : enableLocked ? (
                 // Sin cuenta viva detrás, prender este medio no habilita nada:
                 // el operario lo vería en el modal de egreso, lo elegiría, y
                 // el QR no cobraría con el cliente parado en la ventanilla.
-                // El arreglo no está acá, está en Integraciones, así que el
-                // interruptor se apaga y en su lugar va el camino de salida.
+                // El arreglo no está acá, está en Integraciones, así que al
+                // lado del interruptor va el camino de salida.
+                //
+                // El interruptor se bloquea en UNA sola dirección: no se puede
+                // prender, sí se puede apagar. Apagarlo es la salida de
+                // emergencia del dueño —lo único que todavía tiene efecto real
+                // sobre un QR roto— y el backend lo permite explícitamente
+                // (sólo valida la cuenta cuando `enabled === true`).
                 <span
-                  title="Mercado Pago no está vinculado. Volvé a vincular la cuenta para poder cobrar con el QR."
+                  title={
+                    m.enabled
+                      ? 'Mercado Pago no está vinculado y el QR no cobra. Podés apagarlo acá, o volver a vincular la cuenta.'
+                      : 'Mercado Pago no está vinculado. Volvé a vincular la cuenta para poder cobrar con el QR.'
+                  }
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -326,9 +394,13 @@ export function PaymentMethodsPage() {
                 >
                   <Switch
                     checked={m.enabled}
-                    disabled
-                    onChange={() => {}}
-                    aria-label={`${m.name} necesita una cuenta de Mercado Pago vinculada`}
+                    disabled={!m.enabled}
+                    onChange={() => handleToggleEnabled(m)}
+                    aria-label={
+                      m.enabled
+                        ? `Desactivar ${m.name}`
+                        : `${m.name} necesita una cuenta de Mercado Pago vinculada`
+                    }
                   />
                   {/*
                     Ruta relativa: `metodos-de-pago` e `integraciones` son
@@ -382,8 +454,10 @@ export function PaymentMethodsPage() {
       },
     ],
     // Handlers close over stable mutate fns; isPending drives the "Marcar" button.
-    // El estado de la cuenta de Mercado Pago decide el badge y el candado del
-    // interruptor, así que las columnas se rearman cuando cambia.
+    // El estado de la cuenta de Mercado Pago decide el badge, el candado del
+    // interruptor y si "Marcar como predeterminado" se puede tocar, así que
+    // las columnas se rearman cuando cambia. `resolveRowLock` no va en las
+    // deps: lo único que mira son estas dos, que sí están.
     [toggleMutation.isPending, mpAccountStatus, mpAccountKnown],
   );
 

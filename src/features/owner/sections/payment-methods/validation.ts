@@ -35,26 +35,45 @@ export function isIntegrationBacked(type: PaymentMethodType): boolean {
 export interface PaymentMethodLock {
   /** Si el medio lo respalda una integración con un tercero. */
   integrationBacked: boolean;
-  /** Si el dueño NO puede prender ni apagar el medio desde esta pantalla. */
-  toggleLocked: boolean;
+  /**
+   * Si el dueño NO puede PRENDER el medio desde esta pantalla.
+   *
+   * Sólo prender. Apagar no se bloquea nunca y por eso no tiene campo acá: ver
+   * "POR QUÉ APAGAR NO SE BLOQUEA" abajo.
+   */
+  enableLocked: boolean;
+  /** Si el dueño NO puede marcarlo como predeterminado. */
+  setDefaultLocked: boolean;
 }
 
 /**
- * Si el dueño puede tocar el interruptor de un medio de pago.
+ * Qué le podés hacer a un medio de pago según la cuenta que lo respalda.
  *
- * La regla, en una línea: un medio integrado sólo se puede prender o apagar
- * mientras la cuenta que lo respalda siga viva.
+ * La regla, en una línea: un medio integrado sólo se puede PONER en
+ * circulación —prenderlo o dejarlo preseleccionado— mientras la cuenta que lo
+ * respalda siga viva. Sacarlo de circulación siempre se puede.
  *
- * POR QUÉ NO ES SIEMPRE EDITABLE
+ * POR QUÉ PRENDER SE BLOQUEA
  * Con la cuenta caída, `enabled: true` sobre "Mercado Pago QR" no habilita
  * nada: el operario ve la opción en el modal de egreso, la elige, y el QR no
  * cobra con el cliente parado en la ventanilla. El camino para arreglarlo no
  * es este interruptor, es volver a vincular en Integraciones.
  *
- * POR QUÉ NO ES SIEMPRE BLOQUEADO
- * Con la cuenta vinculada sí es una decisión del dueño: es su playa y puede
- * elegir no cobrar con QR este mes. Ahí el interruptor hace exactamente lo que
- * promete.
+ * POR QUÉ MARCAR PREDETERMINADO TAMBIÉN
+ * Es la misma puerta con otro cartel, y encima peor: el predeterminado llega
+ * PRESELECCIONADO al modal de egreso. Un QR muerto elegido por defecto es
+ * exactamente el estado que `enableLocked` existe para evitar, alcanzado sin
+ * tocar el interruptor.
+ *
+ * POR QUÉ APAGAR NO SE BLOQUEA
+ * Es la salida de emergencia del dueño. Si la integración se rompió, sacar el
+ * medio de la pantalla de cobro es justo lo que necesita hacer, y es lo único
+ * que todavía tiene efecto real. Bloquearlo lo encerraría en el estado roto.
+ * El backend piensa igual: `togglePaymentMethod` sólo exige la cuenta
+ * vinculada cuando `enabled === true`.
+ *
+ * POR QUÉ RENOMBRAR TAMPOCO
+ * Es cosmético: no pone ni saca nada de circulación.
  *
  * `token_expired` y `revoked` NO cuentan como vinculada: en los dos casos el
  * QR está muerto hasta que alguien vuelva a autorizar.
@@ -70,8 +89,14 @@ export function resolvePaymentMethodLock(input: {
   accountStatus: MpAccountStatus | null;
 }): PaymentMethodLock {
   const integrationBacked = isIntegrationBacked(input.type);
+  // Las dos puertas que ponen el medio en circulación se cierran con la misma
+  // llave. Van en campos separados igual que decisiones distintas: quien lea
+  // el panel tiene que ver POR QUÉ se apaga cada control, no deducirlo de un
+  // booleano que se llama como ninguno de los dos.
+  const accountDown = integrationBacked && input.accountStatus !== 'linked';
   return {
     integrationBacked,
-    toggleLocked: integrationBacked && input.accountStatus !== 'linked',
+    enableLocked: accountDown,
+    setDefaultLocked: accountDown,
   };
 }
