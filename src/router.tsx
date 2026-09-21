@@ -3,7 +3,6 @@ import { fetchMe, getSession, homePathForMe } from './lib/supabase/session';
 import { LandingPage } from './features/landing/components/LandingPage';
 import { AuthPage } from './features/auth/AuthPage';
 import { OnboardingPage } from './features/onboarding/components/OnboardingPage';
-import { DashboardPage } from './features/owner/sections/dashboard/DashboardPage';
 import { PersonalPage } from './features/owner/sections/personal/PersonalPage';
 import { EstadisticasPage } from './features/owner/sections/estadisticas/EstadisticasPage';
 import { TransaccionesPage } from './features/owner/sections/transacciones/TransaccionesPage';
@@ -74,7 +73,7 @@ async function onboardingLoader() {
  * relative so they mount under either base.
  */
 const ownerSectionRoutes = [
-  { path: 'dashboard', element: <DashboardPage /> },
+  { path: 'dashboard', element: <Navigate to="../estadisticas" replace /> },
   { path: 'historial', element: <HistorialPage /> },
   { path: 'caja', element: <CajaPage /> },
   { path: 'personal', element: <PersonalPage /> },
@@ -118,7 +117,7 @@ export const router = createBrowserRouter([
     loader: appLoader,
     errorElement,
     children: [
-      { index: true, loader: () => redirect('/app/dashboard') },
+      { index: true, loader: () => redirect('/app/estadisticas') },
       ...ownerSectionRoutes,
     ],
   },
@@ -143,7 +142,7 @@ export const router = createBrowserRouter([
     loader: opsLoader,
     errorElement,
     children: [
-      { index: true, element: <Navigate to="dashboard" replace /> },
+      { index: true, element: <Navigate to="estadisticas" replace /> },
       ...ownerSectionRoutes,
     ],
   },

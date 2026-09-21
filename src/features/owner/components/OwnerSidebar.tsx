@@ -2,7 +2,6 @@ import { useLocation, Link } from 'react-router-dom';
 import { Logo } from '../../../shared/components/Logo';
 import { Avatar } from '../../../shared/components/Avatar';
 import {
-  IconDashboard,
   IconUsers,
   IconChart,
   IconReceipt,
@@ -26,11 +25,6 @@ interface NavItem {
 }
 
 export const OWNER_NAV_ITEMS: NavItem[] = [
-  {
-    segment: 'dashboard',
-    label: 'Monitoreo en vivo',
-    icon: <IconDashboard size={18} />,
-  },
   {
     segment: 'historial',
     label: 'Historial',
@@ -147,9 +141,7 @@ export function OwnerSidebar({
       <nav style={{ flex: 1, padding: '0 8px', overflowY: 'auto' }}>
         {OWNER_NAV_ITEMS.map((item) => {
           const to = `${basePath}/${item.segment}`;
-          const isActive =
-            pathname === to ||
-            (item.segment !== 'dashboard' && pathname.startsWith(to));
+          const isActive = pathname === to || pathname.startsWith(to);
           return (
             <Link
               key={item.segment}

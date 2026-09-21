@@ -15,7 +15,7 @@ import { useSucursal } from '../context/SucursalContext';
 const METRICS_KEY = ['metrics'] as const;
 
 /**
- * Filtros que comparten los tres paneles del dashboard de ingresos. `null` en
+ * Filtros que comparten los tres paneles de estadísticas. `null` en
  * los hooks significa "todavía no hay nada que pedir" (rango incompleto, caja
  * sin elegir): no se dispara ninguna request.
  */

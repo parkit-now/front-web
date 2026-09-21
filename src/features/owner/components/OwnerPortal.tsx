@@ -23,7 +23,8 @@ import {
  * Renders the active section, gating on the resolved lot. While entities load
  * nothing tenant-scoped is shown. In owner mode a caller with no owned lots gets
  * a clear empty state; in admin mode an unknown `:tenantId` gets a not-found
- * state with a way back instead of a dashboard bound to a non-existent lot.
+ * state with a way back instead of a tenant-scoped screen bound to a
+ * non-existent lot.
  */
 function OwnerContent({ mode }: { mode: SucursalMode }) {
   const navigate = useNavigate();

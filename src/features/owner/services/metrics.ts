@@ -81,7 +81,7 @@ function metricsPath(
 }
 
 /**
- * Serie temporal del dashboard de ingresos.
+ * Serie temporal de ingresos.
  *
  * Devuelve las dos series en el mismo payload (`revenue` y `vehiclesIn`), así
  * que las pestañas $/autos de la UI no necesitan refetchear.
