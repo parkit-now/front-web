@@ -70,6 +70,9 @@ export type EndpointKey =
   | 'metrics.summary'
   | 'cashSessions.list'
   | 'staff.list'
+  | 'staff.add'
+  | 'staff.update'
+  | 'staff.remove'
   | 'audit.list'
   | 'mercadoPago.getAccount'
   | 'mercadoPago.authorizationUrl'
@@ -137,6 +140,12 @@ const CODE_MESSAGES: Record<string, string> = {
     'El usuario ya está vinculado a ese estacionamiento.',
   MEMBERSHIP_NOT_FOUND:
     'El usuario no tiene un rol asignado en ese estacionamiento.',
+
+  // Staff · ABM de empleados hecho por el dueño.
+  STAFF_SELF_MANAGEMENT:
+    'No podés cambiar ni eliminar tu propio rol. Pedíselo a otro dueño.',
+  STAFF_LAST_OWNER:
+    'Tiene que quedar al menos un dueño en el estacionamiento. Nombrá otro antes de hacer este cambio.',
 
   // Entidad (tenant) — acceso por membership.
   ENTITY_NOT_FOUND: 'No encontramos el estacionamiento.',
@@ -280,7 +289,13 @@ const VALIDATION_CODE_MESSAGES: Record<string, string> = {
   isInt: 'Debe ser un número entero.',
   isBoolean: 'Debe ser verdadero o falso.',
   isEmail: 'Email inválido.',
+  // `isUuid` es el nombre real del constraint de class-validator (`IS_UUID`);
+  // `isUUID` queda por las dudas, pero el backend nunca lo emite.
+  isUuid: 'Identificador inválido.',
   isUUID: 'Identificador inválido.',
+  // Lo tira el pipe global con `forbidNonWhitelisted` cuando el body trae una
+  // clave de más. Es un bug del front, no del usuario, pero mejor que el genérico.
+  whitelistValidation: 'Valor inválido.',
   isDate: 'Fecha inválida.',
   // El backend exige offset explícito en las fechas de métricas: sin él
   // resolvería el instante contra el reloj del servidor (UTC en producción).
@@ -300,6 +315,35 @@ const VALIDATION_FIELD_CODE_MESSAGES: Record<string, string> = {
   'email:isEmail': 'Email inválido.',
   'email:isNotEmpty': 'Ingresá tu email.',
 };
+
+/** Un `ValidationFieldErrorDto` reducido a lo que la UI necesita. */
+export interface FieldError {
+  field: string;
+  code: string;
+}
+
+/**
+ * Los errores por campo de un `400 VALIDATION_FAILED`, o `[]` si el error es
+ * otra cosa.
+ *
+ * El `problem` de un 400 de validación es un `ValidationProblemDetailsDto`, que
+ * suma `validationsErrors[]` al resto. Como `ApiError.problem` es la unión de
+ * los dos, hay que estrecharla antes de leer el array.
+ */
+export function readFieldErrors(error: unknown): FieldError[] {
+  if (!(error instanceof ApiError) || !error.problem) return [];
+  if (!('validationsErrors' in error.problem)) return [];
+
+  const raw: unknown = error.problem.validationsErrors;
+  if (!Array.isArray(raw)) return [];
+
+  return raw.flatMap((item): FieldError[] => {
+    if (typeof item !== 'object' || item === null) return [];
+    const { field, code } = item as { field?: unknown; code?: unknown };
+    if (typeof field !== 'string' || typeof code !== 'string') return [];
+    return [{ field, code }];
+  });
+}
 
 /**
  * Traduce un `ValidationFieldErrorDto.code` (constraint name de
