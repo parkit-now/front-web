@@ -53,6 +53,19 @@ Escala base: `8, 12, 16, 24`.
 - Mostrar identificador del usuario (`email` o `id`) en una pill.
 - Mostrar accion de `Cerrar sesion` con estilo consistente.
 
+## Responsividad web
+
+- Las pantallas nuevas deben validarse al menos en `360px`, `768px` y desktop.
+- No bloquear vistas por ancho de pantalla salvo decision explicita de producto.
+- Evitar anchos fijos salvo en controles puntuales; preferir `max-width`,
+  `minmax(0, 1fr)` y `min-width: 0` en hijos flex/grid.
+- Para grillas de cards o formularios, preferir
+  `grid-template-columns: repeat(auto-fit, minmax(...))`.
+- Toda tabla o listado ancho debe vivir dentro de un contenedor con overflow
+  horizontal controlado.
+- En portales autenticados, usar el shell responsive compartido: sidebar en
+  desktop y barra inferior en mobile.
+
 ## Regla para agentes IA
 
 1. Antes de proponer estilos nuevos, revisar este archivo.

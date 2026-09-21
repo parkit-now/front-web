@@ -12,6 +12,7 @@ export function AdminTopBar() {
 
   return (
     <header
+      className="portal-topbar"
       style={{
         height: 64,
         background: '#fcfdff',
@@ -24,6 +25,7 @@ export function AdminTopBar() {
       }}
     >
       <h2
+        className="portal-topbar-title"
         style={{
           margin: 0,
           flex: 1,
@@ -38,6 +40,7 @@ export function AdminTopBar() {
 
       {/* ENV pill */}
       <span
+        className="portal-topbar-env"
         style={{
           background: '#101828',
           color: '#fff',

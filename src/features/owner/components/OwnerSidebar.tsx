@@ -23,7 +23,7 @@ interface NavItem {
   icon: React.ReactNode;
 }
 
-const NAV_ITEMS: NavItem[] = [
+export const OWNER_NAV_ITEMS: NavItem[] = [
   {
     segment: 'dashboard',
     label: 'Monitoreo en vivo',
@@ -97,6 +97,7 @@ export function OwnerSidebar({
 
   return (
     <aside
+      className="portal-sidebar"
       style={{
         width: 260,
         flexShrink: 0,
@@ -132,7 +133,7 @@ export function OwnerSidebar({
 
       {/* Nav items */}
       <nav style={{ flex: 1, padding: '0 8px', overflowY: 'auto' }}>
-        {NAV_ITEMS.map((item) => {
+        {OWNER_NAV_ITEMS.map((item) => {
           const to = `${basePath}/${item.segment}`;
           const isActive =
             pathname === to ||

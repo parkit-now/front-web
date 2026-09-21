@@ -14,7 +14,7 @@ interface NavItem {
   icon: React.ReactNode;
 }
 
-const NAV_ITEMS: NavItem[] = [
+export const ADMIN_NAV_ITEMS: NavItem[] = [
   {
     path: '/ops/solicitudes',
     label: 'Solicitudes',
@@ -47,6 +47,7 @@ export function AdminSidebar({
 
   return (
     <aside
+      className="portal-sidebar"
       style={{
         width: 260,
         flexShrink: 0,
@@ -82,7 +83,7 @@ export function AdminSidebar({
 
       {/* Nav items */}
       <nav style={{ flex: 1, padding: '0 8px', overflowY: 'auto' }}>
-        {NAV_ITEMS.map((item) => {
+        {ADMIN_NAV_ITEMS.map((item) => {
           const isActive =
             pathname === item.path || pathname.startsWith(item.path);
           return (
