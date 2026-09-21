@@ -19,6 +19,7 @@ import {
   setAddressProvince,
   toDeclaredLocation,
   toUpdateAddressDto,
+  unrecognizedAddressFields,
   type AddressFormValue,
 } from './addressUtils';
 
@@ -596,5 +597,57 @@ describe('composeFormatted con los valores del catálogo', () => {
     expect(composeFormatted(legacy)).toBe(
       'AV CABILDO 2000, Ciudad Autónoma de Buenos Aires',
     );
+  });
+});
+
+describe('unrecognizedAddressFields', () => {
+  const base: AddressFormValue = {
+    ...emptyAddress(),
+    streetName: 'Av. Santa Fe',
+    streetNumber: '1234',
+  };
+
+  it('no se queja de los campos vacíos: de eso habla missingAddressFields', () => {
+    expect(unrecognizedAddressFields(emptyAddress())).toEqual([]);
+  });
+
+  it('no se queja de un par que el catálogo conoce', () => {
+    const value = {
+      ...base,
+      stateName: 'Buenos Aires',
+      cityName: 'San Isidro',
+    };
+    expect(unrecognizedAddressFields(value)).toEqual([]);
+  });
+
+  it('marca la localidad que Mercado Pago no conoce aunque esté completa', () => {
+    // El caso del ticket: "Martínez" pasa `missingAddressFields` (está lleno) y
+    // es justo el valor con el que la vinculación se cae.
+    const martinez = {
+      ...base,
+      stateName: 'Buenos Aires',
+      cityName: 'Martínez',
+    };
+    expect(missingAddressFields(martinez)).toEqual([]);
+    expect(unrecognizedAddressFields(martinez)).toEqual(['cityName']);
+  });
+
+  it('marca las dos, provincia primero, que es el orden en que se arreglan', () => {
+    const value = { ...base, stateName: 'Bs. As.', cityName: 'Martínez' };
+    expect(unrecognizedAddressFields(value)).toEqual(['stateName', 'cityName']);
+  });
+
+  it('tolera tildes y mayúsculas antes de acusar a nadie', () => {
+    const value = { ...base, stateName: 'CORDOBA', cityName: 'cordoba' };
+    expect(unrecognizedAddressFields(value)).toEqual([]);
+  });
+
+  it('acepta el nombre que Georef le da a CABA en la provincia', () => {
+    const value = {
+      ...base,
+      stateName: 'Ciudad Autónoma de Buenos Aires',
+      cityName: 'Palermo',
+    };
+    expect(unrecognizedAddressFields(value)).toEqual([]);
   });
 });

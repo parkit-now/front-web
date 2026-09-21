@@ -5,6 +5,7 @@ import {
   isCityInProvince,
   resolveGeocodedLocation,
 } from '../../../lib/locations/catalog';
+import type { CatalogMatch } from '../../../lib/locations/catalog';
 
 /**
  * Lógica pura del `AddressPicker`: mapeo Georef → DTO, normalización de los
@@ -410,6 +411,45 @@ export function missingAddressFields(
   return REQUIRED_ADDRESS_FIELDS.filter(
     (field) => value[field].trim().length === 0,
   );
+}
+
+/**
+ * Los campos que tienen algo cargado que el catálogo de Mercado Pago NO
+ * reconoce. Complemento de `missingAddressFields`, NO un reemplazo.
+ *
+ * Son dos preguntas distintas y hacía falta separarlas:
+ *
+ *  - `missingAddressFields` pregunta "¿está vacío?". Esa regla la ESPEJA EL
+ *    BACKEND (`src/entities/tenant-address.ts`, `missingDeclaredAddressFields`)
+ *    y la usan onboarding, integraciones y la revisión del admin. Meterle acá
+ *    adentro el catálogo la desincronizaría de las otras cuatro definiciones, y
+ *    el front rechazaría direcciones que el backend da por buenas.
+ *  - Esta pregunta "¿esto lo conoce Mercado Pago?". Un "Martínez" guardado
+ *    pasa la primera —el campo está lleno— y falla la segunda, que es
+ *    exactamente el bug: la vinculación se cae con `location.city_name was
+ *    invalid` dos pantallas después.
+ *
+ * Devuelve `[]` para los campos vacíos: de esos ya se queja
+ * `missingAddressFields`, y decir dos veces lo mismo con palabras distintas
+ * manda a la persona a buscar dos problemas donde hay uno.
+ *
+ * El orden —provincia y después localidad— sigue al de la pantalla: es el orden
+ * en el que hay que arreglarlos, porque sin provincia válida la localidad no se
+ * puede ni elegir.
+ */
+export function unrecognizedAddressFields(
+  value: AddressFormValue,
+): AddressTextField[] {
+  const { province, city } = resolveGeocodedLocation(
+    value.stateName,
+    value.cityName,
+  );
+  const isUnknown = (match: CatalogMatch) => match.status === 'unknown';
+
+  const fields: AddressTextField[] = [];
+  if (isUnknown(province)) fields.push('stateName');
+  if (isUnknown(city)) fields.push('cityName');
+  return fields;
 }
 
 /**

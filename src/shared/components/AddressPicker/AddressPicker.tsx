@@ -25,6 +25,7 @@ import {
   REQUIRED_ADDRESS_FIELDS,
   setAddressDetailField,
   setAddressProvince,
+  unrecognizedAddressFields,
   type AddressFormValue,
   type AddressTextField,
 } from './addressUtils';
@@ -167,9 +168,19 @@ export function AddressPicker({
    * Es un LATCH a propósito: una vez abierto, completar el último campo que
    * faltaba no vuelve a cerrar el panel en la cara de quien está tipeando.
    * Sólo lo resetea elegir un candidato nuevo de Georef.
+   *
+   * ⚠️ También arranca en `true` con una dirección COMPLETA pero que Mercado
+   * Pago no reconoce (un borrador viejo con "Martínez"). Sin esto, el borrador
+   * abría con el detalle colapsado: el aviso rojo del selector quedaba escondido
+   * detrás de un "Ver detalle" que nadie tenía motivo para abrir, y la persona
+   * seguía al paso 2 con el mismo valor que Mercado Pago iba a rechazar. O sea:
+   * este ticket no arreglaba nada para los borradores que ya existían.
    */
   const [manualChosen, setManualChosen] = useState(
-    () => !isAddressEmpty(value) && missingAddressFields(value).length > 0,
+    () =>
+      !isAddressEmpty(value) &&
+      (missingAddressFields(value).length > 0 ||
+        unrecognizedAddressFields(value).length > 0),
   );
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailEditable, setDetailEditable] = useState(false);

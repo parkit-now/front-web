@@ -1,5 +1,6 @@
 import {
   missingAddressFields,
+  unrecognizedAddressFields,
   type AddressFormValue,
   type AddressTextField,
 } from '../../shared/components/AddressPicker/addressUtils';
@@ -80,8 +81,38 @@ export const ADDRESS_FIELD_LABELS: Record<AddressTextField, string> = {
  */
 export function validateAddress(value: AddressFormValue): string | null {
   const missing = missingAddressFields(value);
-  if (missing.length === 0) return null;
-  return describeMissingAddressFields(missing);
+  if (missing.length > 0) return describeMissingAddressFields(missing);
+
+  // "Lleno" no alcanza: el alta termina en una vinculación con Mercado Pago, y
+  // MP valida la provincia y la localidad contra SU catálogo. Un borrador
+  // guardado antes de que el formulario usara selectores puede traer "Martínez"
+  // —completo, prolijo y rechazado por MP— y sin este chequeo pasaba derecho al
+  // backend. Faltar un campo y tener uno que MP no conoce frenan el alta igual:
+  // las dos terminan en un estacionamiento que no puede cobrar.
+  const unrecognized = unrecognizedAddressFields(value);
+  if (unrecognized.length > 0) {
+    return describeUnrecognizedAddressFields(unrecognized);
+  }
+
+  return null;
+}
+
+/**
+ * El mensaje del campo que Mercado Pago no reconoce.
+ *
+ * Nombra el valor que está guardado ("Martínez") en vez de decir sólo "la
+ * localidad es inválida": la persona lo cargó creyendo que estaba bien, y sin
+ * ver cuál es el texto en cuestión no entiende qué le están pidiendo cambiar.
+ */
+export function describeUnrecognizedAddressFields(
+  unrecognized: readonly AddressTextField[],
+): string {
+  const labels = unrecognized.map((field) => ADDRESS_FIELD_LABELS[field]);
+  const list =
+    labels.length === 1
+      ? labels[0]
+      : `${labels.slice(0, -1).join(', ')} y ${labels[labels.length - 1]}`;
+  return `Elegí ${list} de la lista: Mercado Pago no reconoce lo que está cargado y no vas a poder cobrar`;
 }
 
 /**
