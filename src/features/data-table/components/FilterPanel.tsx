@@ -77,7 +77,7 @@ function getOptions<TData>(
           facetedValues.find((faceted) => faceted.value === option.value)
             ?.count ?? 0,
       }))
-      .filter((option) => option.count > 0);
+      .filter((option) => option.count > 0 || option.includeWhenEmpty);
   }
 
   return facetedValues

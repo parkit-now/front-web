@@ -7,6 +7,8 @@ import { DashboardPage } from './features/owner/sections/dashboard/DashboardPage
 import { PersonalPage } from './features/owner/sections/personal/PersonalPage';
 import { EstadisticasPage } from './features/owner/sections/estadisticas/EstadisticasPage';
 import { TransaccionesPage } from './features/owner/sections/transacciones/TransaccionesPage';
+import { HistorialPage } from './features/owner/sections/operacion/HistorialPage';
+import { CajaPage } from './features/owner/sections/operacion/CajaPage';
 import { AuditoriaPage } from './features/owner/sections/auditoria/AuditoriaPage';
 import { ConfigPage } from './features/owner/sections/config/ConfigPage';
 import { PaymentMethodsPage } from './features/owner/sections/payment-methods/PaymentMethodsPage';
@@ -73,6 +75,8 @@ async function onboardingLoader() {
  */
 const ownerSectionRoutes = [
   { path: 'dashboard', element: <DashboardPage /> },
+  { path: 'historial', element: <HistorialPage /> },
+  { path: 'caja', element: <CajaPage /> },
   { path: 'personal', element: <PersonalPage /> },
   { path: 'estadisticas', element: <EstadisticasPage /> },
   { path: 'transacciones', element: <TransaccionesPage /> },

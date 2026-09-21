@@ -52,6 +52,8 @@ const ACTIVE_KEY = 'parkit.activeTenantId';
 /** Owner sections reachable under both `/app/*` and `/ops/estacionamientos/:id/*`. */
 const SECTIONS = [
   'dashboard',
+  'historial',
+  'caja',
   'personal',
   'estadisticas',
   'transacciones',

@@ -10,6 +10,8 @@ import { SucursalSwitcher } from './SucursalSwitcher';
 // `/ops/estacionamientos/:tenantId/*`.
 const SECTION_TITLES: Record<string, string> = {
   dashboard: 'Monitoreo en vivo',
+  historial: 'Historial',
+  caja: 'Caja',
   personal: 'Personal',
   estadisticas: 'Estadísticas',
   transacciones: 'Transacciones',

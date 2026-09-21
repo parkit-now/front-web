@@ -9,6 +9,7 @@ import type { TableTemplateScope } from '../table-view-template';
 export type DataTableFilterOption = {
   value: string;
   label: string;
+  includeWhenEmpty?: boolean;
 };
 
 export type DataTableServerState = {
@@ -30,6 +31,9 @@ export type DataTableProps<TData> = {
   filterableColumns?: string[];
   filterOptionsByColumn?: Record<string, DataTableFilterOption[]>;
   initialColumnFilters?: ColumnFiltersState;
+  onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
+  columnFiltersOverride?: ColumnFiltersState;
+  columnFiltersOverrideKey?: string | number;
   initialColumnVisibility?: VisibilityState;
   initialPageSize?: number;
   pageSizeOptions?: number[];

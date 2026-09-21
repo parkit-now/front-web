@@ -8,6 +8,8 @@ import {
   IconReceipt,
   IconShield,
   IconDollar,
+  IconClock,
+  IconInbox,
   IconAuto,
   IconLayers,
   IconCreditCard,
@@ -28,6 +30,16 @@ export const OWNER_NAV_ITEMS: NavItem[] = [
     segment: 'dashboard',
     label: 'Monitoreo en vivo',
     icon: <IconDashboard size={18} />,
+  },
+  {
+    segment: 'historial',
+    label: 'Historial',
+    icon: <IconClock size={18} />,
+  },
+  {
+    segment: 'caja',
+    label: 'Caja',
+    icon: <IconInbox size={18} />,
   },
   { segment: 'personal', label: 'Personal', icon: <IconUsers size={18} /> },
   {
