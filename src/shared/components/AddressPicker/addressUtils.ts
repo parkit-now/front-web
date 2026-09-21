@@ -1,6 +1,11 @@
 import type { components } from '../../../generated/api-types';
 import type { GeocodedAddress } from '../../../lib/geocoding/GeocodingProvider';
 import { roundCoordinate } from '../../../lib/geocoding/georef';
+import {
+  isCityInProvince,
+  resolveGeocodedLocation,
+} from '../../../lib/locations/catalog';
+import type { CatalogMatch } from '../../../lib/locations/catalog';
 
 /**
  * Lógica pura del `AddressPicker`: mapeo Georef → DTO, normalización de los
@@ -145,6 +150,52 @@ export function addressFromGeocoded(
     longitude: coord(geocoded.longitude),
     geocodingSource: 'georef',
     geocodedAt: now.toISOString(),
+  };
+}
+
+/**
+ * Pasa la provincia y la localidad de un candidato de Georef por el catálogo de
+ * Mercado Pago. ES EL ARREGLO DEL BUG, y va SIEMPRE compuesto sobre
+ * `addressFromGeocoded` antes de tocar el estado del formulario.
+ *
+ * Georef y MP NO hablan el mismo idioma. Georef devuelve `localidad_censal`
+ * según el INDEC; MP valida contra el catálogo de MercadoLibre. Para una
+ * dirección de Martínez, Georef dice "Martínez" y MP sólo conoce "San Isidro":
+ * guardar lo que dijo Georef es garantizar un `location.city_name was invalid`
+ * dos pantallas después, en producción, cuando el dueño vincule la cuenta.
+ *
+ * Qué hace con cada campo:
+ *  - Matchea (sin tildes ni mayúsculas) → guarda el string EXACTO del catálogo.
+ *    Ahí se corrige, de paso, que Georef diga "Ciudad Autónoma de Buenos Aires"
+ *    donde MP escribe "Capital Federal".
+ *  - NO matchea → lo deja VACÍO. No se inventa un mapeo ni se hace fuzzy
+ *    matching: un valor que MP rechaza es peor que un campo vacío, porque el
+ *    campo vacío se ve y se arregla acá mismo.
+ *
+ * Y dejarlo vacío no esconde nada: `cityName`/`stateName` están en
+ * `REQUIRED_ADDRESS_FIELDS`, así que `missingAddressFields` los marca y el
+ * `AddressPicker` despliega el detalle solo, con los selectores habilitados.
+ *
+ * ⚠️ Es EXCLUSIVO del camino de Georef. Sobre una dirección ya guardada
+ * borraría el dato del dueño al abrir el formulario, que es justo lo que no se
+ * hace: para eso los selectores muestran el valor viejo marcado como no
+ * reconocido (ver `CatalogSelect`).
+ *
+ * `formatted` NO se recompone: sigue siendo la `nomenclatura` de Georef, que se
+ * lee mejor que cualquier cosa que armemos. Se actualiza sola en cuanto la
+ * persona elige la localidad (ver `setAddressDetailField`).
+ */
+export function applyCatalogToGeocoded(
+  value: AddressFormValue,
+): AddressFormValue {
+  const { province, city } = resolveGeocodedLocation(
+    value.stateName,
+    value.cityName,
+  );
+  return {
+    ...value,
+    stateName: province.status === 'matched' ? province.value : '',
+    cityName: city.status === 'matched' ? city.value : '',
   };
 }
 
@@ -299,6 +350,46 @@ export function setAddressDetailField(
   return { ...next, formatted: composeFormatted(next) };
 }
 
+/**
+ * Cambio de PROVINCIA en el selector encadenado.
+ *
+ * No es un `setAddressDetailField('stateName', …)` porque toca DOS campos de
+ * una: si la localidad que había no pertenece a la provincia nueva, se limpia.
+ * Dejarla sería dejar un par imposible —"Rosario, Mendoza"— que MP rechaza y
+ * que en pantalla se ve perfectamente válido.
+ *
+ * Va en UNA sola transición a propósito. Encadenar dos `onChange` dejaría al
+ * formulario padre viendo un estado intermedio inconsistente entre re-renders,
+ * y el componente es controlado: ese estado intermedio se pinta.
+ *
+ * Lo que NO hace: limpiar cuando la localidad SÍ pertenece (cambiar de
+ * "Bs. As." no reconocida a "Buenos Aires" con "La Plata" cargada conserva La
+ * Plata), ni tocar nada cuando el valor no cambió — un `onChange` que repite el
+ * mismo string no puede borrar trabajo ajeno.
+ */
+export function setAddressProvince(
+  value: AddressFormValue,
+  province: string,
+  now: Date = new Date(),
+): AddressFormValue {
+  const cityName = isCityInProvince(province, value.cityName)
+    ? value.cityName
+    : '';
+  if (value.stateName === province && value.cityName === cityName) return value;
+
+  const next: AddressFormValue = {
+    ...value,
+    stateName: province,
+    cityName,
+    geocodingSource: 'manual',
+    geocodedAt: now.toISOString(),
+  };
+  // `stateName` y `cityName` están los dos en `FORMATTED_FIELDS`: la línea de
+  // display tiene que seguir al cambio o la pantalla diría una cosa y la base
+  // guardaría otra.
+  return { ...next, formatted: composeFormatted(next) };
+}
+
 /** `true` cuando la dirección la normalizó Georef y tiene línea de display. */
 export function isGeorefNormalized(value: AddressFormValue): boolean {
   return (
@@ -320,6 +411,45 @@ export function missingAddressFields(
   return REQUIRED_ADDRESS_FIELDS.filter(
     (field) => value[field].trim().length === 0,
   );
+}
+
+/**
+ * Los campos que tienen algo cargado que el catálogo de Mercado Pago NO
+ * reconoce. Complemento de `missingAddressFields`, NO un reemplazo.
+ *
+ * Son dos preguntas distintas y hacía falta separarlas:
+ *
+ *  - `missingAddressFields` pregunta "¿está vacío?". Esa regla la ESPEJA EL
+ *    BACKEND (`src/entities/tenant-address.ts`, `missingDeclaredAddressFields`)
+ *    y la usan onboarding, integraciones y la revisión del admin. Meterle acá
+ *    adentro el catálogo la desincronizaría de las otras cuatro definiciones, y
+ *    el front rechazaría direcciones que el backend da por buenas.
+ *  - Esta pregunta "¿esto lo conoce Mercado Pago?". Un "Martínez" guardado
+ *    pasa la primera —el campo está lleno— y falla la segunda, que es
+ *    exactamente el bug: la vinculación se cae con `location.city_name was
+ *    invalid` dos pantallas después.
+ *
+ * Devuelve `[]` para los campos vacíos: de esos ya se queja
+ * `missingAddressFields`, y decir dos veces lo mismo con palabras distintas
+ * manda a la persona a buscar dos problemas donde hay uno.
+ *
+ * El orden —provincia y después localidad— sigue al de la pantalla: es el orden
+ * en el que hay que arreglarlos, porque sin provincia válida la localidad no se
+ * puede ni elegir.
+ */
+export function unrecognizedAddressFields(
+  value: AddressFormValue,
+): AddressTextField[] {
+  const { province, city } = resolveGeocodedLocation(
+    value.stateName,
+    value.cityName,
+  );
+  const isUnknown = (match: CatalogMatch) => match.status === 'unknown';
+
+  const fields: AddressTextField[] = [];
+  if (isUnknown(province)) fields.push('stateName');
+  if (isUnknown(city)) fields.push('cityName');
+  return fields;
 }
 
 /**

@@ -11,7 +11,8 @@ import {
 import { EmptyState } from '../../../shared/components/ui/EmptyState';
 import { Button } from '../../../shared/components/ui/Button';
 import { IconBuilding } from '../../../shared/components/icons';
-import { OwnerSidebar } from './OwnerSidebar';
+import { MobileBottomNav } from '../../../shared/components/MobileBottomNav';
+import { OWNER_NAV_ITEMS, OwnerSidebar } from './OwnerSidebar';
 import { OwnerTopBar } from './OwnerTopBar';
 import {
   AdminImpersonationBar,
@@ -22,7 +23,8 @@ import {
  * Renders the active section, gating on the resolved lot. While entities load
  * nothing tenant-scoped is shown. In owner mode a caller with no owned lots gets
  * a clear empty state; in admin mode an unknown `:tenantId` gets a not-found
- * state with a way back instead of a dashboard bound to a non-existent lot.
+ * state with a way back instead of a tenant-scoped screen bound to a
+ * non-existent lot.
  */
 function OwnerContent({ mode }: { mode: SucursalMode }) {
   const navigate = useNavigate();
@@ -108,19 +110,17 @@ export function OwnerPortal({ mode = 'owner' }: { mode?: SucursalMode }) {
     ? `/ops/estacionamientos/${params.tenantId ?? ''}`
     : '/app';
   const sidebarOffset = isAdmin ? ADMIN_BAR_HEIGHT : 0;
+  const mobileNavItems = OWNER_NAV_ITEMS.map((item) => ({
+    to: `${basePath}/${item.segment}`,
+    label: item.label,
+    icon: item.icon,
+  }));
 
   return (
     <SucursalProvider mode={mode}>
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          minHeight: '100vh',
-          background: 'var(--bg-b)',
-        }}
-      >
+      <div className="portal-shell">
         {isAdmin && <AdminImpersonationBar />}
-        <div style={{ display: 'flex', flex: 1, minWidth: 0 }}>
+        <div className="portal-body">
           <OwnerSidebar
             userName={userName}
             userRole={isAdmin ? 'Administrador' : 'Dueño'}
@@ -128,20 +128,17 @@ export function OwnerPortal({ mode = 'owner' }: { mode?: SucursalMode }) {
             basePath={basePath}
             topOffset={sidebarOffset}
           />
-          <div
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              minWidth: 0,
-            }}
-          >
+          <div className="portal-content">
             <OwnerTopBar />
-            <main style={{ flex: 1, padding: 24, overflowY: 'auto' }}>
+            <main className="portal-main">
               <OwnerContent mode={mode} />
             </main>
           </div>
         </div>
+        <MobileBottomNav
+          items={mobileNavItems}
+          ariaLabel="Navegación de operación"
+        />
       </div>
     </SucursalProvider>
   );

@@ -9,7 +9,8 @@ import { SucursalSwitcher } from './SucursalSwitcher';
 // Keyed by the last path segment so it works under both `/app/*` and
 // `/ops/estacionamientos/:tenantId/*`.
 const SECTION_TITLES: Record<string, string> = {
-  dashboard: 'Monitoreo en vivo',
+  historial: 'Historial',
+  caja: 'Caja',
   personal: 'Personal',
   estadisticas: 'Estadísticas',
   transacciones: 'Transacciones',
@@ -27,6 +28,7 @@ export function OwnerTopBar() {
 
   return (
     <header
+      className="portal-topbar owner-topbar"
       style={{
         height: 64,
         background: 'var(--card)',
@@ -41,6 +43,7 @@ export function OwnerTopBar() {
       <SucursalSwitcher />
 
       <div
+        className="portal-topbar-divider"
         style={{
           width: 1,
           height: 24,
@@ -50,6 +53,7 @@ export function OwnerTopBar() {
       />
 
       <h2
+        className="portal-topbar-title"
         style={{
           margin: 0,
           fontSize: 15,
@@ -62,7 +66,10 @@ export function OwnerTopBar() {
         {title}
       </h2>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <div
+        className="portal-topbar-actions"
+        style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+      >
         <button
           type="button"
           className="pk-btn pk-btn-ghost pk-btn-icon"

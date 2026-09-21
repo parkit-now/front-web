@@ -3,6 +3,10 @@ import { apiRequest } from '../../../lib/api/client';
 import { getSession } from '../../../lib/supabase/session';
 
 export type CashSession = components['schemas']['CashSessionDto'];
+export type CashSessionChangesResponse =
+  components['schemas']['CashSessionChangesResponseDto'];
+
+const CHANGES_PAGE_SIZE = 500;
 
 async function bearer(): Promise<string> {
   const session = await getSession();
@@ -37,4 +41,31 @@ export async function listCashSessions(
     path: `/tenants/${encodeURIComponent(tenantId)}/cash-sessions${qs ? `?${qs}` : ''}`,
     bearer: await bearer(),
   });
+}
+
+export async function listAllCashSessions(
+  tenantId: string,
+): Promise<CashSession[]> {
+  const token = await bearer();
+  const all: CashSession[] = [];
+  let afterSeq = 0;
+
+  while (true) {
+    const params = new URLSearchParams({
+      afterSeq: String(afterSeq),
+      limit: String(CHANGES_PAGE_SIZE),
+    });
+    const page = await apiRequest<CashSessionChangesResponse>({
+      method: 'GET',
+      path: `/tenants/${encodeURIComponent(tenantId)}/cash-sessions/changes?${params.toString()}`,
+      bearer: token,
+    });
+
+    const items = page.items ?? [];
+    all.push(...items);
+    if (items.length < CHANGES_PAGE_SIZE || page.maxSeq <= afterSeq) break;
+    afterSeq = page.maxSeq;
+  }
+
+  return all;
 }

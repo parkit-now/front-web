@@ -1031,19 +1031,39 @@
     padding-left: 14px;
     padding-right: 14px;
   }
+  .dt-card-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 12px;
+  }
+  .dt-card-header > div:first-child:empty {
+    display: none;
+  }
+  .dt-card-header-right {
+    justify-content: flex-end;
+  }
   .dt-toolbar {
     align-items: stretch;
     flex-direction: column;
+    gap: 8px;
+    padding-top: 8px;
+    padding-bottom: 10px;
   }
   .dt-search-cluster {
     width: 100%;
+    flex: 0 0 auto;
   }
   .dt-toolbar-actions {
     margin-left: 0;
     justify-content: flex-start;
   }
   .dt-toolbar-leading {
+    flex: 0 0 auto;
     justify-content: flex-start;
+  }
+  .dt-quick-switches {
+    flex: 0 0 auto;
   }
   .dt-menu-panel {
     left: 0;

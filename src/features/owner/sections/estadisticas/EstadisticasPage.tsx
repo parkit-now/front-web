@@ -21,6 +21,8 @@ import {
   type RevenueFilters,
 } from '../../hooks/useMetrics';
 import { useCashSessions } from '../../hooks/useCashSessions';
+import { useKpis } from '../../hooks/useKpis';
+import { KpiCards } from './LiveKpiCards';
 import { BarChart } from './BarChart';
 import { DonutChart } from './DonutChart';
 import { TopPlatesTable } from './TopPlatesTable';
@@ -50,15 +52,15 @@ const GRANULARITIES: Granularity[] = ['hour', 'day', 'week', 'month'];
 type SerieTab = 'ingresos' | 'autos';
 
 const SERIE_TABS = [
-  { id: 'ingresos', label: 'Ingresos' },
-  { id: 'autos', label: 'Autos ingresados' },
+  { id: 'ingresos', label: 'Recaudación' },
+  { id: 'autos', label: 'Ingresos de vehículos' },
 ];
 
 const RANGE_ERRORS: Record<string, { title: string; description: string }> = {
   incomplete: {
     title: 'Elegí un rango de fechas',
     description:
-      'Seleccioná al menos una fecha para ver los ingresos del período.',
+      'Seleccioná al menos una fecha para ver la recaudación del período.',
   },
   inverted: {
     title: 'El rango está invertido',
@@ -105,18 +107,16 @@ function Chip({
 function KpiCard({
   title,
   value,
-  sub,
   loading,
 }: {
   title: string;
   value: string;
-  sub?: string;
   loading?: boolean;
 }) {
   return (
     <div
       className="pk-card pk-card-pad"
-      style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
     >
       <span
         style={{
@@ -144,9 +144,6 @@ function KpiCard({
           {value}
         </span>
       )}
-      {sub && (
-        <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{sub}</span>
-      )}
     </div>
   );
 }
@@ -168,6 +165,11 @@ function Note({ children }: { children: React.ReactNode }) {
 
 export function EstadisticasPage() {
   const { sucursalId } = useSucursal();
+  const {
+    data: liveKpis,
+    isLoading: liveKpisLoading,
+    isMonthLoading,
+  } = useKpis();
 
   const [preset, setPreset] = useState<PresetOption>('7d');
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
@@ -281,8 +283,14 @@ export function EstadisticasPage() {
   return (
     <div>
       <SectionHeader
-        title="Ingresos"
-        subtitle="Recaudación y autos ingresados, por período"
+        title="Estadísticas"
+        subtitle="Ocupación actual, recaudación y movimiento de vehículos"
+      />
+
+      <KpiCards
+        kpis={liveKpis}
+        loading={liveKpisLoading}
+        monthLoading={isMonthLoading}
       />
 
       {/* Filtros */}
@@ -468,12 +476,12 @@ export function EstadisticasPage() {
 
         {vehicleType && (
           <Note>
-            El tipo de vehículo solo se registra en los ingresos automáticos por
-            lectura de patente. Las altas manuales quedan sin tipo y este filtro
-            las excluye, así que el total puede quedar muy por debajo del real.
-            Además, cada estadía guarda el nombre que el tipo tenía ese día: si
-            se renombró desde entonces, las estadías anteriores no aparecen bajo
-            el nombre nuevo.
+            El tipo de vehículo solo se registra en los ingresos automáticos de
+            vehículos por lectura de patente. Los ingresos manuales quedan sin
+            tipo y este filtro los excluye, así que el total puede quedar muy
+            por debajo del real. Además, cada estadía guarda el nombre que el
+            tipo tenía ese día: si se renombró desde entonces, las estadías
+            anteriores no aparecen bajo el nombre nuevo.
           </Note>
         )}
       </div>
@@ -500,7 +508,7 @@ export function EstadisticasPage() {
       {canQuery && seriesQuery.isError && (
         <div className="pk-card">
           <EmptyState
-            title="No se pudieron cargar los ingresos"
+            title="No se pudieron cargar las estadísticas"
             description={translateApiError(seriesQuery.error, {
               endpoint: 'metrics.revenue',
             })}
@@ -520,25 +528,18 @@ export function EstadisticasPage() {
             }}
           >
             <KpiCard
-              title="Total ingresos"
+              title="Recaudación total"
               value={fmtMoney0(series?.totals.revenue ?? 0)}
-              sub={
-                isCashSession
-                  ? 'cobrado por esta caja'
-                  : 'recaudado en el período'
-              }
               loading={seriesQuery.isLoading}
             />
             <KpiCard
-              title="Autos ingresados"
+              title="Ingresos de vehículos"
               value={(series?.totals.vehiclesIn ?? 0).toLocaleString('es-AR')}
-              sub="entradas en el período"
               loading={seriesQuery.isLoading}
             />
             <KpiCard
-              title="Autos salidos"
+              title="Egresos de vehículos"
               value={(series?.totals.vehiclesOut ?? 0).toLocaleString('es-AR')}
-              sub="salidas en el período"
               loading={seriesQuery.isLoading}
             />
           </div>
@@ -579,10 +580,11 @@ export function EstadisticasPage() {
             )}
 
             <Note>
-              Los ingresos se imputan al momento de <strong>salida</strong> del
-              vehículo y las entradas al de <strong>ingreso</strong>. Un auto
-              que entra un día y sale otro suma su visita al primero y su
-              recaudación al segundo, así que las dos series no coinciden.
+              La recaudación se imputa al momento de <strong>salida</strong> del
+              vehículo y los ingresos de vehículos al de{' '}
+              <strong>ingreso</strong>. Un auto que entra un día y sale otro
+              suma su visita al primero y su recaudación al segundo, así que las
+              dos series no coinciden.
             </Note>
 
             {isCashSession && series && (
@@ -593,9 +595,9 @@ export function EstadisticasPage() {
                 <strong>{formatWindowLabel(series.from, series.to)}</strong>.
                 Puede terminar unos minutos después del cierre del turno porque
                 incluye los cobros que el escritorio sincronizó más tarde. En
-                "Autos ingresados" solo cuentan los que además entraron en esa
-                ventana, y las estadías cerradas sin detalle de pago no tienen
-                caja y no aparecen.
+                "Ingresos de vehículos" solo cuentan los que además entraron en
+                esa ventana, y las estadías cerradas sin detalle de pago no
+                tienen caja y no aparecen.
               </Note>
             )}
 
@@ -627,7 +629,7 @@ export function EstadisticasPage() {
                   color: 'var(--text-2)',
                 }}
               >
-                Ingresos por método de pago
+                Recaudación por método de pago
               </span>
             </div>
 

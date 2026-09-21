@@ -120,6 +120,9 @@ export function DataTable<TData>({
   filterableColumns = [],
   filterOptionsByColumn,
   initialColumnFilters,
+  onColumnFiltersChange,
+  columnFiltersOverride,
+  columnFiltersOverrideKey,
   initialColumnVisibility = EMPTY_VISIBILITY,
   initialPageSize = 10,
   pageSizeOptions = [5, 10, 20, 30, 50],
@@ -168,6 +171,15 @@ export function DataTable<TData>({
       current.pageIndex === 0 ? current : { ...current, pageIndex: 0 },
     );
   }, [columnFilters, globalFilter, sorting]);
+
+  useEffect(() => {
+    onColumnFiltersChange?.(columnFilters);
+  }, [columnFilters, onColumnFiltersChange]);
+
+  useEffect(() => {
+    if (columnFiltersOverrideKey === undefined) return;
+    setColumnFilters(columnFiltersOverride ?? []);
+  }, [columnFiltersOverride, columnFiltersOverrideKey]);
 
   const serverStateRef = useRef(serverState);
   serverStateRef.current = serverState;

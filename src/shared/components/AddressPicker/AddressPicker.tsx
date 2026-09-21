@@ -8,11 +8,14 @@ import type {
   GeocodingStatus,
 } from '../../../lib/geocoding/GeocodingProvider';
 import { georefProvider } from '../../../lib/geocoding/georef';
+import { AR_PROVINCES, citiesOf } from '../../../lib/locations/catalog';
 import { AddressMap } from './AddressMap';
+import { CatalogSelect } from './CatalogSelect';
 import {
   addressFromGeocoded,
   addressPrimaryLine,
   addressSummaryDetail,
+  applyCatalogToGeocoded,
   describeGeocodingSource,
   hasCoordinates,
   isAddressEmpty,
@@ -21,6 +24,8 @@ import {
   moveAddressPin,
   REQUIRED_ADDRESS_FIELDS,
   setAddressDetailField,
+  setAddressProvince,
+  unrecognizedAddressFields,
   type AddressFormValue,
   type AddressTextField,
 } from './addressUtils';
@@ -60,24 +65,42 @@ type SearchState =
       results: GeocodedAddress[];
     };
 
-/**
- * El detalle desglosado, en el orden en que se lee en voz alta una dirección
- * argentina. La línea de display NO está: se deduce (ver `composeFormatted`).
- */
-const TEXT_FIELDS: {
+interface TextFieldSpec {
   field: AddressTextField;
   label: string;
   placeholder: string;
-}[] = [
+}
+
+/**
+ * El detalle desglosado se partió en TRES bloques, y no es cosmética: la
+ * provincia y la localidad DEJARON DE SER TEXTO LIBRE.
+ *
+ * Antes eran seis entradas en un `.map` uniforme sobre `<Input>`. Ya no hay
+ * uniformidad que preservar: un `<select>` encadenado necesita opciones, un
+ * `disabled` que depende de OTRO campo, el manejo del valor viejo no reconocido
+ * y su propio aviso. Se evaluó meterle a la lista un discriminante
+ * `kind: 'text' | 'state' | 'city'` y se descartó: el cuerpo del `.map` habría
+ * quedado un `switch` de tres ramas que no comparten casi ninguna prop — la
+ * uniformidad sería una mentira sostenida por un tipo, y las reglas del
+ * selector encadenado quedarían escondidas adentro de un renderer genérico en
+ * vez de leerse donde se aplican.
+ *
+ * Con la lista partida, el JSX dice literalmente lo que pasa en pantalla y los
+ * `<Input>` que siguen siendo texto libre conservan su `.map`.
+ *
+ * ⚠️ La PROVINCIA va ahora ANTES que la localidad. Es obligatorio: no se puede
+ * elegir una ciudad sin haber elegido la provincia, y mostrar primero un campo
+ * deshabilitado que depende de otro que está más abajo es pedirle a la persona
+ * que adivine el orden.
+ */
+const STREET_FIELDS: TextFieldSpec[] = [
   { field: 'streetName', label: 'Calle', placeholder: 'Av. Corrientes' },
   { field: 'streetNumber', label: 'Altura', placeholder: '1234' },
   { field: 'floor', label: 'Piso / Depto', placeholder: 'PB' },
-  { field: 'cityName', label: 'Localidad', placeholder: 'Balvanera' },
-  {
-    field: 'stateName',
-    label: 'Provincia',
-    placeholder: 'Ciudad Autónoma de Buenos Aires',
-  },
+];
+
+/** Lo que va DESPUÉS de los selectores. Georef nunca lo devuelve: se tipea. */
+const EXTRA_FIELDS: TextFieldSpec[] = [
   { field: 'postalCode', label: 'Código postal', placeholder: 'C1043' },
 ];
 
@@ -145,12 +168,34 @@ export function AddressPicker({
    * Es un LATCH a propósito: una vez abierto, completar el último campo que
    * faltaba no vuelve a cerrar el panel en la cara de quien está tipeando.
    * Sólo lo resetea elegir un candidato nuevo de Georef.
+   *
+   * ⚠️ También arranca en `true` con una dirección COMPLETA pero que Mercado
+   * Pago no reconoce (un borrador viejo con "Martínez"). Sin esto, el borrador
+   * abría con el detalle colapsado: el aviso rojo del selector quedaba escondido
+   * detrás de un "Ver detalle" que nadie tenía motivo para abrir, y la persona
+   * seguía al paso 2 con el mismo valor que Mercado Pago iba a rechazar. O sea:
+   * este ticket no arreglaba nada para los borradores que ya existían.
    */
   const [manualChosen, setManualChosen] = useState(
-    () => !isAddressEmpty(value) && missingAddressFields(value).length > 0,
+    () =>
+      !isAddressEmpty(value) &&
+      (missingAddressFields(value).length > 0 ||
+        unrecognizedAddressFields(value).length > 0),
   );
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailEditable, setDetailEditable] = useState(false);
+  /**
+   * La localidad que Georef devolvió y el catálogo de Mercado Pago descartó
+   * (p. ej. "Martínez"), para poder EXPLICAR por qué el selector quedó vacío.
+   *
+   * Sin esto, la persona busca "Av. Santa Fe 1234, Martínez", Georef acierta, y
+   * de pronto tiene un campo obligatorio en blanco sin ninguna razón visible.
+   * Un campo que se vacía solo y no dice por qué se lee como un bug del
+   * sistema, no como algo que hay que completar.
+   */
+  const [cityDroppedByCatalog, setCityDroppedByCatalog] = useState<
+    string | null
+  >(null);
 
   // Corta la request en vuelo si el componente se desmonta (cambiar de
   // pestaña, cerrar el wizard): sin esto quedaría un setState sobre un
@@ -166,6 +211,9 @@ export function AddressPicker({
     abortRef.current = controller;
 
     setSearch({ kind: 'searching' });
+    // El aviso es sobre la búsqueda ANTERIOR: arrastrarlo a la nueva sería
+    // explicar un campo vacío con un motivo que ya no aplica.
+    setCityDroppedByCatalog(null);
     const result = await provider.search(trimmed, {
       signal: controller.signal,
     });
@@ -188,9 +236,21 @@ export function AddressPicker({
   }
 
   function applyCandidate(candidate: GeocodedAddress) {
-    const next = addressFromGeocoded(candidate, value);
+    // `applyCatalogToGeocoded` NO es opcional acá: Georef habla el vocabulario
+    // del INDEC y Mercado Pago valida contra el de MercadoLibre. Para Martínez,
+    // Georef dice "Martínez" y MP sólo conoce "San Isidro". Lo que no está en
+    // el catálogo se deja VACÍO en vez de guardar algo que MP va a rechazar —
+    // y como `cityName`/`stateName` son obligatorios, el `incomplete` de abajo
+    // despliega el detalle solo con los selectores listos para elegir.
+    const georef = addressFromGeocoded(candidate, value);
+    const next = applyCatalogToGeocoded(georef);
     onChange(next);
     setGeorefApplied(true);
+    // Georef SÍ trajo una localidad y el catálogo la descartó: hay que decirlo
+    // con todas las letras, no dejar un campo obligatorio vacío sin motivo.
+    setCityDroppedByCatalog(
+      georef.cityName && !next.cityName ? georef.cityName : null,
+    );
     // Georef resuelve A MEDIAS más seguido de lo que parece: buscar una calle
     // sin altura devuelve un candidato con `altura: null` y una
     // `nomenclatura` igual de prolija. Esa dirección no le sirve a Mercado
@@ -209,6 +269,12 @@ export function AddressPicker({
 
   function updateField(field: AddressTextField, text: string) {
     onChange(setAddressDetailField(value, field, text));
+  }
+
+  // Una sola transición: cambiar de provincia puede tener que limpiar la
+  // localidad, y partirlo en dos `onChange` pintaría el par inconsistente.
+  function updateProvince(province: string) {
+    onChange(setAddressProvince(value, province));
   }
 
   function handlePinMove(latitude: number, longitude: number) {
@@ -260,6 +326,66 @@ export function AddressPicker({
   const primaryLine = addressPrimaryLine(value);
   const summaryDetail = addressSummaryDetail(value);
   const sourceLabel = describeGeocodingSource(value.geocodingSource);
+
+  /**
+   * Las localidades de la provincia elegida. Vacío si no hay provincia o si la
+   * que hay guardada no está en el catálogo (un tenant viejo con "Bs. As.").
+   *
+   * Que esté vacío es exactamente lo que deshabilita el selector de localidad,
+   * y de ahí sale la regla pedida: no se elige ciudad sin provincia. NO deja a
+   * nadie trabado — el selector de provincia siempre está habilitado, así que
+   * arreglar la provincia desbloquea la localidad en el mismo formulario.
+   */
+  const cities = citiesOf(value.stateName);
+  const provinceReady = cities.length > 0;
+
+  /**
+   * El texto de ayuda del selector de localidad, en orden de urgencia.
+   *
+   * El aviso de Georef se apaga solo en cuanto hay una localidad elegida: ya no
+   * explica nada y pasaría a ser un reproche por algo que la persona ya
+   * resolvió.
+   */
+  const cityHint = !provinceReady
+    ? 'Se habilita al elegir la provincia de arriba.'
+    : cityDroppedByCatalog && !value.cityName
+      ? `Encontramos la dirección en “${cityDroppedByCatalog}”, pero Mercado Pago no tiene esa localidad en su lista. Elegí la que corresponde para poder cobrar con Mercado Pago.`
+      : undefined;
+
+  /**
+   * El cuerpo del viejo `.map` de `TEXT_FIELDS`, ahora compartido por los dos
+   * bloques de texto libre que quedaron a los costados de los selectores. Es el
+   * mismo JSX de antes: la única razón de extraerlo es no duplicarlo.
+   */
+  function renderTextField({ field, label, placeholder }: TextFieldSpec) {
+    return (
+      <Input
+        key={field}
+        id={`${uid}-${field}`}
+        data-testid={`address-field-${field}`}
+        label={label}
+        value={value[field]}
+        placeholder={detailReadOnly ? undefined : placeholder}
+        disabled={disabled}
+        // `readOnly` y NO `disabled`: un input deshabilitado se saltea en la
+        // navegación por teclado y los lectores de pantalla no lo anuncian. El
+        // dato tiene que poder leerse y copiarse aunque no se pueda editar.
+        readOnly={detailReadOnly}
+        // El asterisco cuelga de `required`, NO sólo de `manualMode`: con
+        // `collapsible={false}` (ConfigPerfil) `manualMode` es siempre true, y
+        // ahí el domicilio NO es obligatorio — hay tenants viejos con la
+        // dirección en `null`. Marcarlos sería mentirle al dueño sobre algo que
+        // el formulario no exige.
+        required={required && manualMode && REQUIRED_FIELDS.includes(field)}
+        style={
+          detailReadOnly
+            ? { background: 'var(--surface-2, #f2f5fa)', cursor: 'text' }
+            : undefined
+        }
+        onChange={(e) => updateField(field, e.target.value)}
+      />
+    );
+  }
 
   return (
     <div
@@ -466,36 +592,41 @@ export function AddressPicker({
             opacity: detailReadOnly ? 0.72 : 1,
           }}
         >
-          {TEXT_FIELDS.map(({ field, label, placeholder }) => (
-            <Input
-              key={field}
-              id={`${uid}-${field}`}
-              data-testid={`address-field-${field}`}
-              label={label}
-              value={value[field]}
-              placeholder={detailReadOnly ? undefined : placeholder}
-              disabled={disabled}
-              // `readOnly` y NO `disabled`: un input deshabilitado se saltea
-              // en la navegación por teclado y los lectores de pantalla no lo
-              // anuncian. El dato tiene que poder leerse y copiarse aunque no
-              // se pueda editar.
-              readOnly={detailReadOnly}
-              // El asterisco cuelga de `required`, NO sólo de `manualMode`:
-              // con `collapsible={false}` (ConfigPerfil) `manualMode` es
-              // siempre true, y ahí el domicilio NO es obligatorio — hay
-              // tenants viejos con la dirección en `null`. Marcarlos sería
-              // mentirle al dueño sobre algo que el formulario no exige.
-              required={
-                required && manualMode && REQUIRED_FIELDS.includes(field)
-              }
-              style={
-                detailReadOnly
-                  ? { background: 'var(--surface-2, #f2f5fa)', cursor: 'text' }
-                  : undefined
-              }
-              onChange={(e) => updateField(field, e.target.value)}
-            />
-          ))}
+          {STREET_FIELDS.map(renderTextField)}
+
+          <CatalogSelect
+            id={`${uid}-stateName`}
+            data-testid="address-field-stateName"
+            label="Provincia"
+            value={value.stateName}
+            options={AR_PROVINCES}
+            placeholder="Elegí la provincia"
+            disabled={disabled}
+            readOnly={detailReadOnly}
+            required={required && manualMode}
+            onChange={updateProvince}
+          />
+
+          <CatalogSelect
+            id={`${uid}-cityName`}
+            data-testid="address-field-cityName"
+            label="Localidad"
+            value={value.cityName}
+            options={cities}
+            placeholder={
+              provinceReady
+                ? 'Elegí la localidad'
+                : 'Elegí primero la provincia'
+            }
+            // La regla explícita del ticket: sin provincia no hay localidad.
+            disabled={disabled || !provinceReady}
+            readOnly={detailReadOnly}
+            required={required && manualMode}
+            hint={cityHint}
+            onChange={(city) => updateField('cityName', city)}
+          />
+
+          {EXTRA_FIELDS.map(renderTextField)}
         </div>
       ) : null}
 

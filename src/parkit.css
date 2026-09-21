@@ -87,6 +87,173 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+/* ====== Portal shell ====== */
+.portal-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg-b);
+}
+
+.portal-body {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.portal-content {
+  flex: 1;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.portal-main {
+  flex: 1;
+  min-width: 0;
+  padding: 24px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.portal-topbar {
+  min-width: 0;
+}
+
+.portal-topbar-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portal-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .portal-shell {
+    min-height: 100dvh;
+  }
+
+  .portal-body {
+    min-height: 0;
+  }
+
+  .portal-sidebar {
+    display: none !important;
+  }
+
+  .portal-main {
+    padding: 16px;
+    padding-bottom: calc(88px + env(safe-area-inset-bottom));
+  }
+
+  .portal-topbar {
+    height: auto !important;
+    min-height: 56px;
+    padding: 10px 16px !important;
+    gap: 10px !important;
+  }
+
+  .owner-topbar {
+    align-items: flex-start !important;
+    flex-wrap: wrap;
+  }
+
+  .owner-topbar > :first-child {
+    max-width: min(100%, 220px);
+  }
+
+  .portal-topbar-divider,
+  .portal-topbar-actions,
+  .portal-topbar-env {
+    display: none !important;
+  }
+
+  .portal-bottom-nav {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 80;
+    display: block;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border-soft);
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 -10px 30px rgba(16, 24, 40, 0.1);
+    backdrop-filter: blur(14px);
+  }
+
+  .portal-bottom-nav-scroll {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .portal-bottom-nav-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .portal-bottom-nav-item {
+    position: relative;
+    display: inline-flex;
+    min-width: 74px;
+    max-width: 104px;
+    flex: 0 0 auto;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 7px 8px;
+    border-radius: var(--r-md);
+    color: var(--text-3);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.15;
+    text-align: center;
+  }
+
+  .portal-bottom-nav-item.is-active {
+    background: var(--brand-soft);
+    color: var(--brand);
+  }
+
+  .portal-bottom-nav-icon {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    min-height: 20px;
+  }
+
+  .portal-bottom-nav-label {
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .portal-bottom-nav-badge {
+    position: absolute;
+    top: -8px;
+    right: -12px;
+    min-width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 5px;
+    border: 2px solid #fff;
+    border-radius: 999px;
+    background: var(--brand);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 800;
+  }
+}
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -185,58 +352,7 @@ a {
   padding: 32px;
 }
 
-.dashboard-lpr-review-link {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding: 14px 16px;
-  border: 1px solid var(--warn-border);
-  border-radius: var(--r-lg);
-  background: var(--warn-bg);
-  color: var(--text-1);
-  text-decoration: none;
-  box-shadow: var(--shadow-card);
-}
-
-.dashboard-lpr-review-link:hover {
-  border-color: var(--warn-text);
-}
-
-.dashboard-lpr-review-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--r-md);
-  background: var(--card);
-  color: var(--warn-text);
-  flex-shrink: 0;
-}
-
-.dashboard-lpr-review-copy {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.dashboard-lpr-review-copy strong {
-  color: var(--text-1);
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.dashboard-lpr-review-copy span {
-  color: var(--text-2);
-  font-size: 13px;
-}
-
-/* Alert — aviso destacado reutilizable. Generaliza el patrón de
-   .dashboard-lpr-review-link (icono + copy + acción) para no seguir copiando
-   el mismo CSS en cada pantalla. */
+/* Alert — aviso destacado reutilizable con icono, copy y acción. */
 .pk-alert {
   display: flex;
   align-items: center;
@@ -614,6 +730,7 @@ a {
 }
 .pk-drawer-in {
   animation: pk-drawer-in 320ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  max-width: 100vw;
 }
 @keyframes pk-pulse-err {
   0%,

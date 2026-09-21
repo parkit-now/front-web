@@ -6,7 +6,7 @@ import { useSucursal } from '../context/SucursalContext';
 const CASH_SESSION_LIMIT = 60;
 
 /**
- * Turnos de caja de la sucursal activa, para el filtro por caja del dashboard
+ * Turnos de caja de la sucursal activa, para el filtro por caja de estadísticas
  * de ingresos.
  *
  * Va detrás de un `enabled` para no pedir la lista en cada visita a la página,

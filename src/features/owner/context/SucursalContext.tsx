@@ -51,7 +51,8 @@ const ACTIVE_KEY = 'parkit.activeTenantId';
 
 /** Owner sections reachable under both `/app/*` and `/ops/estacionamientos/:id/*`. */
 const SECTIONS = [
-  'dashboard',
+  'historial',
+  'caja',
   'personal',
   'estadisticas',
   'transacciones',
@@ -144,7 +145,7 @@ export function SucursalProvider({
       const seg = location.pathname.split('/').filter(Boolean).pop() ?? '';
       const section = (SECTIONS as readonly string[]).includes(seg)
         ? seg
-        : 'dashboard';
+        : 'estadisticas';
       void navigate(`/ops/estacionamientos/${id}/${section}`);
       return;
     }

@@ -2,12 +2,13 @@ import { useLocation, Link } from 'react-router-dom';
 import { Logo } from '../../../shared/components/Logo';
 import { Avatar } from '../../../shared/components/Avatar';
 import {
-  IconDashboard,
   IconUsers,
   IconChart,
   IconReceipt,
   IconShield,
   IconDollar,
+  IconClock,
+  IconInbox,
   IconAuto,
   IconLayers,
   IconCreditCard,
@@ -23,11 +24,16 @@ interface NavItem {
   icon: React.ReactNode;
 }
 
-const NAV_ITEMS: NavItem[] = [
+export const OWNER_NAV_ITEMS: NavItem[] = [
   {
-    segment: 'dashboard',
-    label: 'Monitoreo en vivo',
-    icon: <IconDashboard size={18} />,
+    segment: 'historial',
+    label: 'Historial',
+    icon: <IconClock size={18} />,
+  },
+  {
+    segment: 'caja',
+    label: 'Caja',
+    icon: <IconInbox size={18} />,
   },
   { segment: 'personal', label: 'Personal', icon: <IconUsers size={18} /> },
   {
@@ -97,6 +103,7 @@ export function OwnerSidebar({
 
   return (
     <aside
+      className="portal-sidebar"
       style={{
         width: 260,
         flexShrink: 0,
@@ -132,11 +139,9 @@ export function OwnerSidebar({
 
       {/* Nav items */}
       <nav style={{ flex: 1, padding: '0 8px', overflowY: 'auto' }}>
-        {NAV_ITEMS.map((item) => {
+        {OWNER_NAV_ITEMS.map((item) => {
           const to = `${basePath}/${item.segment}`;
-          const isActive =
-            pathname === to ||
-            (item.segment !== 'dashboard' && pathname.startsWith(to));
+          const isActive = pathname === to || pathname.startsWith(to);
           return (
             <Link
               key={item.segment}
