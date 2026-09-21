@@ -10,6 +10,11 @@ import { TransaccionesPage } from './features/owner/sections/transacciones/Trans
 import { AuditoriaPage } from './features/owner/sections/auditoria/AuditoriaPage';
 import { ConfigPage } from './features/owner/sections/config/ConfigPage';
 import { PaymentMethodsPage } from './features/owner/sections/payment-methods/PaymentMethodsPage';
+import { IntegracionesPage } from './features/owner/sections/integraciones/IntegracionesPage';
+import {
+  MercadoPagoCallbackPage,
+  MP_CALLBACK_PATH,
+} from './features/owner/sections/integraciones/MercadoPagoCallbackPage';
 import { TasasPage } from './features/owner/sections/tasas/TasasPage';
 import { TiposVehiculoPage } from './features/owner/sections/tipos-de-vehiculo/TiposVehiculoPage';
 import { VehiculosPage } from './features/owner/sections/vehiculos/VehiculosPage';
@@ -81,6 +86,7 @@ const ownerSectionRoutes = [
   { path: 'vehiculos', element: <VehiculosPage /> },
   { path: 'tipos-de-vehiculo', element: <TiposVehiculoPage /> },
   { path: 'metodos-de-pago', element: <PaymentMethodsPage /> },
+  { path: 'integraciones', element: <IntegracionesPage /> },
   { path: 'config', element: <ConfigPage /> },
 ];
 
@@ -136,6 +142,18 @@ export const router = createBrowserRouter([
       { index: true, element: <Navigate to="dashboard" replace /> },
       ...ownerSectionRoutes,
     ],
+  },
+  {
+    // El redirect del OAuth de Mercado Pago. Es top-level y NO cuelga de
+    // `/app`: el path tiene que coincidir carácter por carácter con el
+    // `redirect_uri` registrado en la aplicación de Mercado Pago
+    // (`mercadopago` sin guion), que es un valor fijo del lado de ellos.
+    //
+    // Va ANTES del catch-all de abajo: si no, el `*` se come el `code` y
+    // manda a la landing sin decir nada.
+    path: MP_CALLBACK_PATH,
+    element: <MercadoPagoCallbackPage />,
+    errorElement,
   },
   { path: '*', loader: () => redirect('/') },
 ]);

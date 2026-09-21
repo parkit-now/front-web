@@ -73,7 +73,12 @@ export type EndpointKey =
   | 'staff.add'
   | 'staff.update'
   | 'staff.remove'
-  | 'audit.list';
+  | 'audit.list'
+  | 'mercadoPago.getAccount'
+  | 'mercadoPago.authorizationUrl'
+  | 'mercadoPago.oauthCallback'
+  | 'mercadoPago.unlink'
+  | 'mercadoPago.resyncPos';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;
@@ -169,6 +174,30 @@ const CODE_MESSAGES: Record<string, string> = {
   // propósito: distinguirlos le confirmaría a un tercero que el id existe.
   CASH_SESSION_NOT_FOUND:
     'La caja seleccionada no existe o no pertenece a este estacionamiento.',
+
+  // Mercado Pago. Le hablamos al dueño de la playa, no a un desarrollador: cada
+  // mensaje dice qué pasó y qué hacer. A la `POS` de Mercado Pago le decimos
+  // "punto de venta" y no "caja", para no pisarnos con las cajas del turno.
+  MP_NOT_LINKED:
+    'Todavía no vinculaste tu cuenta de Mercado Pago. Vinculala desde Integraciones para cobrar con QR.',
+  MP_ALREADY_LINKED:
+    'Este estacionamiento ya tiene una cuenta de Mercado Pago vinculada. Desvinculala antes de conectar otra.',
+  MP_ENTITY_ADDRESS_INCOMPLETE:
+    'Completá la dirección de tu estacionamiento antes de vincular Mercado Pago.',
+  MP_ACCOUNT_TOKEN_EXPIRED:
+    'Se venció la conexión con Mercado Pago. Volvé a vincular tu cuenta para seguir cobrando con QR.',
+  MP_ACCOUNT_REVOKED:
+    'Se revocó el acceso de Parkit a tu cuenta de Mercado Pago. Volvé a vincularla para seguir cobrando con QR.',
+  MP_OAUTH_STATE_INVALID:
+    'El enlace de vinculación venció o ya se usó. Probá de nuevo desde Integraciones.',
+  MP_OAUTH_CODE_EXCHANGE_FAILED:
+    'Mercado Pago no pudo confirmar la vinculación. Volvé a intentarlo en unos minutos.',
+  MP_STORE_CREATE_FAILED:
+    'No pudimos crear la sucursal en Mercado Pago. Volvé a intentarlo en unos minutos.',
+  MP_POS_CREATE_FAILED:
+    'Vinculamos tu cuenta pero no pudimos crear el punto de venta, así que todavía no hay QR. Probá sincronizarlo desde Integraciones.',
+  MP_UNAVAILABLE:
+    'Mercado Pago no está respondiendo. Volvé a intentarlo en unos minutos.',
 
   // Validacion (envoltorio — el detalle por campo se traduce con
   // translateValidationCode).

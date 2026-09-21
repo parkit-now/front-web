@@ -34,6 +34,11 @@ export const LPR_IMAGE_RETENTION_DAYS_OPTIONS: readonly LprImageRetentionDays[] 
 export const LPR_IMAGE_RETENTION_DAYS_DEFAULT: LprImageRetentionDays = 30;
 export type PaymentMethodSummary =
   components['schemas']['PaymentMethodSummaryDto'];
+/**
+ * Qué ES el medio de pago, a diferencia de `name`, que es cómo lo llama el
+ * dueño. `mercadopago_qr` es el que crea la integración al vincular la cuenta.
+ */
+export type PaymentMethodType = components['schemas']['PaymentMethodType'];
 export type TogglePaymentMethodInput =
   components['schemas']['TogglePaymentMethodDto'];
 export type CreatePaymentMethodInput =

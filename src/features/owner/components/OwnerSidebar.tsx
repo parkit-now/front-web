@@ -11,6 +11,7 @@ import {
   IconAuto,
   IconLayers,
   IconCreditCard,
+  IconPlug,
   IconSettings,
   IconLogout,
 } from '../../../shared/components/icons';
@@ -55,6 +56,17 @@ const NAV_ITEMS: NavItem[] = [
     segment: 'metodos-de-pago',
     label: 'Métodos de pago',
     icon: <IconCreditCard size={18} />,
+  },
+  {
+    segment: 'integraciones',
+    label: 'Integraciones',
+    // Genérico a propósito: la sección es "Integraciones", no "Mercado Pago".
+    // El isotipo de la marca acá diría que la sección ES Mercado Pago y
+    // mentiría apenas entre la segunda integración. El logo va en la tarjeta,
+    // que sí identifica a la marca.
+    // El enchufe además comunica "conectar", que es lo que hace la sección
+    // (un rayo hablaría de energía, que no tiene nada que ver).
+    icon: <IconPlug size={18} />,
   },
   {
     segment: 'config',
