@@ -10,7 +10,7 @@ import {
 } from '../../../shared/utils/ar-datetime';
 
 /**
- * View-model de las cards del dashboard en vivo. Compone `/metrics/summary`
+ * View-model de las cards de métricas actuales. Compone `/metrics/summary`
  * (ocupación + hoy + comparativa) con una ventana month-to-date de
  * `/metrics/revenue`, que es de donde sale el acumulado del mes: `summary` no
  * lo devuelve.

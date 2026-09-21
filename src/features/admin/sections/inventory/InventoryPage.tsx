@@ -45,7 +45,7 @@ export function InventoryPage() {
 
   /** Enter the parking's panel as admin (same panel the owner sees). */
   function openParking(parking: Parking) {
-    void navigate(`/ops/estacionamientos/${parking.id}/dashboard`);
+    void navigate(`/ops/estacionamientos/${parking.id}/estadisticas`);
   }
 
   function confirmDelete() {

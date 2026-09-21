@@ -62,7 +62,7 @@ export function DonutChart({ slices, total, size = 168 }: DonutChartProps) {
           height={size}
           viewBox="0 0 42 42"
           role="img"
-          aria-label={`Ingresos por método de pago, total ${fmtMoney0(total)}`}
+          aria-label={`Recaudación por método de pago, total ${fmtMoney0(total)}`}
         >
           <circle
             cx="21"

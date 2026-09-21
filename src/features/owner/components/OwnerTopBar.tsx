@@ -9,7 +9,6 @@ import { SucursalSwitcher } from './SucursalSwitcher';
 // Keyed by the last path segment so it works under both `/app/*` and
 // `/ops/estacionamientos/:tenantId/*`.
 const SECTION_TITLES: Record<string, string> = {
-  dashboard: 'Monitoreo en vivo',
   historial: 'Historial',
   caja: 'Caja',
   personal: 'Personal',
