@@ -1,18 +1,16 @@
 import { useState } from 'react';
 import { ConfigPerfil } from './ConfigPerfil';
-import { ConfigBilling } from './ConfigBilling';
 import { ConfigHorarios } from './ConfigHorarios';
 import { ConfigServicios } from './ConfigServicios';
 import { ConfigRetencion } from './ConfigRetencion';
 
-type Tab = 'perfil' | 'horarios' | 'servicios' | 'retencion' | 'facturacion';
+type Tab = 'perfil' | 'horarios' | 'servicios' | 'retencion';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'perfil', label: 'Perfil' },
   { id: 'horarios', label: 'Horarios' },
   { id: 'servicios', label: 'Servicios' },
   { id: 'retencion', label: 'Retención' },
-  { id: 'facturacion', label: 'Facturación' },
 ];
 
 export function ConfigPage() {
@@ -76,7 +74,6 @@ export function ConfigPage() {
         {tab === 'horarios' && <ConfigHorarios />}
         {tab === 'servicios' && <ConfigServicios />}
         {tab === 'retencion' && <ConfigRetencion />}
-        {tab === 'facturacion' && <ConfigBilling />}
       </div>
     </div>
   );

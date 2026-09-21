@@ -4,7 +4,6 @@ import { Avatar } from '../../../shared/components/Avatar';
 import {
   IconUsers,
   IconChart,
-  IconReceipt,
   IconShield,
   IconDollar,
   IconClock,
@@ -40,11 +39,6 @@ export const OWNER_NAV_ITEMS: NavItem[] = [
     segment: 'estadisticas',
     label: 'Estadísticas',
     icon: <IconChart size={18} />,
-  },
-  {
-    segment: 'transacciones',
-    label: 'Transacciones',
-    icon: <IconReceipt size={18} />,
   },
   {
     segment: 'auditoria',

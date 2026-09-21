@@ -55,7 +55,6 @@ const SECTIONS = [
   'caja',
   'personal',
   'estadisticas',
-  'transacciones',
   'auditoria',
   'tasas',
   'vehiculos',
