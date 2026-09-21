@@ -196,8 +196,52 @@ const CODE_MESSAGES: Record<string, string> = {
     'No pudimos crear la sucursal en Mercado Pago. Volvé a intentarlo en unos minutos.',
   MP_POS_CREATE_FAILED:
     'Vinculamos tu cuenta pero no pudimos crear el punto de venta, así que todavía no hay QR. Probá sincronizarlo desde Integraciones.',
+  // La cuenta está vinculada y sana, lo que falta es el punto de venta. La
+  // salida es sincronizar, NO volver a vincular: por eso no comparte mensaje
+  // con MP_NOT_LINKED.
+  MP_POS_NOT_PROVISIONED:
+    'Tu cuenta de Mercado Pago está vinculada pero todavía no tiene punto de venta, así que no hay QR. Sincronizalo desde Integraciones.',
+  // El backend usa este code para crear, consultar Y cancelar la orden de
+  // Mercado Pago, así que el mensaje tiene que servir para los tres casos: no
+  // puede decir "no se pudo generar el cobro".
+  MP_ORDER_CREATE_FAILED:
+    'No pudimos gestionar el cobro con QR en Mercado Pago. Volvé a intentarlo en unos minutos o cobrá por otro medio.',
   MP_UNAVAILABLE:
     'Mercado Pago no está respondiendo. Volvé a intentarlo en unos minutos.',
+  // Hermano de MP_UNAVAILABLE: acá directamente no hubo respuesta (timeout,
+  // DNS, socket cortado).
+  MP_UNREACHABLE:
+    'No pudimos comunicarnos con Mercado Pago. Probá de nuevo en un momento.',
+  // OJO: esto NO es "el pago falló". Mercado Pago contestó 2xx con un cuerpo
+  // que no pudimos interpretar, así que la orden PUEDE EXISTIR igual. El
+  // mensaje no puede afirmar que no se cobró: manda a verificar antes de
+  // generar otro cobro.
+  MP_MALFORMED_RESPONSE:
+    'Mercado Pago respondió algo que no pudimos interpretar, así que no sabemos cómo quedó el cobro. Revisalo en Mercado Pago antes de generar otro.',
+
+  // Cobros con QR (intentos de pago). Mismo criterio que el bloque de arriba:
+  // le hablamos al operario que tiene al cliente adelante, no a un backend.
+  // El mismo code cubre un cobro inexistente y uno de otro estacionamiento, a
+  // propósito: distinguirlos le confirmaría a un tercero que el id existe.
+  PAYMENT_INTENT_NOT_FOUND:
+    'Ese cobro con QR no existe o no pertenece a este estacionamiento.',
+  // El bloqueo es de ESTA estadía.
+  PAYMENT_INTENT_ALREADY_OPEN:
+    'Esta estadía ya tiene un cobro con QR en curso. Usá ese QR o cancelalo antes de generar otro.',
+  // El bloqueo es de OTRA estadía: el punto de venta sostiene un cobro por vez.
+  // Decir de cuál es el bloqueo no es un detalle: lo que tiene que hacer el
+  // operario es distinto que en PAYMENT_INTENT_ALREADY_OPEN.
+  PAYMENT_INTENT_POS_BUSY:
+    'Hay un cobro con QR en curso para otra estadía. Esperá a que termine o cobrá por otro medio.',
+  PAYMENT_INTENT_NOT_CANCELABLE:
+    'Ese cobro con QR ya no se puede cancelar: se pagó, venció o ya se había cancelado.',
+  PAYMENT_INTENT_ENTRY_CLOSED:
+    'Esta estadía ya tiene la salida registrada, así que no se puede cobrar con QR.',
+  // Un solo code para cinco casos (ya consumido, de otra estadía, de otra
+  // playa, monto distinto, nunca aprobado) porque la salida del operario es la
+  // misma en los cinco: mirar cómo quedó el cobro y, si hace falta, generar otro.
+  PAYMENT_INTENT_NOT_CONSUMABLE:
+    'Ese cobro con QR ya se aplicó o no corresponde a esta estadía. Revisá su estado y, si hace falta, generá uno nuevo.',
 
   // Validacion (envoltorio — el detalle por campo se traduce con
   // translateValidationCode).
