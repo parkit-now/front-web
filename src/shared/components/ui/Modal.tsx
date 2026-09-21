@@ -131,7 +131,7 @@ export function Modal({
             <IconClose size={16} />
           </button>
         </div>
-        <div style={{ padding: 24, overflowY: 'auto', maxHeight: '70vh' }}>
+        <div style={{ padding: 16, overflowY: 'auto', maxHeight: '70vh' }}>
           {children}
         </div>
         {footer && (

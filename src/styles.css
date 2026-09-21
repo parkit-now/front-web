@@ -336,8 +336,7 @@ h2 {
 
 .audit-page {
   display: grid;
-  gap: 18px;
-  padding: 32px;
+  gap: 12px;
 }
 
 .audit-header-actions {
@@ -560,8 +559,8 @@ h2 {
 
 .audit2-drawer-body {
   display: grid;
-  gap: 18px;
-  padding: 20px;
+  gap: 12px;
+  padding: 16px;
 }
 
 .audit2-detail-header {
@@ -738,10 +737,6 @@ h2 {
 }
 
 @media (max-width: 760px) {
-  .audit-page {
-    padding: 20px;
-  }
-
   .audit-risk-grid,
   .audit-risk-chart {
     grid-template-columns: 1fr;

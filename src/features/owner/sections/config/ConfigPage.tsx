@@ -19,7 +19,7 @@ export function ConfigPage() {
   const [tab, setTab] = useState<Tab>('perfil');
 
   return (
-    <div style={{ padding: 32, display: 'flex', gap: 0 }}>
+    <div style={{ display: 'flex', gap: 0 }}>
       {/* Sidebar tabs */}
       <nav
         style={{

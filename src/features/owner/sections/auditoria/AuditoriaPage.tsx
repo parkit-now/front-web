@@ -895,7 +895,6 @@ export function AuditoriaPage() {
   const criticalCount = periodRows.filter(
     (row) => row.actionKind !== 'other',
   ).length;
-
   const riskMetrics = useMemo<AuditRiskMetrics>(() => {
     let underchargedLoss = 0;
     let chargeReductionLoss = 0;

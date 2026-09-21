@@ -51,7 +51,7 @@ export function TopPlatesTable({ items, loading, error }: TopPlatesTableProps) {
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 12,
-          marginBottom: 16,
+          marginBottom: 10,
           flexWrap: 'wrap',
         }}
       >

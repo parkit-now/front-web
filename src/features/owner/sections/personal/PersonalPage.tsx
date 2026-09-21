@@ -161,14 +161,10 @@ export function PersonalPage() {
     [userId],
   );
 
-  const scopeLabel = allBranches
-    ? 'todas tus sucursales'
-    : (sucursal?.nombre ?? 'la sucursal activa');
-
   if (query.isError) {
     return (
       <div>
-        <SectionHeader title="Personal" />
+        <SectionHeader title="Personal" subtitle="Equipo y permisos" />
         <div className="pk-card">
           <EmptyState
             title="No se pudo cargar el personal"
@@ -185,6 +181,9 @@ export function PersonalPage() {
   // que entra a un lote ajeno no tiene membresías y recibe una lista vacía.
   const showsEmptyScopeHint =
     !query.isLoading && total === 0 && !debouncedSearch && !role;
+  const scopeLabel = allBranches
+    ? 'todas tus sucursales'
+    : (sucursal?.nombre ?? 'la sucursal activa');
 
   return (
     <div>
@@ -193,11 +192,9 @@ export function PersonalPage() {
         subtitle={
           total > 0
             ? `${total} ${total === 1 ? 'persona' : 'personas'} en ${scopeLabel}`
-            : undefined
+            : 'Equipo y permisos'
         }
         action={
-          // Sin sucursales no hay a dónde agregar a nadie. Es el caso del admin
-          // de plataforma sin membresías, que además ve el listado vacío.
           sucursales.length > 0 ? (
             <Button
               variant="primary"

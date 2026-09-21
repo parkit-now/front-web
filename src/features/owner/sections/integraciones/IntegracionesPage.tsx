@@ -168,7 +168,7 @@ export function IntegracionesPage() {
         tiene que ser imposible de pasar por alto al entrar a la sección.
       */}
       {state.kind === 'broken' && (
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 10 }}>
           <Alert
             variant="err"
             icon={<IconAlert size={18} />}

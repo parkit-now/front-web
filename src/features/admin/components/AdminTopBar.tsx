@@ -19,8 +19,8 @@ export function AdminTopBar() {
         borderBottom: '1px solid var(--border-soft)',
         display: 'flex',
         alignItems: 'center',
-        gap: 16,
-        padding: '0 24px',
+        gap: 12,
+        padding: '0 16px',
         flexShrink: 0,
       }}
     >

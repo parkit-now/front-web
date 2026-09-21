@@ -61,7 +61,15 @@ export function AdminSidebar({
       }}
     >
       {/* Logo */}
-      <div style={{ padding: '20px 20px 16px' }}>
+      <div
+        style={{
+          height: 64,
+          padding: '0 20px',
+          display: 'flex',
+          alignItems: 'center',
+          flexShrink: 0,
+        }}
+      >
         <Logo size="md" variant="ops" />
       </div>
 

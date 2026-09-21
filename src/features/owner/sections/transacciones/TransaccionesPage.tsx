@@ -137,7 +137,7 @@ export function TransaccionesPage() {
   );
 
   return (
-    <div style={{ padding: 32 }}>
+    <div>
       <SectionHeader
         title="Transacciones"
         subtitle={`${all.length} transacciones`}

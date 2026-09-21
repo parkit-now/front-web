@@ -184,7 +184,7 @@ export function KpiCards({ kpis, loading, monthLoading }: KpiCardsProps) {
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
         gap: 10,
-        marginBottom: 16,
+        marginBottom: 10,
       }}
     >
       <KpiOcupacion kpis={kpis} loading={loading} />

@@ -17,11 +17,12 @@ export function SectionHeader({
         display: 'flex',
         alignItems: 'flex-start',
         justifyContent: 'space-between',
-        gap: 16,
-        marginBottom: 24,
+        gap: 12,
+        marginBottom: 12,
+        flexWrap: 'wrap',
       }}
     >
-      <div>
+      <div style={{ minWidth: 0 }}>
         {kicker && (
           <p
             style={{
