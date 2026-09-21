@@ -5,6 +5,7 @@ import {
   addressFromLocation,
   addressPrimaryLine,
   addressSummaryDetail,
+  applyCatalogToGeocoded,
   composeFormatted,
   describeGeocodingSource,
   emptyAddress,
@@ -15,6 +16,7 @@ import {
   moveAddressPin,
   setAddressDetailField,
   setAddressField,
+  setAddressProvince,
   toDeclaredLocation,
   toUpdateAddressDto,
   type AddressFormValue,
@@ -451,5 +453,148 @@ describe('addressSummaryDetail', () => {
       stateName: 'CABA',
     };
     expect(addressSummaryDetail(value)).toBe('Balvanera · CABA');
+  });
+});
+
+describe('applyCatalogToGeocoded', () => {
+  it('traduce la provincia de Georef al nombre que usa Mercado Pago', () => {
+    // Georef dice "Ciudad Autónoma de Buenos Aires"; MP escribe "Capital Federal".
+    expect(applyCatalogToGeocoded(filled()).stateName).toBe('Capital Federal');
+  });
+
+  it('VACÍA la localidad que Mercado Pago no conoce — el bug de "Martínez"', () => {
+    const georef = {
+      ...emptyAddress(),
+      cityName: 'Martínez',
+      stateName: 'Buenos Aires',
+    };
+    const next = applyCatalogToGeocoded(georef);
+    expect(next.stateName).toBe('Buenos Aires');
+    // Vacía y NO "San Isidro": adivinar el mapeo es inventar.
+    expect(next.cityName).toBe('');
+  });
+
+  it('deja la localidad vacía como campo faltante, para que la UI la pida', () => {
+    const georef = {
+      ...filled(),
+      cityName: 'Martínez',
+      stateName: 'Buenos Aires',
+    };
+    expect(missingAddressFields(applyCatalogToGeocoded(georef))).toEqual([
+      'cityName',
+    ]);
+  });
+
+  it('conserva la localidad que sí está en el catálogo, con su tilde', () => {
+    const georef = {
+      ...emptyAddress(),
+      cityName: 'villa gesell',
+      stateName: 'buenos aires',
+    };
+    const next = applyCatalogToGeocoded(georef);
+    expect(next.stateName).toBe('Buenos Aires');
+    expect(next.cityName).toBe('Villa Gesell');
+  });
+
+  it('vacía la provincia desconocida en vez de guardar lo que MP rechaza', () => {
+    const georef = { ...emptyAddress(), cityName: 'x', stateName: 'Atlántida' };
+    expect(applyCatalogToGeocoded(georef)).toMatchObject({
+      stateName: '',
+      cityName: '',
+    });
+  });
+
+  it('no toca el resto de los campos ni la nomenclatura de Georef', () => {
+    const next = applyCatalogToGeocoded(filled());
+    expect(next.formatted).toBe(GEOCODED.formatted);
+    expect(next.streetName).toBe('AV CORRIENTES');
+    expect(next.latitude).toBe(-34.603856);
+    expect(next.geocodingSource).toBe('georef');
+  });
+});
+
+describe('setAddressProvince', () => {
+  const laPlata: AddressFormValue = {
+    ...emptyAddress(),
+    streetName: 'Calle 7',
+    streetNumber: '1234',
+    cityName: 'La Plata',
+    stateName: 'Buenos Aires',
+  };
+
+  it('limpia la localidad que no pertenece a la provincia nueva', () => {
+    const next = setAddressProvince(laPlata, 'Córdoba', NOW);
+    expect(next.stateName).toBe('Córdoba');
+    expect(next.cityName).toBe('');
+  });
+
+  it('conserva la localidad cuando sí pertenece a la provincia nueva', () => {
+    // Un tenant viejo con la provincia escrita a mano: arreglarla no puede
+    // costarle la localidad, que ya era correcta.
+    const suelto = { ...laPlata, stateName: 'Bs. As.' };
+    const next = setAddressProvince(suelto, 'Buenos Aires', NOW);
+    expect(next.stateName).toBe('Buenos Aires');
+    expect(next.cityName).toBe('La Plata');
+  });
+
+  it('recompone la línea de display en la misma transición', () => {
+    expect(setAddressProvince(laPlata, 'Córdoba', NOW).formatted).toBe(
+      'Calle 7 1234, Córdoba',
+    );
+  });
+
+  it('marca el origen como manual', () => {
+    const next = setAddressProvince(laPlata, 'Córdoba', NOW);
+    expect(next.geocodingSource).toBe('manual');
+    expect(next.geocodedAt).toBe(NOW.toISOString());
+  });
+
+  it('elegir la opción vacía limpia las dos cosas', () => {
+    const next = setAddressProvince(laPlata, '', NOW);
+    expect(next.stateName).toBe('');
+    expect(next.cityName).toBe('');
+  });
+
+  it('re-elegir la misma provincia NO borra la localidad ni ensucia el origen', () => {
+    // Sin esto, un re-render que repite el `onChange` le borraría la localidad
+    // a alguien que no tocó nada.
+    const next = setAddressProvince(laPlata, 'Buenos Aires', NOW);
+    expect(next).toBe(laPlata);
+  });
+
+  it('con una localidad vieja no reconocida la limpia al confirmar la provincia', () => {
+    const martinez = { ...laPlata, cityName: 'Martínez' };
+    expect(setAddressProvince(martinez, 'Buenos Aires', NOW).cityName).toBe('');
+  });
+});
+
+describe('composeFormatted con los valores del catálogo', () => {
+  it('ya no necesita deduplicar CABA: son dos strings distintos', () => {
+    // Antes Georef devolvía "Ciudad Autónoma de Buenos Aires" en localidad Y
+    // provincia, y `composeFormatted` tenía que tirar una. Con el catálogo son
+    // "Palermo" y "Capital Federal": las dos partes entran.
+    const value = {
+      ...emptyAddress(),
+      streetName: 'AV CABILDO',
+      streetNumber: '2000',
+      cityName: 'Palermo',
+      stateName: 'Capital Federal',
+    };
+    expect(composeFormatted(value)).toBe(
+      'AV CABILDO 2000, Palermo, Capital Federal',
+    );
+  });
+
+  it('sigue deduplicando los datos viejos que tienen la parte repetida', () => {
+    const legacy = {
+      ...emptyAddress(),
+      streetName: 'AV CABILDO',
+      streetNumber: '2000',
+      cityName: 'Ciudad Autónoma de Buenos Aires',
+      stateName: 'Ciudad Autónoma de Buenos Aires',
+    };
+    expect(composeFormatted(legacy)).toBe(
+      'AV CABILDO 2000, Ciudad Autónoma de Buenos Aires',
+    );
   });
 });
