@@ -167,6 +167,48 @@ describe('validateAddress', () => {
   });
 });
 
+describe('validateAddress con el catálogo de Mercado Pago', () => {
+  it('frena una localidad completa que Mercado Pago no conoce', () => {
+    // El borrador viejo del ticket: "Martínez" está lleno y prolijo, pasa el
+    // chequeo de campos faltantes, y es EL valor con el que la vinculación se
+    // cae. Antes se iba derecho al backend.
+    const martinez = georefAddress({
+      cityName: 'Martínez',
+      stateName: 'Buenos Aires',
+    });
+    expect(validateAddress(martinez)).toContain('la localidad');
+  });
+
+  it('nombra la provincia cuando la que está guardada no existe', () => {
+    const rota = manualAddress({ stateName: 'Bs. As.', cityName: 'La Plata' });
+    expect(validateAddress(rota)).toContain('la provincia');
+  });
+
+  it('el mensaje explica que el problema es Mercado Pago', () => {
+    const martinez = georefAddress({
+      cityName: 'Martínez',
+      stateName: 'Buenos Aires',
+    });
+    expect(validateAddress(martinez)).toContain('Mercado Pago');
+  });
+
+  it('deja pasar la misma dirección con la localidad corregida', () => {
+    const corregida = georefAddress({
+      cityName: 'San Isidro',
+      stateName: 'Buenos Aires',
+    });
+    expect(validateAddress(corregida)).toBeNull();
+  });
+
+  it('el campo vacío sigue hablando de lo que FALTA, no de Mercado Pago', () => {
+    // Un solo problema, un solo mensaje: decir las dos cosas manda a buscar
+    // dos errores donde hay uno.
+    const error = validateAddress(manualAddress({ cityName: '' }));
+    expect(error).toContain('falta');
+    expect(error).not.toContain('Mercado Pago');
+  });
+});
+
 describe('validateName', () => {
   it('exige el nombre', () => {
     expect(validateName('')).toBeTruthy();
