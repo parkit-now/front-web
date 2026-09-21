@@ -2,8 +2,10 @@ import { useCallback, useMemo, useState } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { SectionHeader } from '../../../../shared/components/SectionHeader';
 import { Badge } from '../../../../shared/components/ui/Badge';
+import { Button } from '../../../../shared/components/ui/Button';
 import { Avatar } from '../../../../shared/components/Avatar';
 import { EmptyState } from '../../../../shared/components/ui/EmptyState';
+import { IconPencil, IconPlus } from '../../../../shared/components/icons';
 import { fmtDateTimeAr } from '../../../../shared/utils/fmt';
 import { useDebouncedValue } from '../../../../shared/hooks/useDebouncedValue';
 import { translateApiError } from '../../../../lib/api/translate';
@@ -12,6 +14,8 @@ import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
 import { useSucursal } from '../../context/SucursalContext';
 import { useStaffList } from '../../hooks/useStaff';
 import type { StaffMember, StaffRole } from '../../services/staff';
+import { AddStaffModal } from './AddStaffModal';
+import { StaffManageModal } from './StaffManageModal';
 
 const ROLE_LABELS: Record<'owner' | 'operator', string> = {
   owner: 'Dueño',
@@ -20,13 +24,15 @@ const ROLE_LABELS: Record<'owner' | 'operator', string> = {
 
 export function PersonalPage() {
   const userId = useCurrentUserId();
-  const { sucursalId, sucursal } = useSucursal();
+  const { sucursalId, sucursal, sucursales } = useSucursal();
 
   const [search, setSearch] = useState('');
   const [role, setRole] = useState<'' | StaffRole>('');
   const [allBranches, setAllBranches] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [adding, setAdding] = useState(false);
+  const [managingId, setManagingId] = useState<string | null>(null);
 
   const debouncedSearch = useDebouncedValue(search, 300);
 
@@ -40,6 +46,12 @@ export function PersonalPage() {
 
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
   const total = query.data?.total ?? 0;
+
+  // La persona abierta se re-lee del listado en vez de guardarse entera: tras
+  // una mutación el modal tiene que mostrar las membresías nuevas, no la foto
+  // del click. Si desaparece del listado (se la sacó de su única sucursal, o
+  // un filtro dejó de matchearla) el modal se cierra solo.
+  const managing = items.find((member) => member.id === managingId) ?? null;
 
   const handlePaginationChange = useCallback(
     (state: { pageIndex: number; pageSize: number }) => {
@@ -113,8 +125,40 @@ export function PersonalPage() {
           </span>
         ),
       },
+      {
+        id: 'acciones',
+        header: () => <div style={{ textAlign: 'center' }}>Acciones</div>,
+        size: 110,
+        enableSorting: false,
+        enableHiding: false,
+        cell: ({ row }) => {
+          const member = row.original;
+          // Nadie se gestiona a sí mismo: la API responde 403
+          // STAFF_SELF_MANAGEMENT, así que el botón ni se habilita. Existe para
+          // que un dueño no se auto-degrade y pierda su propia playa.
+          const isSelf = member.id === userId;
+          return (
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <button
+                type="button"
+                className="pk-btn pk-btn-ghost pk-btn-icon"
+                title={
+                  isSelf
+                    ? 'No podés cambiar ni eliminar tu propio rol. Pedíselo a otro dueño.'
+                    : 'Gestionar'
+                }
+                aria-label={`Gestionar a ${member.name ?? member.email}`}
+                disabled={isSelf}
+                onClick={() => setManagingId(member.id)}
+              >
+                <IconPencil size={16} />
+              </button>
+            </div>
+          );
+        },
+      },
     ],
-    [],
+    [userId],
   );
 
   const scopeLabel = allBranches
@@ -150,6 +194,20 @@ export function PersonalPage() {
           total > 0
             ? `${total} ${total === 1 ? 'persona' : 'personas'} en ${scopeLabel}`
             : undefined
+        }
+        action={
+          // Sin sucursales no hay a dónde agregar a nadie. Es el caso del admin
+          // de plataforma sin membresías, que además ve el listado vacío.
+          sucursales.length > 0 ? (
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<IconPlus size={15} />}
+              onClick={() => setAdding(true)}
+            >
+              Agregar persona
+            </Button>
+          ) : undefined
         }
       />
 
@@ -225,6 +283,23 @@ export function PersonalPage() {
               ? { userId, tenantId: sucursalId, tableKey: 'owner-staff' }
               : undefined
           }
+        />
+      )}
+
+      <AddStaffModal
+        open={adding}
+        onClose={() => setAdding(false)}
+        branches={sucursales}
+        defaultBranchId={sucursalId}
+      />
+
+      {managing && (
+        <StaffManageModal
+          open
+          onClose={() => setManagingId(null)}
+          member={managing}
+          branches={sucursales}
+          currentUserId={userId}
         />
       )}
     </div>

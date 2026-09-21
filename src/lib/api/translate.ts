@@ -70,7 +70,15 @@ export type EndpointKey =
   | 'metrics.summary'
   | 'cashSessions.list'
   | 'staff.list'
-  | 'audit.list';
+  | 'staff.add'
+  | 'staff.update'
+  | 'staff.remove'
+  | 'audit.list'
+  | 'mercadoPago.getAccount'
+  | 'mercadoPago.authorizationUrl'
+  | 'mercadoPago.oauthCallback'
+  | 'mercadoPago.unlink'
+  | 'mercadoPago.resyncPos';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;
@@ -133,6 +141,12 @@ const CODE_MESSAGES: Record<string, string> = {
   MEMBERSHIP_NOT_FOUND:
     'El usuario no tiene un rol asignado en ese estacionamiento.',
 
+  // Staff · ABM de empleados hecho por el dueño.
+  STAFF_SELF_MANAGEMENT:
+    'No podés cambiar ni eliminar tu propio rol. Pedíselo a otro dueño.',
+  STAFF_LAST_OWNER:
+    'Tiene que quedar al menos un dueño en el estacionamiento. Nombrá otro antes de hacer este cambio.',
+
   // Entidad (tenant) — acceso por membership.
   ENTITY_NOT_FOUND: 'No encontramos el estacionamiento.',
   ENTITY_NOT_OWNER: 'Solo el propietario puede realizar esta acción.',
@@ -160,6 +174,30 @@ const CODE_MESSAGES: Record<string, string> = {
   // propósito: distinguirlos le confirmaría a un tercero que el id existe.
   CASH_SESSION_NOT_FOUND:
     'La caja seleccionada no existe o no pertenece a este estacionamiento.',
+
+  // Mercado Pago. Le hablamos al dueño de la playa, no a un desarrollador: cada
+  // mensaje dice qué pasó y qué hacer. A la `POS` de Mercado Pago le decimos
+  // "punto de venta" y no "caja", para no pisarnos con las cajas del turno.
+  MP_NOT_LINKED:
+    'Todavía no vinculaste tu cuenta de Mercado Pago. Vinculala desde Integraciones para cobrar con QR.',
+  MP_ALREADY_LINKED:
+    'Este estacionamiento ya tiene una cuenta de Mercado Pago vinculada. Desvinculala antes de conectar otra.',
+  MP_ENTITY_ADDRESS_INCOMPLETE:
+    'Completá la dirección de tu estacionamiento antes de vincular Mercado Pago.',
+  MP_ACCOUNT_TOKEN_EXPIRED:
+    'Se venció la conexión con Mercado Pago. Volvé a vincular tu cuenta para seguir cobrando con QR.',
+  MP_ACCOUNT_REVOKED:
+    'Se revocó el acceso de Parkit a tu cuenta de Mercado Pago. Volvé a vincularla para seguir cobrando con QR.',
+  MP_OAUTH_STATE_INVALID:
+    'El enlace de vinculación venció o ya se usó. Probá de nuevo desde Integraciones.',
+  MP_OAUTH_CODE_EXCHANGE_FAILED:
+    'Mercado Pago no pudo confirmar la vinculación. Volvé a intentarlo en unos minutos.',
+  MP_STORE_CREATE_FAILED:
+    'No pudimos crear la sucursal en Mercado Pago. Volvé a intentarlo en unos minutos.',
+  MP_POS_CREATE_FAILED:
+    'Vinculamos tu cuenta pero no pudimos crear el punto de venta, así que todavía no hay QR. Probá sincronizarlo desde Integraciones.',
+  MP_UNAVAILABLE:
+    'Mercado Pago no está respondiendo. Volvé a intentarlo en unos minutos.',
 
   // Validacion (envoltorio — el detalle por campo se traduce con
   // translateValidationCode).
@@ -251,7 +289,13 @@ const VALIDATION_CODE_MESSAGES: Record<string, string> = {
   isInt: 'Debe ser un número entero.',
   isBoolean: 'Debe ser verdadero o falso.',
   isEmail: 'Email inválido.',
+  // `isUuid` es el nombre real del constraint de class-validator (`IS_UUID`);
+  // `isUUID` queda por las dudas, pero el backend nunca lo emite.
+  isUuid: 'Identificador inválido.',
   isUUID: 'Identificador inválido.',
+  // Lo tira el pipe global con `forbidNonWhitelisted` cuando el body trae una
+  // clave de más. Es un bug del front, no del usuario, pero mejor que el genérico.
+  whitelistValidation: 'Valor inválido.',
   isDate: 'Fecha inválida.',
   // El backend exige offset explícito en las fechas de métricas: sin él
   // resolvería el instante contra el reloj del servidor (UTC en producción).
@@ -271,6 +315,35 @@ const VALIDATION_FIELD_CODE_MESSAGES: Record<string, string> = {
   'email:isEmail': 'Email inválido.',
   'email:isNotEmpty': 'Ingresá tu email.',
 };
+
+/** Un `ValidationFieldErrorDto` reducido a lo que la UI necesita. */
+export interface FieldError {
+  field: string;
+  code: string;
+}
+
+/**
+ * Los errores por campo de un `400 VALIDATION_FAILED`, o `[]` si el error es
+ * otra cosa.
+ *
+ * El `problem` de un 400 de validación es un `ValidationProblemDetailsDto`, que
+ * suma `validationsErrors[]` al resto. Como `ApiError.problem` es la unión de
+ * los dos, hay que estrecharla antes de leer el array.
+ */
+export function readFieldErrors(error: unknown): FieldError[] {
+  if (!(error instanceof ApiError) || !error.problem) return [];
+  if (!('validationsErrors' in error.problem)) return [];
+
+  const raw: unknown = error.problem.validationsErrors;
+  if (!Array.isArray(raw)) return [];
+
+  return raw.flatMap((item): FieldError[] => {
+    if (typeof item !== 'object' || item === null) return [];
+    const { field, code } = item as { field?: unknown; code?: unknown };
+    if (typeof field !== 'string' || typeof code !== 'string') return [];
+    return [{ field, code }];
+  });
+}
 
 /**
  * Traduce un `ValidationFieldErrorDto.code` (constraint name de

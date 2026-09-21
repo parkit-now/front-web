@@ -58,7 +58,9 @@ const SECTIONS = [
   'auditoria',
   'tasas',
   'vehiculos',
+  'tipos-de-vehiculo',
   'metodos-de-pago',
+  'integraciones',
   'config',
 ] as const;
 

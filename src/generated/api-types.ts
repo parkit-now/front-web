@@ -483,6 +483,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Finish the Mercado Pago linking flow
+         * @description Exchanges the `state` atomically (single use), verifies the caller still owns the entity that started the flow, swaps the `authorization_code` for OAuth tokens, provisions the Mercado Pago `Store` and `POS`, stores the encrypted tokens and creates the `mercadopago_qr` payment method.
+         *
+         *     The route deliberately carries no `:tenantId`: the entity comes from the stored `state`, because Mercado Pago requires a static `redirect_uri`.
+         *
+         *     Every `state` failure — unknown, already consumed, expired, or belonging to somebody else — answers the same generic `MP_OAUTH_STATE_INVALID`, so the endpoint cannot be used as an oracle to probe other people flows.
+         */
         post: operations["mercadoPagoOauthCallback"];
         delete?: never;
         options?: never;
@@ -1420,6 +1428,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tenants/{tenantId}/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add a person to this lot’s staff
+         * @description Requires owner role. La persona se identifica por email y tiene que tener cuenta: **no hay invitación**, si el mail no está registrado la respuesta es `404 USER_NOT_FOUND`.
+         *
+         *     Es también la forma de darle a alguien un rol en un lote **adicional** sin sacarle el que ya tiene: mismo email, otro `:tenantId`.
+         */
+        post: operations["tenantStaffAdd"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/staff/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove a person from this lot’s staff
+         * @description Requires owner role. Desvincula a la persona de **este** lote; su cuenta y sus otros lotes no se tocan.
+         *
+         *     No se puede eliminar la membresía propia, ni la del último owner del lote.
+         */
+        delete: operations["tenantStaffRemove"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a person’s role, or move them to another lot
+         * @description Requires owner role. Acepta `role`, `tenantId` o los dos; un body vacío es `400`.
+         *
+         *     `tenantId` **muda** la membresía: el lote de la URL la pierde y el caller tiene que ser owner de ambos. Para que la persona trabaje en los dos a la vez, usar `POST /tenants/<el otro>/staff` en vez de este endpoint.
+         *
+         *     No se puede modificar la membresía propia, ni dejar al lote sin ningún owner.
+         */
+        patch: operations["tenantStaffUpdate"];
+        trace?: never;
+    };
     "/tenants/{tenantId}/vehicle-types": {
         parameters: {
             query?: never;
@@ -2114,6 +2174,22 @@ export interface components {
              * @example 480
              */
             openMinute: number;
+        };
+        CreateStaffMemberDto: {
+            /**
+             * Format: email
+             * @description Email de una cuenta **ya registrada** en Parkit. Se normaliza (trim + minúsculas) antes de buscarla.
+             *
+             *     No hay flujo de invitación: si nadie se registró con ese mail, la respuesta es `404 USER_NOT_FOUND` y la persona tiene que crearse la cuenta primero.
+             * @example ana@example.com
+             */
+            email: string;
+            /**
+             * @description Rol en **este** lote. `owner` está permitido: un dueño puede nombrar a otro dueño.
+             * @example operator
+             * @enum {string}
+             */
+            role: "owner" | "operator";
         };
         CreateVehicleDto: {
             /** @example Toyota */
@@ -3452,6 +3528,49 @@ export interface components {
              */
             tenantName: string;
         };
+        StaffMembershipResultDto: {
+            /**
+             * Format: date-time
+             * @description Antigüedad de la persona en la empresa. Se conserva al mudarla de lote, así que puede ser anterior al alta del lote destino.
+             */
+            createdAt: string;
+            /**
+             * Format: email
+             * @example ana@example.com
+             */
+            email: string;
+            /**
+             * @description Rol de plataforma (`admin` | `user`), no el del lote. El del lote es `role`.
+             * @example user
+             * @enum {string}
+             */
+            globalRole: "admin" | "user";
+            /**
+             * @description Nombre espejado de Supabase Auth. `null` en cuentas de email/password creadas sin uno.
+             * @example Ana Gómez
+             */
+            name: string | null;
+            /**
+             * @example operator
+             * @enum {string}
+             */
+            role: "owner" | "operator";
+            /**
+             * Format: uuid
+             * @description Lote donde quedó la membresía. Difiere del `:tenantId` de la URL cuando el PATCH fue una mudanza.
+             */
+            tenantId: string;
+            /**
+             * @description Nombre del lote, para no obligar a un segundo lookup.
+             * @example Estacionamiento Once
+             */
+            tenantName: string;
+            /**
+             * Format: uuid
+             * @description Id de la persona. Es el `:userId` de los PATCH/DELETE posteriores.
+             */
+            userId: string;
+        };
         SummaryAlertsDto: {
             /**
              * @description Unreviewed, non-archived LPR detections (`status = pending`). Detail lives at `GET /tenants/:tenantId/lpr-events?status=pending`.
@@ -3801,6 +3920,20 @@ export interface components {
         UpdateServiceDto: {
             /** @description Whether the amenity is offered by the tenant. */
             enabled?: boolean;
+        };
+        UpdateStaffMemberDto: {
+            /**
+             * @description Nuevo rol. Si además viene `tenantId`, se aplica en el lote destino. Omitirlo en una mudanza conserva el rol actual.
+             * @enum {string}
+             */
+            role?: "owner" | "operator";
+            /**
+             * Format: uuid
+             * @description **Mueve** la membresía a este lote: el de la URL deja de tenerla.
+             *
+             *     El caller tiene que ser owner de los dos. Mandar el mismo id que el de la URL no es una mudanza — se trata como un cambio de rol común.
+             */
+            tenantId?: string;
         };
         UpdateVehicleDto: {
             /** @example Toyota */
@@ -7565,6 +7698,207 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ServiceChangesResponseDto"];
+                };
+            };
+        };
+    };
+    tenantStaffAdd: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID de la entidad (estacionamiento / tenant). */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStaffMemberDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffMembershipResultDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Caller is not a member of the entity (`ENTITY_NO_ACCESS`), or is a member without the `owner` role (`ENTITY_INSUFFICIENT_ROLE`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description No account registered with that email (`USER_NOT_FOUND`). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The person already works at this lot (`MEMBERSHIP_ALREADY_EXISTS`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    tenantStaffRemove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID de la entidad (estacionamiento / tenant). */
+                tenantId: string;
+                /** @description Id de la persona. */
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Membership removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Own membership (`STAFF_SELF_MANAGEMENT`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description The person does not work at this lot (`MEMBERSHIP_NOT_FOUND`). A repeated DELETE lands here. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Would leave the lot without an owner (`STAFF_LAST_OWNER`). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    tenantStaffUpdate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description ID de la entidad (estacionamiento / tenant). */
+                tenantId: string;
+                /** @description Id de la persona (no el de la membresía: no tiene id propio). */
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateStaffMemberDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffMembershipResultDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationProblemDetailsDto"];
+                };
+            };
+            /** @description Missing, malformed, or expired bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description Own membership (`STAFF_SELF_MANAGEMENT`), or the destination lot is not the caller’s (`ENTITY_NO_ACCESS`). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description `MEMBERSHIP_NOT_FOUND` | `ENTITY_NOT_FOUND` (destination). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+            /** @description `STAFF_LAST_OWNER` (would leave the lot ownerless) | `MEMBERSHIP_ALREADY_EXISTS` (already works at the destination). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
         };
