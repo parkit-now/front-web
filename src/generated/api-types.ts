@@ -2813,6 +2813,12 @@ export interface components {
              */
             role: "admin" | "user";
         };
+        MetricsProjectionsDto: {
+            monthHistoricalForecast: components["schemas"]["RevenueProjectionDto"];
+            monthWithOpenEntries: components["schemas"]["RevenueProjectionDto"];
+            todayHistoricalForecast: components["schemas"]["RevenueProjectionDto"];
+            todayWithOpenEntries: components["schemas"]["RevenueProjectionDto"];
+        };
         MetricsSummaryDto: {
             alerts: components["schemas"]["SummaryAlertsDto"];
             comparison: components["schemas"]["SummaryComparisonDto"];
@@ -2824,10 +2830,11 @@ export interface components {
             /**
              * Format: date-time
              * @description Instant the snapshot was taken. Also the upper bound of the "today" window and the offset the baselines are truncated to.
-             */
+            */
             generatedAt: string;
             /** @description Live occupancy at `generatedAt`. */
             occupancy: components["schemas"]["OccupancyDto"];
+            projections: components["schemas"]["MetricsProjectionsDto"];
             /** @description Totals from the start of the current civil day up to `generatedAt`. */
             today: components["schemas"]["DayTotalsDto"];
             /**
@@ -3595,6 +3602,19 @@ export interface components {
              * @example 19
              */
             vehiclesOut: number;
+        };
+        RevenueProjectionDto: {
+            /**
+             * @description Confidence level based on the amount of historical data.
+             * @enum {string}
+             */
+            confidence: "low" | "medium" | "high";
+            /** @description Historical days used by the trend model. */
+            historicalDays: number;
+            /** @description Open entries included in the projection. */
+            openEntries: number;
+            /** @description Projected revenue in ARS. Orientative, not an accounting total. */
+            value: number;
         };
         RevenueResponseDto: {
             /** @description Chronological buckets covering the window with no gaps or overlaps. First and last are clipped to the requested instants. */

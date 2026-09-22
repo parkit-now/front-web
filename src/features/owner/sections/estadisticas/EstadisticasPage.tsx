@@ -293,6 +293,36 @@ export function EstadisticasPage() {
         monthLoading={isMonthLoading}
       />
 
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          margin: '4px 0 12px',
+          color: 'var(--text-3)',
+          fontSize: 12,
+          fontWeight: 700,
+          textTransform: 'uppercase',
+          letterSpacing: '.04em',
+        }}
+      >
+        <span
+          style={{
+            flex: 1,
+            height: 1,
+            background: 'var(--border)',
+          }}
+        />
+        <span>Períodos y filtros</span>
+        <span
+          style={{
+            flex: 1,
+            height: 1,
+            background: 'var(--border)',
+          }}
+        />
+      </div>
+
       {/* Filtros */}
       <div
         className="pk-card pk-card-pad"
