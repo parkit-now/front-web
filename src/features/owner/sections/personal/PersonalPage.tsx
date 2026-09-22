@@ -7,6 +7,7 @@ import { Avatar } from '../../../../shared/components/Avatar';
 import { EmptyState } from '../../../../shared/components/ui/EmptyState';
 import { IconPencil, IconPlus } from '../../../../shared/components/icons';
 import { fmtDateTimeAr } from '../../../../shared/utils/fmt';
+import { isUuid } from '../../../../shared/utils/uuid';
 import { useDebouncedValue } from '../../../../shared/hooks/useDebouncedValue';
 import { translateApiError } from '../../../../lib/api/translate';
 import { DataTable } from '../../../../features/data-table';
@@ -16,6 +17,7 @@ import { useStaffList } from '../../hooks/useStaff';
 import type { StaffMember, StaffRole } from '../../services/staff';
 import { AddStaffModal } from './AddStaffModal';
 import { StaffManageModal } from './StaffManageModal';
+import './personal.css';
 
 const ROLE_LABELS: Record<'owner' | 'operator', string> = {
   owner: 'Dueño',
@@ -24,7 +26,12 @@ const ROLE_LABELS: Record<'owner' | 'operator', string> = {
 
 export function PersonalPage() {
   const userId = useCurrentUserId();
-  const { sucursalId, sucursal, sucursales } = useSucursal();
+  const {
+    sucursalId,
+    sucursal,
+    sucursales,
+    isLoading: sucursalesLoading,
+  } = useSucursal();
 
   const [search, setSearch] = useState('');
   const [role, setRole] = useState<'' | StaffRole>('');
@@ -35,17 +42,24 @@ export function PersonalPage() {
   const [managingId, setManagingId] = useState<string | null>(null);
 
   const debouncedSearch = useDebouncedValue(search, 300);
+  const canLoadStaff = allBranches || Boolean(sucursal);
+  const scopedTenantId =
+    !allBranches && isUuid(sucursalId) ? sucursalId : undefined;
 
-  const query = useStaffList({
-    search: debouncedSearch || undefined,
-    role: role || undefined,
-    tenantId: allBranches ? undefined : sucursalId || undefined,
-    page,
-    pageSize,
-  });
+  const query = useStaffList(
+    {
+      search: debouncedSearch || undefined,
+      role: role || undefined,
+      tenantId: scopedTenantId,
+      page,
+      pageSize,
+    },
+    { enabled: canLoadStaff },
+  );
 
   const items = useMemo(() => query.data?.items ?? [], [query.data]);
   const total = query.data?.total ?? 0;
+  const isLoading = query.isLoading || (!canLoadStaff && sucursalesLoading);
 
   // La persona abierta se re-lee del listado en vez de guardarse entera: tras
   // una mutación el modal tiene que mostrar las membresías nuevas, no la foto
@@ -71,27 +85,18 @@ export function PersonalPage() {
       {
         id: 'miembro',
         header: 'Miembro',
+        size: 280,
         accessorFn: (member) => member.name ?? member.email,
         cell: ({ row }) => {
           const member = row.original;
           // `name` es null en cuentas creadas con email/password sin nombre.
           const display = member.name ?? member.email;
           return (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div className="staff-member-cell">
               <Avatar name={display} size={32} soft />
-              <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: 'var(--text-1)',
-                  }}
-                >
-                  {display}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                  {member.email}
-                </div>
+              <div className="staff-member-copy">
+                <div className="staff-member-name">{display}</div>
+                <div className="staff-member-email">{member.email}</div>
               </div>
             </div>
           );
@@ -100,16 +105,25 @@ export function PersonalPage() {
       {
         id: 'roles',
         header: 'Roles por sucursal',
+        size: 420,
         accessorFn: (member) =>
           member.memberships.map((m) => m.tenantName).join(', '),
         cell: ({ row }) => (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div className="staff-role-list">
             {row.original.memberships.map((membership) => (
               <Badge
                 key={membership.tenantId}
                 variant={membership.role === 'owner' ? 'brand' : 'ok'}
+                className="staff-role-badge"
+                title={`${membership.tenantName} · ${ROLE_LABELS[membership.role]}`}
               >
-                {membership.tenantName} · {ROLE_LABELS[membership.role]}
+                <span className="staff-role-branch">
+                  {membership.tenantName}
+                </span>
+                <span className="staff-role-separator">·</span>
+                <strong className="staff-role-name">
+                  {ROLE_LABELS[membership.role]}
+                </strong>
               </Badge>
             ))}
           </div>
@@ -161,14 +175,10 @@ export function PersonalPage() {
     [userId],
   );
 
-  const scopeLabel = allBranches
-    ? 'todas tus sucursales'
-    : (sucursal?.nombre ?? 'la sucursal activa');
-
   if (query.isError) {
     return (
       <div>
-        <SectionHeader title="Personal" />
+        <SectionHeader title="Personal" subtitle="Equipo y permisos" />
         <div className="pk-card">
           <EmptyState
             title="No se pudo cargar el personal"
@@ -184,7 +194,10 @@ export function PersonalPage() {
   // El alcance sale de las membresías de quien consulta, no de la URL: un admin
   // que entra a un lote ajeno no tiene membresías y recibe una lista vacía.
   const showsEmptyScopeHint =
-    !query.isLoading && total === 0 && !debouncedSearch && !role;
+    !isLoading && total === 0 && !debouncedSearch && !role;
+  const scopeLabel = allBranches
+    ? 'todas tus sucursales'
+    : (sucursal?.nombre ?? 'la sucursal activa');
 
   return (
     <div>
@@ -193,11 +206,9 @@ export function PersonalPage() {
         subtitle={
           total > 0
             ? `${total} ${total === 1 ? 'persona' : 'personas'} en ${scopeLabel}`
-            : undefined
+            : 'Equipo y permisos'
         }
         action={
-          // Sin sucursales no hay a dónde agregar a nadie. Es el caso del admin
-          // de plataforma sin membresías, que además ve el listado vacío.
           sucursales.length > 0 ? (
             <Button
               variant="primary"
@@ -222,7 +233,7 @@ export function PersonalPage() {
         <DataTable<StaffMember>
           data={items}
           columns={columns}
-          isLoading={query.isLoading}
+          isLoading={isLoading}
           emptyMessage="No hay personas que coincidan con la búsqueda."
           searchPlaceholder="Buscar por nombre o email"
           getRowId={(member) => member.id}

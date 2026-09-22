@@ -299,8 +299,8 @@ export function EstadisticasPage() {
         style={{
           display: 'flex',
           flexDirection: 'column',
-          gap: 16,
-          marginBottom: 24,
+          gap: 10,
+          marginBottom: 12,
         }}
       >
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -523,8 +523,8 @@ export function EstadisticasPage() {
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-              gap: 16,
-              marginBottom: 24,
+              gap: 10,
+              marginBottom: 12,
             }}
           >
             <KpiCard
@@ -545,10 +545,10 @@ export function EstadisticasPage() {
           </div>
 
           {/* Gráfico */}
-          <div className="pk-card pk-card-pad" style={{ marginBottom: 24 }}>
+          <div className="pk-card pk-card-pad" style={{ marginBottom: 12 }}>
             {/* Las dos series vienen en el mismo payload: cambiar de pestaña no
                 dispara otra request. */}
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 10 }}>
               <Tabs
                 tabs={SERIE_TABS}
                 active={serie}
@@ -620,8 +620,8 @@ export function EstadisticasPage() {
           </div>
 
           {/* Torta por método de pago */}
-          <div className="pk-card pk-card-pad" style={{ marginBottom: 24 }}>
-            <div style={{ marginBottom: 16 }}>
+          <div className="pk-card pk-card-pad" style={{ marginBottom: 12 }}>
+            <div style={{ marginBottom: 10 }}>
               <span
                 style={{
                   fontSize: 13,

@@ -35,7 +35,7 @@ import {
 } from './operationUtils';
 import './operation.css';
 
-const SEARCHABLE_KEYS = ['plate', 'notes'];
+const SEARCHABLE_KEYS = ['plate', 'vehicleBrand', 'vehicleModel', 'notes'];
 const FILTERABLE_COLUMNS = [
   'enteredAtLocalDate',
   'leftAtLocalDate',
@@ -473,7 +473,7 @@ export function HistorialPage() {
           columns={columns}
           isLoading={isLoading}
           emptyMessage="No hay movimientos registrados todavía."
-          searchPlaceholder="Buscar por patente o notas"
+          searchPlaceholder="Buscar por patente, vehículo o notas"
           searchableKeys={SEARCHABLE_KEYS}
           filterableColumns={FILTERABLE_COLUMNS}
           filterOptionsByColumn={{

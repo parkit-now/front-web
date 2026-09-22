@@ -352,11 +352,11 @@ export function SolicitudesPage() {
 
         <div style={{ flex: 1, overflowY: 'auto' }}>
           {listQuery.isLoading ? (
-            <p style={{ padding: 20, color: 'var(--text-2)', fontSize: 14 }}>
+            <p style={{ padding: 12, color: 'var(--text-2)', fontSize: 14 }}>
               Cargando solicitudes...
             </p>
           ) : listQuery.isError ? (
-            <div style={{ padding: 20 }}>
+            <div style={{ padding: 12 }}>
               <p style={{ color: 'var(--text-2)', fontSize: 14 }}>
                 No pudimos cargar las solicitudes.
               </p>
@@ -370,7 +370,7 @@ export function SolicitudesPage() {
           ) : items.length === 0 ? (
             <div
               style={{
-                padding: 32,
+                padding: 16,
                 textAlign: 'center',
                 display: 'flex',
                 flexDirection: 'column',
@@ -462,7 +462,7 @@ export function SolicitudesPage() {
         }}
       >
         {selectedId && detailQuery.isLoading ? (
-          <p style={{ padding: 28, color: 'var(--text-2)', fontSize: 14 }}>
+          <p style={{ padding: 12, color: 'var(--text-2)', fontSize: 14 }}>
             Cargando detalle...
           </p>
         ) : detail ? (
@@ -712,7 +712,7 @@ export function SolicitudesPage() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: 12,
-              padding: 40,
+              padding: 16,
             }}
           >
             <IconInbox size={40} style={{ color: 'var(--text-3)' }} />

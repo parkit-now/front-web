@@ -236,20 +236,20 @@ export function UserDetailDrawer({
       width={520}
     >
       {detailQuery.isLoading ? (
-        <p style={{ padding: 24, color: 'var(--text-2)', fontSize: 14 }}>
+        <p style={{ padding: 16, color: 'var(--text-2)', fontSize: 14 }}>
           Cargando usuario…
         </p>
       ) : !user ? (
-        <p style={{ padding: 24, color: 'var(--text-2)', fontSize: 14 }}>
+        <p style={{ padding: 16, color: 'var(--text-2)', fontSize: 14 }}>
           No pudimos cargar el usuario.
         </p>
       ) : (
         <div
           style={{
-            padding: 24,
+            padding: 16,
             display: 'flex',
             flexDirection: 'column',
-            gap: 24,
+            gap: 16,
           }}
         >
           {/* Identity */}

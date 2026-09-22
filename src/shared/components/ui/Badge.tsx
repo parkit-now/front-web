@@ -1,6 +1,6 @@
 type BadgeVariant = 'default' | 'brand' | 'ok' | 'err' | 'warn';
 
-interface BadgeProps {
+interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   children: React.ReactNode;
   variant?: BadgeVariant;
   dot?: boolean;
@@ -20,6 +20,7 @@ export function Badge({
   variant = 'default',
   dot = false,
   className = '',
+  ...spanProps
 }: BadgeProps) {
   const cls = [
     'pk-badge',
@@ -29,5 +30,9 @@ export function Badge({
   ]
     .filter(Boolean)
     .join(' ');
-  return <span className={cls}>{children}</span>;
+  return (
+    <span className={cls} {...spanProps}>
+      {children}
+    </span>
+  );
 }

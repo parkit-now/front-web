@@ -4,7 +4,6 @@ import { Avatar } from '../../../shared/components/Avatar';
 import {
   IconUsers,
   IconChart,
-  IconReceipt,
   IconShield,
   IconDollar,
   IconClock,
@@ -40,11 +39,6 @@ export const OWNER_NAV_ITEMS: NavItem[] = [
     segment: 'estadisticas',
     label: 'Estadísticas',
     icon: <IconChart size={18} />,
-  },
-  {
-    segment: 'transacciones',
-    label: 'Transacciones',
-    icon: <IconReceipt size={18} />,
   },
   {
     segment: 'auditoria',
@@ -117,7 +111,15 @@ export function OwnerSidebar({
       }}
     >
       {/* Logo */}
-      <div style={{ padding: '20px 20px 16px' }}>
+      <div
+        style={{
+          height: 64,
+          padding: '0 20px',
+          display: 'flex',
+          alignItems: 'center',
+          flexShrink: 0,
+        }}
+      >
         <Logo size="md" />
       </div>
 

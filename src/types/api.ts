@@ -5,7 +5,6 @@ export type BayType = 'auto' | 'moto' | 'bici';
 export type BayStatus = 'occupied' | 'overdue' | 'reserved' | 'vacant';
 export type UserRole = 'owner' | 'admin' | 'supervisor' | 'operator';
 export type SucursalEstado = 'active' | 'maintenance';
-export type TransactionEstado = 'ok' | 'failed' | 'cancelled';
 
 export interface Sucursal {
   id: string;
@@ -35,18 +34,6 @@ export interface Bay {
   reserva_id: string | null;
   tarifa_por_hora: number;
   monto_actual: number | null;
-}
-
-export interface Transaction {
-  id: string;
-  sucursal_id: string;
-  patente: string;
-  cliente: string;
-  monto: number;
-  medio_pago: string;
-  estado: TransactionEstado;
-  fecha_label: string;
-  procesado_at: string;
 }
 
 export interface MedioPago {

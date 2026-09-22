@@ -34,10 +34,14 @@ export interface StaffFilters {
  * consulta, no de la sucursal activa. Por eso el hook no usa `useSucursal()`
  * — la página decide si acota con `tenantId` o no.
  */
-export function useStaffList(filters: StaffFilters) {
+export function useStaffList(
+  filters: StaffFilters,
+  options: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: [...STAFF_KEY, 'list', filters],
     queryFn: () => listStaff(filters),
+    enabled: options.enabled ?? true,
     placeholderData: keepPreviousData,
   });
 }

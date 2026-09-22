@@ -1,0 +1,77 @@
+.staff-member-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.staff-member-copy {
+  min-width: 0;
+}
+
+.staff-member-name {
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--text-1);
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.staff-member-email {
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--text-3);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.staff-role-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.staff-role-badge {
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  min-height: 24px;
+  padding-block: 3px;
+}
+
+.staff-role-branch {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.staff-role-separator,
+.staff-role-name {
+  flex: none;
+}
+
+.staff-role-name {
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .staff-member-name,
+  .staff-member-email {
+    max-width: 170px;
+  }
+
+  .staff-role-list {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .staff-role-badge {
+    max-width: min(280px, 100%);
+  }
+}

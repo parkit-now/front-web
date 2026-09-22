@@ -5,7 +5,6 @@ import { AuthPage } from './features/auth/AuthPage';
 import { OnboardingPage } from './features/onboarding/components/OnboardingPage';
 import { PersonalPage } from './features/owner/sections/personal/PersonalPage';
 import { EstadisticasPage } from './features/owner/sections/estadisticas/EstadisticasPage';
-import { TransaccionesPage } from './features/owner/sections/transacciones/TransaccionesPage';
 import { HistorialPage } from './features/owner/sections/operacion/HistorialPage';
 import { CajaPage } from './features/owner/sections/operacion/CajaPage';
 import { AuditoriaPage } from './features/owner/sections/auditoria/AuditoriaPage';
@@ -78,7 +77,7 @@ const ownerSectionRoutes = [
   { path: 'caja', element: <CajaPage /> },
   { path: 'personal', element: <PersonalPage /> },
   { path: 'estadisticas', element: <EstadisticasPage /> },
-  { path: 'transacciones', element: <TransaccionesPage /> },
+  { path: 'transacciones', element: <Navigate to="../historial" replace /> },
   { path: 'auditoria', element: <AuditoriaPage /> },
   { path: 'auditoria2', element: <Navigate to="../auditoria" replace /> },
   {

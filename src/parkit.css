@@ -112,7 +112,7 @@ a {
 .portal-main {
   flex: 1;
   min-width: 0;
-  padding: 24px;
+  padding: 12px;
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -146,7 +146,7 @@ a {
   }
 
   .portal-main {
-    padding: 16px;
+    padding: 10px;
     padding-bottom: calc(88px + env(safe-area-inset-bottom));
   }
 
@@ -346,10 +346,10 @@ a {
   box-shadow: var(--shadow-card);
 }
 .pk-card-pad {
-  padding: 24px;
+  padding: 16px;
 }
 .pk-card-pad-lg {
-  padding: 32px;
+  padding: 20px;
 }
 
 /* Alert — aviso destacado reutilizable con icono, copy y acción. */
@@ -443,7 +443,7 @@ a {
   align-items: flex-end;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 .lpr-review-filter-field {

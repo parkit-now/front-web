@@ -861,8 +861,15 @@
   padding: 0 8px;
 }
 
-.dt-pagination-summary {
+.dt-pagination-status {
   flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 180px;
+}
+
+.dt-pagination-summary {
   margin: 0;
   color: var(--color-muted);
   font-size: 13px;
@@ -931,7 +938,7 @@
   z-index: 70;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: 16px;
   background:
     radial-gradient(
       circle at 30% 20%,
@@ -1076,7 +1083,7 @@
     align-items: flex-start;
     flex-direction: column;
   }
-  .dt-pagination-summary {
+  .dt-pagination-status {
     flex: none;
   }
 }
@@ -1109,6 +1116,9 @@
   }
   .dt-pagination-pages {
     flex-wrap: wrap;
+  }
+  .dt-pagination-status {
+    min-width: 0;
   }
   .dt-pagination-summary {
     display: none;
