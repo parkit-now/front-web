@@ -6,6 +6,7 @@ import {
   resolveCertSubstepState,
   resolveCertVerifyErrorEffect,
   resolveOpenCertSubstep,
+  resolvePreviousCertSubstep,
   type CertProgress,
 } from './certSubsteps';
 
@@ -162,5 +163,20 @@ describe('applyCertVerifyError', () => {
   it('sin error previo, uno que no marca nada deja todo en null', () => {
     const next = applyCertVerifyError(EMPTY_CERT_PROGRESS, 'ARCA_UNAVAILABLE');
     expect(next.errorSubstep).toBeNull();
+  });
+});
+
+describe('resolvePreviousCertSubstep', () => {
+  it('el 1 no tiene anterior', () => {
+    expect(resolvePreviousCertSubstep(1)).toBeNull();
+  });
+
+  it.each([
+    [2, 1],
+    [3, 2],
+    [4, 3],
+    [5, 4],
+  ] as const)('el anterior a %i es %i', (id, previous) => {
+    expect(resolvePreviousCertSubstep(id)).toBe(previous);
   });
 });

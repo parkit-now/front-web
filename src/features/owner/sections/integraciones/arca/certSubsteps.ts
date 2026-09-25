@@ -66,6 +66,20 @@ export function resolveOpenCertSubstep(progress: CertProgress): CertSubstepId {
   return 5;
 }
 
+/**
+ * El sub-paso anterior a `id`, para el botón "Volver". `null` en el 1: no
+ * hay a dónde volver.
+ *
+ * Volver NO toca el progreso (no descompleta nada): sólo cambia cuál
+ * sub-paso está abierto, así que vive aparte de `resolveOpenCertSubstep`.
+ */
+export function resolvePreviousCertSubstep(
+  id: CertSubstepId,
+): CertSubstepId | null {
+  const index = CERT_SUBSTEP_IDS.indexOf(id);
+  return index > 0 ? CERT_SUBSTEP_IDS[index - 1] : null;
+}
+
 /** Estado visual de UN sub-paso puntual, para pintar su título. */
 export function resolveCertSubstepState(
   id: CertSubstepId,
