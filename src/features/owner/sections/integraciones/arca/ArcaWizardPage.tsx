@@ -179,9 +179,9 @@ export function ArcaWizardPage() {
   }
 
   /**
-   * "Cambiar CUIT" desde el recap del paso 1: el `POST account` de siempre
-   * reinicia la cuenta (nuevo `pending_certificate`), pero el progreso del
-   * acordeón queda en `localStorage` bajo la cuenta VIEJA. Si el backend
+   * Después de un `POST account` (que reinicia la cuenta en
+   * `pending_certificate`) el progreso del acordeón queda en `localStorage`
+   * bajo la cuenta VIEJA. Si el backend
    * reutiliza el mismo id, además, ni el `useEffect` que lee el storage por
    * `account.id` se dispara solo (el id no cambió) — por eso se limpia acá
    * explícito, para el id que sea.
@@ -215,7 +215,16 @@ export function ArcaWizardPage() {
         cuit: input.cuit,
         ...(input.iibb.trim() ? { iibb: input.iibb.trim() } : {}),
       }),
-    onSuccess: syncAccount,
+    // Toda solicitud nueva (primera vez, "Cambiar CUIT" o volver a vincular
+    // después de desvincular) arranca el paso 2 de cero. Al re-vincular el
+    // backend reutiliza la fila, o sea el mismo `account.id`: sin esto el
+    // acordeón abría con el progreso viejo. Y el CSR cacheado es el de la
+    // solicitud ANTERIOR: copiarlo daría un certificado para otra clave.
+    onSuccess: (next) => {
+      syncAccount(next);
+      resetCertProgressAfterCuitChange(next.id);
+      queryClient.removeQueries({ queryKey: ['arca', 'csr', sucursalId] });
+    },
     onError: onMutationError({ endpoint: 'arca.createAccount' }),
   });
 
@@ -427,12 +436,7 @@ export function ArcaWizardPage() {
                     iibb={account.iibb ?? null}
                     pending={createMutation.isPending}
                     onContinue={() => setViewStep(null)}
-                    onChangeCuit={(values) =>
-                      createMutation.mutate(values, {
-                        onSuccess: (result) =>
-                          resetCertProgressAfterCuitChange(result.id),
-                      })
-                    }
+                    onChangeCuit={(values) => createMutation.mutate(values)}
                   />
                 )
               ))}
