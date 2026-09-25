@@ -432,7 +432,7 @@ function Step1Form({
         <Input
           label="CUIT"
           required
-          placeholder="20-12345678-3"
+          placeholder="20-12345678-6"
           inputMode="numeric"
           value={cuit}
           error={errors.cuit ?? undefined}
@@ -464,14 +464,14 @@ function Step1Form({
 const ARCA_INSTRUCTIONS: Record<ArcaEnvironment, string[]> = {
   homologacion: [
     'Entrá a ARCA con tu clave fiscal y abrí el servicio WSASS.',
-    'Elegí "Nuevo certificado" y como nombre simbólico del DN usá el alias de acá abajo (copialo con el botón).',
+    'Elegí "Nuevo certificado" y como nombre simbólico del DN usá el alias que aparece arriba (copialo con el botón).',
     'Pegá el contenido del archivo CSR que descargaste y confirmá con "Crear DN y obtener certificado".',
     'Guardá el certificado que te da ARCA como archivo .crt.',
     'Volvé a WSASS y creá una autorización a servicio con ese mismo DN, dos veces: una para "wsfe" y otra para "ws_sr_constancia_inscripcion".',
   ],
   produccion: [
     'Entrá a ARCA con tu clave fiscal y abrí "Administración de Certificados Digitales".',
-    'Agregá un alias nuevo con el valor de acá abajo (copialo con el botón) y subí el archivo CSR que descargaste.',
+    'Agregá un alias nuevo con el valor que aparece arriba (copialo con el botón) y subí el archivo CSR que descargaste.',
     'Descargá el certificado que te devuelve ARCA (.crt).',
     'Andá a "Administrador de Relaciones de Clave Fiscal" y creá una Nueva Relación: asociá "Facturación Electrónica" y "Constancia de Inscripción" a este certificado.',
   ],
