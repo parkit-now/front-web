@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert } from '../../../../../shared/components/ui/Alert';
@@ -11,6 +11,7 @@ import {
   IconCheck,
   IconCheckCircle,
   IconDownload,
+  IconExternalLink,
 } from '../../../../../shared/components/icons';
 import { SectionHeader } from '../../../../../shared/components/SectionHeader';
 import { useToast } from '../../../../../lib/notifications/ToastProvider';
@@ -31,10 +32,11 @@ import {
   uploadArcaSalesPointConstancia,
   type ArcaAccount,
   type ArcaCertificateResult,
+  type ArcaCsr,
   type ArcaEnvironment,
   type ArcaTaxCondition,
 } from '../../../services/arca';
-import { ARCA_TAX_CONDITION_LABELS } from '../validation';
+import { ARCA_TAX_CONDITION_LABELS, formatCuit } from '../validation';
 import {
   validateArcaConstancia,
   validateArcaFiscalDataForm,
@@ -44,6 +46,7 @@ import {
   type ArcaFiscalDataFormValues,
 } from './wizard';
 import { normalizeArcaCuit } from './cuit';
+import { ARCA_LOGIN_URL } from './links';
 
 const ROW: React.CSSProperties = {
   display: 'flex',
@@ -120,21 +123,14 @@ export function ArcaWizardPage() {
   });
 
   // ── Paso 2: certificado ─────────────────────────────────────────────────────
-  const [downloadingCsr, setDownloadingCsr] = useState(false);
-  async function handleDownloadCsr() {
-    setDownloadingCsr(true);
-    try {
-      const csr = await getArcaCsr(sucursalId);
-      downloadTextFile(csr.fileName, csr.csrPem);
-    } catch (error) {
-      showToast({
-        message: translateApiError(error, { endpoint: 'arca.getCsr' }),
-        kind: 'error',
-      });
-    } finally {
-      setDownloadingCsr(false);
-    }
-  }
+  // Se trae SOLO con llegar al paso (no con un botón): homologación la
+  // necesita para el textarea de "pegar en ARCA", que es el camino principal
+  // ahí, no un extra detrás de un click.
+  const csrQuery = useQuery({
+    queryKey: ['arca', 'csr', sucursalId],
+    queryFn: () => getArcaCsr(sucursalId),
+    enabled: Boolean(sucursalId) && account?.status === 'pending_certificate',
+  });
 
   const reusableQuery = useQuery({
     queryKey: ['arca', 'reusable-certificates', sucursalId],
@@ -277,11 +273,11 @@ export function ArcaWizardPage() {
           account.status === 'pending_certificate' && (
             <Step2Upload
               account={account}
+              csr={csrQuery.data ?? null}
+              csrLoading={csrQuery.isLoading}
               reusable={reusableQuery.data ?? []}
               reusing={reuseMutation.isPending}
-              downloadingCsr={downloadingCsr}
               verifying={uploadCertMutation.isPending}
-              onDownloadCsr={() => void handleDownloadCsr()}
               onReuse={(fromTenantId) => reuseMutation.mutate(fromTenantId)}
               onVerify={(certificate) => uploadCertMutation.mutate(certificate)}
             />
@@ -429,19 +425,24 @@ function Step1Form({
           gap: 12,
         }}
       >
-        <Input
-          label="CUIT"
-          required
-          placeholder="20-12345678-6"
-          inputMode="numeric"
-          value={cuit}
-          error={errors.cuit ?? undefined}
-          onChange={(e) => {
-            setCuit(e.target.value);
-            if (errors.cuit) setErrors({});
-          }}
-          disabled={pending}
-        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <Input
+            label="CUIT"
+            required
+            placeholder="20-12345678-6"
+            inputMode="numeric"
+            value={cuit}
+            error={errors.cuit ?? undefined}
+            onChange={(e) => {
+              setCuit(e.target.value);
+              if (errors.cuit) setErrors({});
+            }}
+            disabled={pending}
+          />
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}>
+            Con o sin guiones.
+          </p>
+        </div>
         <Input
           label="Ingresos Brutos (opcional)"
           placeholder="901-123456-7"
@@ -461,70 +462,276 @@ function Step1Form({
 
 // ── Paso 2: certificado ──────────────────────────────────────────────────────
 
-const ARCA_INSTRUCTIONS: Record<ArcaEnvironment, string[]> = {
-  homologacion: [
-    'Entrá a ARCA con tu clave fiscal y abrí el servicio WSASS.',
-    'Elegí "Nuevo certificado" y como nombre simbólico del DN usá el alias que aparece arriba (copialo con el botón).',
-    'Pegá el contenido del archivo CSR que descargaste y confirmá con "Crear DN y obtener certificado".',
-    'Guardá el certificado que te da ARCA como archivo .crt.',
-    'Volvé a WSASS y creá una autorización a servicio con ese mismo DN, dos veces: una para "wsfe" y otra para "ws_sr_constancia_inscripcion".',
-  ],
-  produccion: [
-    'Entrá a ARCA con tu clave fiscal y abrí "Administración de Certificados Digitales".',
-    'Agregá un alias nuevo con el valor que aparece arriba (copialo con el botón) y subí el archivo CSR que descargaste.',
-    'Descargá el certificado que te devuelve ARCA (.crt).',
-    'Andá a "Administrador de Relaciones de Clave Fiscal" y creá una Nueva Relación: asociá "Facturación Electrónica" y "Constancia de Inscripción" a este certificado.',
-  ],
-};
+/**
+ * Link a ARCA, siempre a la misma URL de login (ver `links.ts`: los
+ * servicios internos no se pueden linkear directo, exigen la sesión SSO del
+ * portal).
+ */
+function ArcaLoginLink() {
+  return (
+    <a
+      href={ARCA_LOGIN_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="pk-btn pk-btn-secondary pk-btn-sm"
+      style={{
+        textDecoration: 'none',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        alignSelf: 'flex-start',
+      }}
+    >
+      Entrar a ARCA
+      <IconExternalLink size={13} />
+    </a>
+  );
+}
 
-function Step2Upload({
-  account,
-  reusable,
-  reusing,
-  downloadingCsr,
-  verifying,
-  onDownloadCsr,
-  onReuse,
-  onVerify,
+/** Botón de texto chico, para acciones secundarias (no compiten con el CTA del paso). */
+function SmallLinkButton({
+  children,
+  onClick,
+  disabled = false,
 }: {
-  account: { certAlias: string; environment: ArcaEnvironment };
-  reusable: readonly { tenantId: string; tenantName: string }[];
-  reusing: boolean;
-  downloadingCsr: boolean;
-  verifying: boolean;
-  onDownloadCsr: () => void;
-  onReuse: (fromTenantId: string) => void;
-  onVerify: (certificate: string) => void;
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        alignSelf: 'flex-start',
+        background: 'none',
+        border: 'none',
+        padding: 0,
+        fontSize: 12,
+        color: 'var(--text-2)',
+        textDecoration: 'underline',
+        textDecorationColor: 'var(--border)',
+        textUnderlineOffset: 3,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Un valor para pegar en ARCA (alias, CUIT...), en monoespaciado, con botón de copiar. */
+function CopyRow({
+  label,
+  displayValue,
+  copyValue,
+}: {
+  label: string;
+  displayValue: string;
+  copyValue: string;
 }) {
   const [copied, setCopied] = useState(false);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [fileText, setFileText] = useState<string | null>(null);
-  const [fileError, setFileError] = useState<string | null>(null);
 
-  async function handleCopyAlias() {
+  async function handleCopy() {
     try {
-      await navigator.clipboard.writeText(account.certAlias);
+      await navigator.clipboard.writeText(copyValue);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Sin permiso de portapapeles: el alias ya está a la vista para copiar
+      // Sin permiso de portapapeles: el valor ya está a la vista para copiar
       // a mano, no hace falta avisar con un error.
     }
   }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        flexWrap: 'wrap',
+        padding: '8px 12px',
+        background: 'var(--surface-2, var(--bg-2))',
+        borderRadius: 'var(--r-md)',
+        border: '1px solid var(--border-soft)',
+      }}
+    >
+      <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{label}</span>
+      <code style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>
+        {displayValue}
+      </code>
+      <Button variant="ghost" size="sm" onClick={() => void handleCopy()}>
+        {copied ? 'Copiado' : 'Copiar'}
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * El texto de la solicitud (CSR), oculto por defecto: es un bloque de texto
+ * largo que no aporta nada mirado de arriba a abajo, sólo hay que pegarlo en
+ * ARCA. `Copiar` funciona SIN mostrarlo (copia `csr.csrPem` desde el estado,
+ * no desde el textarea visible).
+ */
+function CsrBlock({
+  csr,
+  loading,
+  showDownloadLink = true,
+}: {
+  csr: ArcaCsr | null;
+  loading: boolean;
+  showDownloadLink?: boolean;
+}) {
+  const [visible, setVisible] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    if (!csr) return;
+    try {
+      await navigator.clipboard.writeText(csr.csrPem);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Sin permiso de portapapeles: mostrando el texto se puede copiar a mano.
+    }
+  }
+
+  if (loading || !csr) {
+    return (
+      <p style={{ ...HINT, color: 'var(--text-3)' }}>
+        Preparando la solicitud (CSR)...
+      </p>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={ROW}>
+        <Button variant="ghost" size="sm" onClick={() => setVisible((v) => !v)}>
+          {visible ? 'Ocultar' : 'Mostrar'}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={() => void handleCopy()}>
+          {copied ? 'Copiado' : 'Copiar'}
+        </Button>
+        {showDownloadLink && (
+          <SmallLinkButton
+            onClick={() => downloadTextFile(csr.fileName, csr.csrPem)}
+          >
+            Descargar como archivo
+          </SmallLinkButton>
+        )}
+      </div>
+      {visible && (
+        <textarea
+          readOnly
+          value={csr.csrPem}
+          rows={6}
+          aria-label="Solicitud de certificado (CSR)"
+          style={{
+            fontFamily: 'monospace',
+            fontSize: 12,
+            padding: 8,
+            borderRadius: 'var(--r-md)',
+            border: '1px solid var(--border-soft)',
+            resize: 'vertical',
+            color: 'var(--text-1)',
+            background: 'var(--card)',
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * El certificado que devuelve ARCA, pegado a mano: es el camino principal,
+ * así el dueño no depende de encontrar y adjuntar un archivo .crt. Subir el
+ * archivo queda como atajo secundario, que sólo rellena este mismo textarea.
+ */
+function CertificateTextarea({
+  value,
+  onChange,
+  disabled,
+  secondaryLabel = '¿Tenés el archivo .crt? Subilo',
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled: boolean;
+  secondaryLabel?: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    setFileError(null);
     try {
       const text = await file.text();
-      setFileName(file.name);
-      setFileText(text);
+      onChange(text);
     } catch {
-      setFileError('No pudimos leer el archivo. Probá de nuevo.');
+      // Si no se pudo leer, el textarea sigue como estaba: el dueño puede
+      // pegar el contenido a mano igual.
     }
   }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={
+          '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----'
+        }
+        rows={8}
+        disabled={disabled}
+        aria-label="Certificado"
+        style={{
+          fontFamily: 'monospace',
+          fontSize: 12,
+          padding: 8,
+          borderRadius: 'var(--r-md)',
+          border: '1px solid var(--border-soft)',
+          resize: 'vertical',
+        }}
+      />
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".crt,application/x-x509-ca-cert,application/pkix-cert,text/plain"
+        onChange={(e) => void handleFileChange(e)}
+        style={{ display: 'none' }}
+      />
+      <SmallLinkButton
+        disabled={disabled}
+        onClick={() => inputRef.current?.click()}
+      >
+        {secondaryLabel}
+      </SmallLinkButton>
+    </div>
+  );
+}
+
+function Step2Upload({
+  account,
+  csr,
+  csrLoading,
+  reusable,
+  reusing,
+  verifying,
+  onReuse,
+  onVerify,
+}: {
+  account: { certAlias: string; environment: ArcaEnvironment; cuit: string };
+  csr: ArcaCsr | null;
+  csrLoading: boolean;
+  reusable: readonly { tenantId: string; tenantName: string }[];
+  reusing: boolean;
+  verifying: boolean;
+  onReuse: (fromTenantId: string) => void;
+  onVerify: (certificate: string) => void;
+}) {
+  const [certText, setCertText] = useState('');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -533,8 +740,8 @@ function Step2Upload({
           Certificado ARCA
         </h3>
         <p style={HINT}>
-          Generá el certificado en el sitio de ARCA con la solicitud (CSR) que
-          te damos acá, y después subilo para verificarlo.
+          Seguí estos pasos en el sitio de ARCA y después pegá acá el
+          certificado para verificarlo.
         </p>
       </div>
 
@@ -562,77 +769,162 @@ function Step2Upload({
         />
       )}
 
-      <div style={ROW}>
-        <Button
-          variant="secondary"
-          icon={<IconDownload size={14} />}
-          loading={downloadingCsr}
-          onClick={onDownloadCsr}
-        >
-          Descargar solicitud (CSR)
-        </Button>
-      </div>
-
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          padding: '8px 12px',
-          background: 'var(--surface-2, var(--bg-2))',
-          borderRadius: 'var(--r-md)',
-          border: '1px solid var(--border-soft)',
-        }}
-      >
-        <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-          Nombre simbólico del DN
-        </span>
-        <code style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}>
-          {account.certAlias}
-        </code>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => void handleCopyAlias()}
-        >
-          {copied ? 'Copiado' : 'Copiar'}
-        </Button>
-      </div>
-
-      <ol style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 6 }}>
-        {ARCA_INSTRUCTIONS[account.environment].map((step) => (
-          <li key={step} style={HINT}>
-            {step}
+      {account.environment === 'homologacion' ? (
+        <ol style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 18 }}>
+          <li style={HINT}>
+            Entrá a ARCA con tu clave fiscal y abrí el servicio{' '}
+            <strong>WSASS – Autogestión Certificados Homologación</strong>.
+            <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
+              <ArcaLoginLink />
+              <p style={{ ...HINT, color: 'var(--text-3)' }}>
+                Si no lo ves en tus servicios, adherilo desde el Administrador
+                de Relaciones de Clave Fiscal.
+              </p>
+            </div>
           </li>
-        ))}
-      </ol>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <label className="pk-label">Certificado (.crt)</label>
-        <input
-          type="file"
-          accept=".crt,application/x-x509-ca-cert,application/pkix-cert,text/plain"
-          onChange={(e) => void handleFileChange(e)}
-          disabled={verifying}
-        />
-        {fileName && (
-          <p style={{ ...HINT, color: 'var(--text-3)' }}>
-            Archivo cargado: {fileName}
-          </p>
-        )}
-        {fileError && (
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--err-text)' }}>
-            {fileError}
-          </p>
-        )}
-      </div>
+          <li style={HINT}>
+            En el menú, elegí <strong>Nuevo Certificado</strong>. En{' '}
+            <strong>Nombre simbólico del DN</strong> poné:
+            <div style={{ marginTop: 8, display: 'grid', gap: 6 }}>
+              <CopyRow
+                label="Nombre simbólico del DN"
+                displayValue={account.certAlias}
+                copyValue={account.certAlias}
+              />
+              <p style={{ ...HINT, color: 'var(--text-3)' }}>
+                Si WSASS te avisa que ese nombre ya existe (porque ya lo
+                vinculaste antes), usá{' '}
+                <strong>Agregar certificado a alias</strong> con ese mismo
+                nombre.
+              </p>
+            </div>
+          </li>
+          <li style={HINT}>
+            En <strong>Solicitud de certificado en formato PKCS10</strong> pegá
+            este texto y confirmá con{' '}
+            <strong>Crear DN y Obtener Certificado</strong>:
+            <div style={{ marginTop: 8 }}>
+              <CsrBlock csr={csr} loading={csrLoading} />
+            </div>
+          </li>
+          <li style={HINT}>
+            ARCA te muestra el certificado. Copialo completo (incluidas las
+            líneas BEGIN y END) y pegalo acá:
+            <div style={{ marginTop: 8 }}>
+              <CertificateTextarea
+                value={certText}
+                onChange={setCertText}
+                disabled={verifying}
+              />
+            </div>
+          </li>
+          <li style={HINT}>
+            Volvé a WSASS, entrá a{' '}
+            <strong>Crear autorización a servicio</strong> y creá dos
+            autorizaciones:
+            <div style={{ marginTop: 8, display: 'grid', gap: 8 }}>
+              <CopyRow
+                label="Nombre simbólico del DN a autorizar"
+                displayValue={account.certAlias}
+                copyValue={account.certAlias}
+              />
+              <CopyRow
+                label="CUIT representado"
+                displayValue={formatCuit(account.cuit)}
+                copyValue={account.cuit}
+              />
+              <ul
+                style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 4 }}
+              >
+                <li style={HINT}>
+                  <strong>Servicio al que desea acceder:</strong> wsfe
+                  (Facturación Electrónica)
+                </li>
+                <li style={HINT}>
+                  <strong>Servicio al que desea acceder:</strong>{' '}
+                  ws_sr_constancia_inscripcion (Constancia de Inscripción)
+                </li>
+              </ul>
+              <p style={{ ...HINT, color: 'var(--text-3)' }}>
+                Confirmá cada una con{' '}
+                <strong>Crear Autorización de Acceso</strong>.
+              </p>
+              <ArcaLoginLink />
+            </div>
+          </li>
+        </ol>
+      ) : (
+        <ol style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 18 }}>
+          <li style={HINT}>
+            Entrá a ARCA con la clave fiscal del titular del CUIT y abrí{' '}
+            <strong>Administración de Certificados Digitales</strong>.
+            <div style={{ marginTop: 8 }}>
+              <ArcaLoginLink />
+            </div>
+          </li>
+          <li style={HINT}>
+            Elegí <strong>Agregar alias</strong> y poné este nombre:
+            <div style={{ marginTop: 8 }}>
+              <CopyRow
+                label="Alias"
+                displayValue={account.certAlias}
+                copyValue={account.certAlias}
+              />
+            </div>
+          </li>
+          <li style={HINT}>
+            Subí la solicitud de certificado (CSR).
+            <div style={{ marginTop: 8, display: 'grid', gap: 10 }}>
+              <div>
+                <Button
+                  variant="secondary"
+                  icon={<IconDownload size={14} />}
+                  disabled={!csr}
+                  onClick={() =>
+                    csr && downloadTextFile(csr.fileName, csr.csrPem)
+                  }
+                >
+                  Descargar solicitud (CSR)
+                </Button>
+              </div>
+              <CsrBlock
+                csr={csr}
+                loading={csrLoading}
+                showDownloadLink={false}
+              />
+            </div>
+          </li>
+          <li style={HINT}>
+            Descargá el certificado que genera ARCA, abrilo y pegá el contenido
+            acá:
+            <div style={{ marginTop: 8 }}>
+              <CertificateTextarea
+                value={certText}
+                onChange={setCertText}
+                disabled={verifying}
+                secondaryLabel="¿Preferís subir el archivo .crt?"
+              />
+            </div>
+          </li>
+          <li style={HINT}>
+            Entrá a <strong>Administrador de Relaciones de Clave Fiscal</strong>{' '}
+            → <strong>Nueva Relación</strong> y asociá a ese certificado los
+            servicios <strong>Facturación Electrónica</strong> (wsfe) y{' '}
+            <strong>Constancia de Inscripción</strong> (
+            ws_sr_constancia_inscripcion).
+            <div style={{ marginTop: 8 }}>
+              <ArcaLoginLink />
+            </div>
+          </li>
+        </ol>
+      )}
 
       <div style={ROW}>
         <Button
           variant="primary"
           loading={verifying}
-          disabled={!fileText}
-          onClick={() => fileText && onVerify(fileText)}
+          disabled={!certText.trim()}
+          onClick={() => onVerify(certText)}
         >
           Verificar
         </Button>
@@ -876,8 +1168,11 @@ function Step3Form({
           En ARCA: "Administración de puntos de venta y domicilios" → Agregar →{' '}
           {posLabel}.
         </p>
+        <div style={{ marginTop: 8 }}>
+          <ArcaLoginLink />
+        </div>
         {account.environment === 'homologacion' ? (
-          <p style={{ ...HINT, color: 'var(--text-3)' }}>
+          <p style={{ ...HINT, color: 'var(--text-3)', marginTop: 8 }}>
             En homologación no hace falta darlo de alta en ARCA: cualquier
             número sirve para probar, y la constancia es opcional.
           </p>
