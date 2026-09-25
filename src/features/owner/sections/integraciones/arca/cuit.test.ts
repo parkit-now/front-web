@@ -43,4 +43,13 @@ describe('validateArcaCuit', () => {
   it('no da error con un CUIT válido', () => {
     expect(validateArcaCuit('20-12345678-6')).toBeNull();
   });
+
+  // El paso 1 del wizard dice "Con o sin guiones": con guiones o sin ellos
+  // tiene que pasar exactamente igual, no sólo "los dos son válidos".
+  it('pasa igual con o sin guiones', () => {
+    expect(validateArcaCuit('20123456786')).toBe(
+      validateArcaCuit('20-12345678-6'),
+    );
+    expect(validateArcaCuit('20123456786')).toBeNull();
+  });
 });
