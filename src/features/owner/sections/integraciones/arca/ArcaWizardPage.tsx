@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '../../../../../lib/api/client';
@@ -11,6 +11,7 @@ import {
   IconAlert,
   IconCheck,
   IconCheckCircle,
+  IconChevronLeft,
   IconDownload,
   IconExternalLink,
   IconXCircle,
@@ -38,14 +39,21 @@ import {
   type ArcaEnvironment,
   type ArcaTaxCondition,
 } from '../../../services/arca';
+import { fmtDateTimeAr } from '../../../../../shared/utils/fmt';
 import { ARCA_TAX_CONDITION_LABELS, formatCuit } from '../validation';
 import {
+  resolveArcaStep1ViewMode,
+  resolveArcaStep2ViewMode,
+  resolveArcaWizardStep,
+  resolveClickableArcaWizardSteps,
   validateArcaConstancia,
   validateArcaFiscalDataForm,
   validateArcaPtoVta,
   validateArcaStep1Form,
-  resolveArcaWizardStep,
+  validatePastedCertificate,
   type ArcaFiscalDataFormValues,
+  type ArcaWizardNumericStep,
+  type ArcaWizardStep,
 } from './wizard';
 import { normalizeArcaCuit } from './cuit';
 import { ARCA_LOGIN_URL } from './links';
@@ -57,6 +65,7 @@ import {
   resolveCertSubstepState,
   resolveCertVerifyErrorEffect,
   resolveOpenCertSubstep,
+  resolvePreviousCertSubstep,
   saveCertProgress,
   type CertProgress,
   type CertSubstepId,
@@ -118,6 +127,24 @@ export function ArcaWizardPage() {
     null,
   );
 
+  // ── Volver a un paso anterior desde el stepper ─────────────────────────────
+  // `null` = seguir el paso natural (`resolveArcaWizardStep`). Un valor acá es
+  // "el dueño clickeó un paso ya alcanzado para volver a mirarlo": nunca
+  // apunta a un paso más adelantado que el natural (sólo se llega acá vía
+  // `resolveClickableArcaWizardSteps`, que ya lo garantiza).
+  const [viewStep, setViewStep] = useState<ArcaWizardNumericStep | null>(null);
+  // Reactivar "Cargar otro certificado" (recap del paso 2) muestra el
+  // acordeón aunque la cuenta ya esté en `pending_sales_point`.
+  const [reissuingCertificate, setReissuingCertificate] = useState(false);
+
+  useEffect(() => {
+    // Cualquier cambio real de estado de la cuenta (avanzar de paso, o
+    // reiniciar por "Cambiar CUIT") invalida un "volver" que haya quedado
+    // pisado: se vuelve a seguir el paso natural.
+    setViewStep(null);
+    setReissuingCertificate(false);
+  }, [account?.id, account?.status]);
+
   // ── Progreso del acordeón de sub-pasos (paso 2) ────────────────────────────
   // Persistido en localStorage por cuenta: si el dueño recarga o vuelve de la
   // pestaña de ARCA, retoma donde había quedado (ver `certSubsteps.ts`).
@@ -149,6 +176,21 @@ export function ArcaWizardPage() {
   function handleCertSubstepDone(id: CertSubstepId) {
     updateCertProgress((prev) => markCertSubstepDone(prev, id));
     setCertVerifyError(null);
+  }
+
+  /**
+   * "Cambiar CUIT" desde el recap del paso 1: el `POST account` de siempre
+   * reinicia la cuenta (nuevo `pending_certificate`), pero el progreso del
+   * acordeón queda en `localStorage` bajo la cuenta VIEJA. Si el backend
+   * reutiliza el mismo id, además, ni el `useEffect` que lee el storage por
+   * `account.id` se dispara solo (el id no cambió) — por eso se limpia acá
+   * explícito, para el id que sea.
+   */
+  function resetCertProgressAfterCuitChange(newAccountId: string) {
+    setCertProgress(EMPTY_CERT_PROGRESS);
+    setCertVerifyError(null);
+    saveCertProgress(sucursalId, newAccountId, EMPTY_CERT_PROGRESS);
+    setViewStep(null);
   }
 
   // Escribe la cuenta que devolvió la mutación DIRECTO en la caché, en vez de
@@ -184,7 +226,11 @@ export function ArcaWizardPage() {
   const csrQuery = useQuery({
     queryKey: ['arca', 'csr', sucursalId],
     queryFn: () => getArcaCsr(sucursalId),
-    enabled: Boolean(sucursalId) && account?.status === 'pending_certificate',
+    // También mientras se "carga otro certificado" desde el recap del paso
+    // 2: ahí también se puede reabrir el sub-paso 3, que necesita el CSR.
+    enabled:
+      Boolean(sucursalId) &&
+      (account?.status === 'pending_certificate' || reissuingCertificate),
   });
 
   const reusableQuery = useQuery({
@@ -210,6 +256,19 @@ export function ArcaWizardPage() {
     mutationFn: (certificate: string) =>
       uploadArcaCertificate(sucursalId, { certificate }),
     onSuccess: (result) => {
+      if (reissuingCertificate) {
+        // El backend acepta un certificado nuevo con la cuenta ya en
+        // `pending_sales_point`: no hay resumen de padrón que mostrar de
+        // nuevo, sólo volver al recap (que ahora refleja el certificado
+        // nuevo: alias igual, `certExpiresAt` actualizado).
+        setReissuingCertificate(false);
+        syncAccount(result.account);
+        showToast({
+          message: 'Cargamos el certificado nuevo.',
+          kind: 'success',
+        });
+        return;
+      }
       setCertResult(result);
       syncAccount(result.account);
     },
@@ -314,7 +373,11 @@ export function ArcaWizardPage() {
     );
   }
 
-  const step = resolveArcaWizardStep(account);
+  const naturalStep = resolveArcaWizardStep(account);
+  // Nunca apunta más adelante que `naturalStep`: sólo se llega a `viewStep`
+  // clickeando un paso de `resolveClickableArcaWizardSteps`, que ya lo exige.
+  const displayStep: ArcaWizardNumericStep =
+    viewStep ?? (naturalStep === 'done' ? 3 : naturalStep);
 
   return (
     <div>
@@ -340,84 +403,166 @@ export function ArcaWizardPage() {
         </div>
       )}
 
-      <Stepper step={step} />
+      <Stepper
+        naturalStep={naturalStep}
+        activeStep={displayStep}
+        onStepClick={setViewStep}
+      />
 
       <Card padding="lg">
-        {step === 1 && (
-          <Step1Form
-            pending={createMutation.isPending}
-            onSubmit={(values) => createMutation.mutate(values)}
-          />
+        {naturalStep === 'done' ? (
+          <WizardDone />
+        ) : (
+          <>
+            {displayStep === 1 &&
+              (resolveArcaStep1ViewMode(naturalStep) === 'form' ? (
+                <Step1Form
+                  pending={createMutation.isPending}
+                  onSubmit={(values) => createMutation.mutate(values)}
+                />
+              ) : (
+                account !== null && (
+                  <Step1Recap
+                    cuit={account.cuit}
+                    iibb={account.iibb ?? null}
+                    pending={createMutation.isPending}
+                    onContinue={() => setViewStep(null)}
+                    onChangeCuit={(values) =>
+                      createMutation.mutate(values, {
+                        onSuccess: (result) =>
+                          resetCertProgressAfterCuitChange(result.id),
+                      })
+                    }
+                  />
+                )
+              ))}
+
+            {displayStep === 2 &&
+              resolveArcaStep2ViewMode(naturalStep) === 'in_progress' && (
+                <>
+                  {account !== null &&
+                    account.status === 'pending_certificate' && (
+                      <Step2Upload
+                        account={account}
+                        csr={csrQuery.data ?? null}
+                        csrLoading={csrQuery.isLoading}
+                        reusable={reusableQuery.data ?? []}
+                        reusing={reuseMutation.isPending}
+                        verifying={uploadCertMutation.isPending}
+                        progress={certProgress}
+                        verifyError={certVerifyError}
+                        onSubstepDone={handleCertSubstepDone}
+                        onReuse={(fromTenantId) =>
+                          reuseMutation.mutate(fromTenantId)
+                        }
+                        onVerify={(certificate) => {
+                          setCertVerifyError(null);
+                          // El sub-paso 5 no tiene "Listo, sigo": reintentar
+                          // "Verificar" ES la forma de decir "ya lo arreglé"
+                          // cuando lo que había fallado era la autorización
+                          // de servicios.
+                          updateCertProgress((prev) =>
+                            prev.errorSubstep === 5
+                              ? { ...prev, errorSubstep: null }
+                              : prev,
+                          );
+                          uploadCertMutation.mutate(certificate);
+                        }}
+                      />
+                    )}
+
+                  {account !== null &&
+                    account.status === 'pending_sales_point' &&
+                    certResult?.padronFound && (
+                      <PadronSummary
+                        account={certResult.account}
+                        onContinue={() => setCertResult(null)}
+                      />
+                    )}
+
+                  {account !== null &&
+                    account.status === 'pending_sales_point' &&
+                    !certResult?.padronFound && (
+                      <FiscalDataForm
+                        environment={account.environment}
+                        pending={updateFiscalMutation.isPending}
+                        onSubmit={(values) =>
+                          updateFiscalMutation.mutate({
+                            razonSocial: values.razonSocial,
+                            condicionIva:
+                              values.condicionIva as ArcaTaxCondition,
+                            domicilioFiscal: values.domicilioFiscal,
+                            ...(values.inicioActividad
+                              ? { inicioActividad: values.inicioActividad }
+                              : {}),
+                          })
+                        }
+                      />
+                    )}
+                </>
+              )}
+
+            {displayStep === 2 &&
+              resolveArcaStep2ViewMode(naturalStep) === 'recap' &&
+              account !== null &&
+              (reissuingCertificate ? (
+                <div
+                  style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+                >
+                  <div style={ROW}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<IconChevronLeft size={14} />}
+                      onClick={() => setReissuingCertificate(false)}
+                    >
+                      Cancelar y volver al resumen
+                    </Button>
+                  </div>
+                  <Step2Upload
+                    account={account}
+                    csr={csrQuery.data ?? null}
+                    csrLoading={csrQuery.isLoading}
+                    reusable={[]}
+                    reusing={false}
+                    verifying={uploadCertMutation.isPending}
+                    // Progreso FORZADO, no el real (`certProgress`): los
+                    // sub-pasos 1 a 3 se dan por hechos (la cuenta ya está
+                    // certificada, no tiene sentido pedirle que los repita) y
+                    // se arranca siempre limpio en el 4, así sea que la
+                    // primera vuelta ya los haya dejado en 4 o 5 (por
+                    // ejemplo, si el certificado venía de "reutilizar el de
+                    // otra sede", sin pasar por el acordeón). No se persiste:
+                    // es sólo para ESTA pantalla.
+                    progress={{ completed: [1, 2, 3], errorSubstep: null }}
+                    verifyError={certVerifyError}
+                    onSubstepDone={handleCertSubstepDone}
+                    onReuse={() => {
+                      /* No aplica: ya hay un certificado vinculado a esta cuenta. */
+                    }}
+                    onVerify={(certificate) => {
+                      setCertVerifyError(null);
+                      uploadCertMutation.mutate(certificate);
+                    }}
+                  />
+                </div>
+              ) : (
+                <Step2Recap
+                  account={account}
+                  onContinue={() => setViewStep(null)}
+                  onReissue={() => setReissuingCertificate(true)}
+                />
+              ))}
+
+            {displayStep === 3 && account !== null && (
+              <Step3Form
+                account={account}
+                pending={salesPointMutation.isPending}
+                onSubmit={(values) => salesPointMutation.mutate(values)}
+              />
+            )}
+          </>
         )}
-
-        {step === 2 &&
-          account !== null &&
-          account.status === 'pending_certificate' && (
-            <Step2Upload
-              account={account}
-              csr={csrQuery.data ?? null}
-              csrLoading={csrQuery.isLoading}
-              reusable={reusableQuery.data ?? []}
-              reusing={reuseMutation.isPending}
-              verifying={uploadCertMutation.isPending}
-              progress={certProgress}
-              verifyError={certVerifyError}
-              onSubstepDone={handleCertSubstepDone}
-              onReuse={(fromTenantId) => reuseMutation.mutate(fromTenantId)}
-              onVerify={(certificate) => {
-                setCertVerifyError(null);
-                // El sub-paso 5 no tiene "Listo, sigo": reintentar
-                // "Verificar" ES la forma de decir "ya lo arreglé" cuando lo
-                // que había fallado era la autorización de servicios.
-                updateCertProgress((prev) =>
-                  prev.errorSubstep === 5
-                    ? { ...prev, errorSubstep: null }
-                    : prev,
-                );
-                uploadCertMutation.mutate(certificate);
-              }}
-            />
-          )}
-
-        {step === 2 &&
-          account !== null &&
-          account.status === 'pending_sales_point' &&
-          certResult?.padronFound && (
-            <PadronSummary
-              account={certResult.account}
-              onContinue={() => setCertResult(null)}
-            />
-          )}
-
-        {step === 2 &&
-          account !== null &&
-          account.status === 'pending_sales_point' &&
-          !certResult?.padronFound && (
-            <FiscalDataForm
-              environment={account.environment}
-              pending={updateFiscalMutation.isPending}
-              onSubmit={(values) =>
-                updateFiscalMutation.mutate({
-                  razonSocial: values.razonSocial,
-                  condicionIva: values.condicionIva as ArcaTaxCondition,
-                  domicilioFiscal: values.domicilioFiscal,
-                  ...(values.inicioActividad
-                    ? { inicioActividad: values.inicioActividad }
-                    : {}),
-                })
-              }
-            />
-          )}
-
-        {step === 3 && account !== null && (
-          <Step3Form
-            account={account}
-            pending={salesPointMutation.isPending}
-            onSubmit={(values) => salesPointMutation.mutate(values)}
-          />
-        )}
-
-        {step === 'done' && <WizardDone />}
       </Card>
     </div>
   );
@@ -425,51 +570,79 @@ export function ArcaWizardPage() {
 
 // ── Stepper ──────────────────────────────────────────────────────────────────
 
-function Stepper({ step }: { step: 1 | 2 | 3 | 'done' }) {
-  const current = step === 'done' ? 4 : step;
+/**
+ * El stepper de arriba. Clickeable en los pasos ya alcanzados
+ * (`resolveClickableArcaWizardSteps`): sirve para volver a mirarlos, no para
+ * saltar para adelante. Con la cuenta `linked` (`naturalStep === 'done'`)
+ * ninguno es clickeable — ya no se puede cambiar nada desde acá.
+ */
+function Stepper({
+  naturalStep,
+  activeStep,
+  onStepClick,
+}: {
+  naturalStep: ArcaWizardStep;
+  activeStep: ArcaWizardNumericStep;
+  onStepClick: (step: ArcaWizardNumericStep) => void;
+}) {
+  const doneThreshold = naturalStep === 'done' ? 4 : naturalStep;
+  const clickable = resolveClickableArcaWizardSteps(naturalStep);
   const labels = ['Datos comerciales', 'Certificado ARCA', 'Punto de venta'];
   return (
     <div style={{ ...ROW, marginBottom: 16 }}>
       {labels.map((label, index) => {
-        const n = index + 1;
-        const done = current > n;
-        const active = current === n;
+        const n = (index + 1) as ArcaWizardNumericStep;
+        const done = doneThreshold > n;
+        const active = activeStep === n;
+        const isClickable = clickable.includes(n);
         return (
           <span
             key={label}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              fontSize: 12,
-              fontWeight: active ? 600 : 500,
-              color: active || done ? 'var(--text-1)' : 'var(--text-3)',
-            }}
+            style={{ display: 'inline-flex', alignItems: 'center' }}
           >
-            <span
+            <button
+              type="button"
+              disabled={!isClickable}
+              onClick={() => onStepClick(n)}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                width: 20,
-                height: 20,
-                borderRadius: '50%',
-                fontSize: 11,
-                background: done
-                  ? 'var(--brand)'
-                  : active
-                    ? 'var(--brand-soft)'
-                    : 'var(--border-soft)',
-                color: done
-                  ? '#fff'
-                  : active
-                    ? 'var(--brand)'
-                    : 'var(--text-3)',
+                gap: 6,
+                fontSize: 12,
+                fontWeight: active ? 600 : 500,
+                color: active || done ? 'var(--text-1)' : 'var(--text-3)',
+                background: 'none',
+                border: 'none',
+                padding: 0,
+                font: 'inherit',
+                cursor: isClickable ? 'pointer' : 'default',
               }}
             >
-              {done ? <IconCheck size={12} /> : n}
-            </span>
-            {label}
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 20,
+                  height: 20,
+                  borderRadius: '50%',
+                  fontSize: 11,
+                  background: done
+                    ? 'var(--brand)'
+                    : active
+                      ? 'var(--brand-soft)'
+                      : 'var(--border-soft)',
+                  color: done
+                    ? '#fff'
+                    : active
+                      ? 'var(--brand)'
+                      : 'var(--text-3)',
+                }}
+              >
+                {done ? <IconCheck size={12} /> : n}
+              </span>
+              {label}
+            </button>
             {index < labels.length - 1 ? (
               <span style={{ color: 'var(--border)', margin: '0 4px' }}>›</span>
             ) : null}
@@ -485,12 +658,17 @@ function Stepper({ step }: { step: 1 | 2 | 3 | 'done' }) {
 function Step1Form({
   pending,
   onSubmit,
+  initialValues,
+  submitLabel = 'Continuar',
 }: {
   pending: boolean;
   onSubmit: (values: { cuit: string; iibb: string }) => void;
+  /** Sólo para "Cambiar CUIT": arranca con lo que ya tenía cargado la cuenta. */
+  initialValues?: { cuit: string; iibb: string };
+  submitLabel?: string;
 }) {
-  const [cuit, setCuit] = useState('');
-  const [iibb, setIibb] = useState('');
+  const [cuit, setCuit] = useState(initialValues?.cuit ?? '');
+  const [iibb, setIibb] = useState(initialValues?.iibb ?? '');
   const [errors, setErrors] = useState<{ cuit?: string }>({});
 
   function handleSubmit() {
@@ -549,7 +727,86 @@ function Step1Form({
       </div>
       <div style={ROW}>
         <Button variant="primary" loading={pending} onClick={handleSubmit}>
+          {submitLabel}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Resumen de sólo lectura del paso 1, para cuando el dueño vuelve a mirarlo
+ * desde el stepper con la cuenta ya creada. Cambiar el CUIT reinicia la
+ * vinculación (mismo `POST account` de siempre), así que va detrás de un
+ * aviso y un segundo click.
+ */
+function Step1Recap({
+  cuit,
+  iibb,
+  pending,
+  onContinue,
+  onChangeCuit,
+}: {
+  cuit: string;
+  iibb: string | null;
+  pending: boolean;
+  onContinue: () => void;
+  onChangeCuit: (values: { cuit: string; iibb: string }) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Alert
+          variant="warn"
+          icon={<IconAlert size={16} />}
+          title="Cambiar el CUIT reinicia la vinculación"
+          description="Se genera una solicitud nueva: el certificado que hayas creado en ARCA con el CUIT anterior deja de servir y vas a tener que repetir el paso 2."
+        />
+        <Step1Form
+          pending={pending}
+          initialValues={{ cuit, iibb: iibb ?? '' }}
+          submitLabel="Guardar y reiniciar"
+          onSubmit={onChangeCuit}
+        />
+        <div style={ROW}>
+          <Button
+            variant="ghost"
+            disabled={pending}
+            onClick={() => setEditing(false)}
+          >
+            Cancelar
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div>
+        <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 600 }}>
+          Datos comerciales
+        </h3>
+        <p style={HINT}>Ya cargados; sólo se pueden ver o reiniciar.</p>
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: 12,
+        }}
+      >
+        <InfoRow label="CUIT" value={formatCuit(cuit)} />
+        <InfoRow label="Ingresos Brutos" value={iibb ?? 'Sin datos'} />
+      </div>
+      <div style={ROW}>
+        <Button variant="primary" onClick={onContinue}>
           Continuar
+        </Button>
+        <Button variant="secondary" onClick={() => setEditing(true)}>
+          Cambiar CUIT
         </Button>
       </div>
     </div>
@@ -581,39 +838,6 @@ function ArcaLoginLink() {
       Entrar a ARCA
       <IconExternalLink size={13} />
     </a>
-  );
-}
-
-/** Botón de texto chico, para acciones secundarias (no compiten con el CTA del paso). */
-function SmallLinkButton({
-  children,
-  onClick,
-  disabled = false,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        alignSelf: 'flex-start',
-        background: 'none',
-        border: 'none',
-        padding: 0,
-        fontSize: 12,
-        color: 'var(--text-2)',
-        textDecoration: 'underline',
-        textDecorationColor: 'var(--border)',
-        textUnderlineOffset: 3,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-      }}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -727,36 +951,26 @@ function CopyCsrButton({
 }
 
 /**
- * El certificado que devuelve ARCA, pegado a mano: es el camino principal,
- * así el dueño no depende de encontrar y adjuntar un archivo .crt. Subir el
- * archivo queda como atajo secundario, que sólo rellena este mismo textarea.
+ * El certificado que devuelve ARCA, pegado a mano: es el único camino. Antes
+ * había un link para subir el archivo `.crt` en vez de pegarlo, pero el
+ * dueño lo probó y no le servía de nada, así que se sacó junto con el input
+ * de archivo que lo respaldaba.
+ *
+ * `error` sólo se pinta cuando el dueño ya escribió algo (ver
+ * `validatePastedCertificate`): con el campo vacío no hay nada que
+ * "corregir" todavía.
  */
 function CertificateTextarea({
   value,
   onChange,
   disabled,
-  secondaryLabel = '¿Tenés el archivo .crt? Subilo',
+  error,
 }: {
   value: string;
   onChange: (value: string) => void;
   disabled: boolean;
-  secondaryLabel?: string;
+  error: string | null;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    try {
-      const text = await file.text();
-      onChange(text);
-    } catch {
-      // Si no se pudo leer, el textarea sigue como estaba: el dueño puede
-      // pegar el contenido a mano igual.
-    }
-  }
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <textarea
@@ -768,28 +982,21 @@ function CertificateTextarea({
         rows={8}
         disabled={disabled}
         aria-label="Certificado"
+        aria-invalid={error ? true : undefined}
         style={{
           fontFamily: 'monospace',
           fontSize: 12,
           padding: 8,
           borderRadius: 'var(--r-md)',
-          border: '1px solid var(--border-soft)',
+          border: `1px solid ${error ? 'var(--err-border)' : 'var(--border-soft)'}`,
           resize: 'vertical',
         }}
       />
-      <input
-        ref={inputRef}
-        type="file"
-        accept=".crt,application/x-x509-ca-cert,application/pkix-cert,text/plain"
-        onChange={(e) => void handleFileChange(e)}
-        style={{ display: 'none' }}
-      />
-      <SmallLinkButton
-        disabled={disabled}
-        onClick={() => inputRef.current?.click()}
-      >
-        {secondaryLabel}
-      </SmallLinkButton>
+      {error && (
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--err-text)' }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -911,12 +1118,22 @@ function CertSubstepBadge({
 }
 
 /** Un sub-paso del acordeón: título + contenido, y si tiene el botón "Listo, sigo →". */
+/** La acción primaria del pie de un sub-paso: "Listo, sigo →" (1 a 4) o "Verificar" (el 5). */
+interface CertSubstepPrimaryAction {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  /** Sólo el 5 lo usa: "Puede tardar varios segundos...". */
+  loadingHint?: string;
+  variant?: 'primary' | 'secondary';
+}
+
 interface CertSubstepDef {
   id: CertSubstepId;
   title: string;
   body: React.ReactNode;
-  /** El sub-paso 5 no lo tiene: termina en "Verificar", no en una casilla. */
-  doneButton?: { disabled?: boolean };
+  primaryAction: CertSubstepPrimaryAction;
 }
 
 /**
@@ -924,27 +1141,35 @@ interface CertSubstepDef {
  * secuencia (no se puede abrir el N+1 sin completar el N). El estado de cada
  * título lo decide `resolveCertSubstepState` (`certSubsteps.ts`), puro y
  * testeado; acá sólo se pinta.
+ *
+ * "Volver" (2 a 5) es un override LOCAL, igual que reabrir un completado
+ * para mirarlo: NO toca el progreso (no descompleta nada), sólo cambia cuál
+ * sub-paso está abierto. Por eso vive acá y no en `certSubsteps.ts` más allá
+ * de `resolvePreviousCertSubstep`, que sólo calcula el número.
  */
 function CertSubstepAccordion({
   substeps,
   progress,
   verifyError,
-  onSubstepDone,
 }: {
   substeps: readonly CertSubstepDef[];
   progress: CertProgress;
   verifyError: { substep: CertSubstepId; message: string } | null;
-  onSubstepDone: (id: CertSubstepId) => void;
 }) {
-  // Abrir un sub-paso ya completado para releerlo es un override LOCAL: en
-  // cuanto el progreso cambia (se completó otro, o hubo un error nuevo) gana
-  // de nuevo el sub-paso natural.
+  // Abrir un sub-paso ya completado para releerlo (o "Volver") es un override
+  // LOCAL: en cuanto el progreso cambia (se completó otro, o hubo un error
+  // nuevo) gana de nuevo el sub-paso natural.
   const [manualOpen, setManualOpen] = useState<CertSubstepId | null>(null);
   useEffect(() => {
     setManualOpen(null);
   }, [progress]);
 
   const openId = manualOpen ?? resolveOpenCertSubstep(progress);
+
+  function handleBack(id: CertSubstepId) {
+    const previous = resolvePreviousCertSubstep(id);
+    if (previous !== null) setManualOpen(previous);
+  }
 
   return (
     <div style={{ display: 'grid', gap: 8 }}>
@@ -1007,18 +1232,34 @@ function CertSubstepAccordion({
                   />
                 )}
                 {s.body}
-                {s.doneButton && (
-                  <div style={ROW}>
+                <div style={ROW}>
+                  {s.id > 1 && (
                     <Button
-                      variant="secondary"
+                      variant="ghost"
                       size="sm"
-                      disabled={s.doneButton.disabled}
-                      onClick={() => onSubstepDone(s.id)}
+                      icon={<IconChevronLeft size={14} />}
+                      aria-label="Volver al paso anterior"
+                      style={{ color: 'var(--err-text)' }}
+                      onClick={() => handleBack(s.id)}
                     >
-                      Listo, sigo →
+                      Volver
                     </Button>
-                  </div>
-                )}
+                  )}
+                  <Button
+                    variant={s.primaryAction.variant ?? 'secondary'}
+                    size="sm"
+                    loading={s.primaryAction.loading}
+                    disabled={s.primaryAction.disabled}
+                    onClick={s.primaryAction.onClick}
+                  >
+                    {s.primaryAction.label}
+                  </Button>
+                  {s.primaryAction.loading && s.primaryAction.loadingHint && (
+                    <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                      {s.primaryAction.loadingHint}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -1055,25 +1296,24 @@ function Step2Upload({
 }) {
   const [certText, setCertText] = useState('');
 
-  // Vive en el sub-paso 5 (informativo, sin "Listo, sigo"): ahí es donde
-  // realmente se llama a ARCA, así que el CTA primario y el loading van ahí.
-  const verifyButton = (
-    <div style={ROW}>
-      <Button
-        variant="primary"
-        loading={verifying}
-        disabled={!certText.trim()}
-        onClick={() => onVerify(certText)}
-      >
-        Verificar
-      </Button>
-      {verifying && (
-        <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-          Puede tardar varios segundos: estamos hablando con ARCA.
-        </span>
-      )}
-    </div>
-  );
+  const certValidation = validatePastedCertificate(certText);
+  // "Listo, sigo" del sub-paso 4 se deshabilita con cualquier error,
+  // incluido el campo vacío (`validatePastedCertificate('')` también
+  // devuelve el genérico). El TEXTO del error sólo se pinta con algo
+  // escrito: con el campo vacío no hay nada que "corregir" todavía.
+  const certInvalid = certValidation !== null;
+  const certError = certText.trim() ? certValidation : null;
+
+  // El sub-paso 5 es informativo (sin "Listo, sigo"): su primaryAction es
+  // "Verificar", la llamada real a ARCA.
+  const verifyAction: CertSubstepPrimaryAction = {
+    label: 'Verificar',
+    variant: 'primary',
+    loading: verifying,
+    disabled: certInvalid,
+    loadingHint: 'Puede tardar varios segundos: estamos hablando con ARCA.',
+    onClick: () => onVerify(certText),
+  };
 
   const homologacionSubsteps: CertSubstepDef[] = [
     {
@@ -1089,7 +1329,10 @@ function Step2Upload({
           />
         </>
       ),
-      doneButton: {},
+      primaryAction: {
+        label: 'Listo, sigo →',
+        onClick: () => onSubstepDone(1),
+      },
     },
     {
       id: 2,
@@ -1152,7 +1395,10 @@ function Step2Upload({
           </p>
         </>
       ),
-      doneButton: {},
+      primaryAction: {
+        label: 'Listo, sigo →',
+        onClick: () => onSubstepDone(2),
+      },
     },
     {
       id: 3,
@@ -1197,7 +1443,10 @@ function Step2Upload({
           </Disclosure>
         </>
       ),
-      doneButton: {},
+      primaryAction: {
+        label: 'Listo, sigo →',
+        onClick: () => onSubstepDone(3),
+      },
     },
     {
       id: 4,
@@ -1212,10 +1461,15 @@ function Step2Upload({
             value={certText}
             onChange={setCertText}
             disabled={verifying}
+            error={certError}
           />
         </>
       ),
-      doneButton: { disabled: !certText.trim() },
+      primaryAction: {
+        label: 'Listo, sigo →',
+        disabled: certInvalid,
+        onClick: () => onSubstepDone(4),
+      },
     },
     {
       id: 5,
@@ -1259,9 +1513,9 @@ function Step2Upload({
             src="/arca-guide/homologacion/07-crear-autorizacion.jpg"
             alt="Formulario Crear autorización a servicio en WSASS"
           />
-          {verifyButton}
         </>
       ),
+      primaryAction: verifyAction,
     },
   ];
 
@@ -1275,7 +1529,10 @@ function Step2Upload({
           <ArcaLoginLink />
         </>
       ),
-      doneButton: {},
+      primaryAction: {
+        label: 'Listo, sigo →',
+        onClick: () => onSubstepDone(1),
+      },
     },
     {
       id: 2,
@@ -1306,7 +1563,10 @@ function Step2Upload({
           </Disclosure>
         </>
       ),
-      doneButton: {},
+      primaryAction: {
+        label: 'Listo, sigo →',
+        onClick: () => onSubstepDone(2),
+      },
     },
     {
       id: 3,
@@ -1337,7 +1597,10 @@ function Step2Upload({
           </div>
         </>
       ),
-      doneButton: {},
+      primaryAction: {
+        label: 'Listo, sigo →',
+        onClick: () => onSubstepDone(3),
+      },
     },
     {
       id: 4,
@@ -1346,17 +1609,21 @@ function Step2Upload({
         <>
           <p style={HINT}>
             Descargá el certificado que genera ARCA, abrilo con el Bloc de notas
-            y pegá el contenido acá:
+            y pegá todo el contenido acá:
           </p>
           <CertificateTextarea
             value={certText}
             onChange={setCertText}
             disabled={verifying}
-            secondaryLabel="¿Preferís subir el archivo .crt?"
+            error={certError}
           />
         </>
       ),
-      doneButton: { disabled: !certText.trim() },
+      primaryAction: {
+        label: 'Listo, sigo →',
+        disabled: certInvalid,
+        onClick: () => onSubstepDone(4),
+      },
     },
     {
       id: 5,
@@ -1370,9 +1637,9 @@ function Step2Upload({
             <strong>Constancia de Inscripción</strong>.
           </p>
           <ArcaLoginLink />
-          {verifyButton}
         </>
       ),
+      primaryAction: verifyAction,
     },
   ];
 
@@ -1419,8 +1686,72 @@ function Step2Upload({
         }
         progress={progress}
         verifyError={verifyError}
-        onSubstepDone={onSubstepDone}
       />
+    </div>
+  );
+}
+
+/**
+ * Recap del paso 2 al volver desde el stepper con el certificado YA
+ * verificado (la cuenta pasó al paso 3: `pending_sales_point` con
+ * `condicionIva` cargada). No hay datos fiscales que completar acá — si
+ * faltaran, `resolveArcaWizardStep` todavía tendría al wizard parado en este
+ * paso, y éste sería el modo `'in_progress'`, no el recap.
+ */
+function Step2Recap({
+  account,
+  onContinue,
+  onReissue,
+}: {
+  account: ArcaAccount;
+  onContinue: () => void;
+  onReissue: () => void;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Alert
+        variant="info"
+        icon={<IconCheckCircle size={16} />}
+        title="Certificado verificado"
+        description="Ya podés continuar al punto de venta, o cargar uno nuevo si hace falta reemplazarlo."
+      />
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: 12,
+        }}
+      >
+        <InfoRow label="Alias del certificado" value={account.certAlias} />
+        <InfoRow
+          label="Vence"
+          value={
+            account.certExpiresAt
+              ? fmtDateTimeAr(account.certExpiresAt)
+              : 'No vence'
+          }
+        />
+        <InfoRow
+          label="Razón social"
+          value={account.razonSocial ?? 'Sin datos'}
+        />
+        <InfoRow
+          label="Condición frente al IVA"
+          value={
+            account.condicionIva
+              ? ARCA_TAX_CONDITION_LABELS[account.condicionIva]
+              : 'Sin datos'
+          }
+        />
+      </div>
+      <div style={ROW}>
+        <Button variant="primary" onClick={onContinue}>
+          Continuar
+        </Button>
+        <Button variant="secondary" onClick={onReissue}>
+          Cargar otro certificado
+        </Button>
+      </div>
     </div>
   );
 }
