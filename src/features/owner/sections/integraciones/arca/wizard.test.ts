@@ -2,11 +2,15 @@ import { describe, expect, it } from 'vitest';
 import type { ArcaAccount } from '../../../services/arca';
 import {
   ARCA_CONSTANCIA_MAX_BYTES,
+  resolveArcaStep1ViewMode,
+  resolveArcaStep2ViewMode,
   resolveArcaWizardStep,
+  resolveClickableArcaWizardSteps,
   validateArcaConstancia,
   validateArcaFiscalDataForm,
   validateArcaPtoVta,
   validateArcaStep1Form,
+  validatePastedCertificate,
 } from './wizard';
 
 function makeAccount(overrides: Partial<ArcaAccount> = {}): ArcaAccount {
@@ -124,6 +128,101 @@ describe('validateArcaPtoVta', () => {
     expect(validateArcaPtoVta('abc')).toBeTruthy();
     expect(validateArcaPtoVta('0')).toBeTruthy();
     expect(validateArcaPtoVta('99999')).toBeTruthy();
+  });
+});
+
+describe('resolveClickableArcaWizardSteps', () => {
+  it('en el paso 1, sólo el 1 es clickeable', () => {
+    expect(resolveClickableArcaWizardSteps(1)).toEqual([1]);
+  });
+
+  it('en el paso 2, el 1 y el 2 (el actual incluido)', () => {
+    expect(resolveClickableArcaWizardSteps(2)).toEqual([1, 2]);
+  });
+
+  it('en el paso 3, los tres', () => {
+    expect(resolveClickableArcaWizardSteps(3)).toEqual([1, 2, 3]);
+  });
+
+  it('con la cuenta linked (wizard terminado), ninguno', () => {
+    expect(resolveClickableArcaWizardSteps('done')).toEqual([]);
+  });
+});
+
+describe('resolveArcaStep1ViewMode', () => {
+  it('es el formulario cuando el wizard está parado en el paso 1', () => {
+    expect(resolveArcaStep1ViewMode(1)).toBe('form');
+  });
+
+  it('es el resumen de sólo lectura si ya se avanzó', () => {
+    expect(resolveArcaStep1ViewMode(2)).toBe('recap');
+    expect(resolveArcaStep1ViewMode(3)).toBe('recap');
+    expect(resolveArcaStep1ViewMode('done')).toBe('recap');
+  });
+});
+
+describe('resolveArcaStep2ViewMode', () => {
+  it('es el acordeón/formulario en curso cuando el wizard está parado ahí', () => {
+    expect(resolveArcaStep2ViewMode(2)).toBe('in_progress');
+  });
+
+  it('es el resumen "certificado verificado" si ya se avanzó al 3', () => {
+    expect(resolveArcaStep2ViewMode(3)).toBe('recap');
+    expect(resolveArcaStep2ViewMode('done')).toBe('recap');
+  });
+});
+
+describe('validatePastedCertificate', () => {
+  const body = 'A'.repeat(520);
+  const validCert = `-----BEGIN CERTIFICATE-----\n${body}\n-----END CERTIFICATE-----`;
+
+  it('acepta un certificado bien formado', () => {
+    expect(validatePastedCertificate(validCert)).toBeNull();
+  });
+
+  it('ignora espacios y saltos de línea (incluido \\r\\n) alrededor del cuerpo', () => {
+    const conCrlf = `-----BEGIN CERTIFICATE-----\r\n${body.slice(0, 260)}\r\n${body.slice(260)}\r\n-----END CERTIFICATE-----`;
+    expect(validatePastedCertificate(conCrlf)).toBeNull();
+  });
+
+  it('tolera espacio alrededor de todo el texto (trim)', () => {
+    expect(validatePastedCertificate(`  ${validCert}  \n`)).toBeNull();
+  });
+
+  it('rechaza el campo vacío', () => {
+    expect(validatePastedCertificate('')).toBeTruthy();
+    expect(validatePastedCertificate('   ')).toBeTruthy();
+  });
+
+  it('rechaza cualquier cosa que no tenga los marcadores (el caso "aaaaaaaaaaaa")', () => {
+    expect(validatePastedCertificate('aaaaaaaaaaaa')).toBeTruthy();
+  });
+
+  it('rechaza si falta el marcador de cierre', () => {
+    expect(
+      validatePastedCertificate(`-----BEGIN CERTIFICATE-----\n${body}`),
+    ).toBeTruthy();
+  });
+
+  it('rechaza si el cierre aparece ANTES que la apertura', () => {
+    const alReves = `-----END CERTIFICATE-----\n${body}\n-----BEGIN CERTIFICATE-----`;
+    expect(validatePastedCertificate(alReves)).toBeTruthy();
+  });
+
+  it('rechaza un cuerpo de menos de 500 caracteres', () => {
+    const corto = `-----BEGIN CERTIFICATE-----\n${'A'.repeat(100)}\n-----END CERTIFICATE-----`;
+    expect(validatePastedCertificate(corto)).toBeTruthy();
+  });
+
+  it('rechaza un cuerpo con caracteres fuera de base64', () => {
+    const conBasura = `-----BEGIN CERTIFICATE-----\n${'A'.repeat(500)}#$%\n-----END CERTIFICATE-----`;
+    expect(validatePastedCertificate(conBasura)).toBeTruthy();
+  });
+
+  it('acepta el cuerpo con los cuatro caracteres especiales de base64 (+ / = y el padding)', () => {
+    const cuerpoConSimbolos = `${'A'.repeat(400)}+/==${'B'.repeat(120)}`;
+    const cert = `-----BEGIN CERTIFICATE-----\n${cuerpoConSimbolos}\n-----END CERTIFICATE-----`;
+    expect(validatePastedCertificate(cert)).toBeNull();
   });
 });
 

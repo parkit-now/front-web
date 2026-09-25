@@ -61,6 +61,97 @@ export function validateArcaStep1Form(
   return errors;
 }
 
+/** Los 3 pasos numerados del wizard, para el stepper de arriba. */
+export const ARCA_WIZARD_NUMERIC_STEPS = [1, 2, 3] as const;
+export type ArcaWizardNumericStep = (typeof ARCA_WIZARD_NUMERIC_STEPS)[number];
+
+/**
+ * Qué pasos del stepper se pueden clickear para volver a verlos.
+ *
+ * Son los YA ALCANZADOS (≤ el paso natural), incluido el actual: clickearlo
+ * no hace nada distinto de lo que ya se está viendo, pero no hay motivo para
+ * bloquearlo. Con la cuenta `linked` (o `cert_expired`, que también cae en
+ * `'done'`) el wizard ya terminó: ahí no se puede volver a tocar nada, así
+ * que ningún paso es clickeable.
+ */
+export function resolveClickableArcaWizardSteps(
+  naturalStep: ArcaWizardStep,
+): readonly ArcaWizardNumericStep[] {
+  if (naturalStep === 'done') return [];
+  return ARCA_WIZARD_NUMERIC_STEPS.filter((n) => n <= naturalStep);
+}
+
+/**
+ * En qué modo mostrar el paso 1 al volver: `'form'` es el formulario normal
+ * (recién ahí es donde está parado el wizard); `'recap'` es el resumen de
+ * sólo lectura con "Continuar" / "Cambiar CUIT", para cuando ya existe una
+ * cuenta y el dueño clickeó el paso 1 del stepper para volver a mirarlo.
+ */
+export function resolveArcaStep1ViewMode(
+  naturalStep: ArcaWizardStep,
+): 'form' | 'recap' {
+  return naturalStep === 1 ? 'form' : 'recap';
+}
+
+/**
+ * Lo mismo para el paso 2: `'in_progress'` es el acordeón/formulario de
+ * datos fiscales de siempre (el wizard está parado ahí); `'recap'` es el
+ * resumen "Certificado verificado" con "Continuar" / "Cargar otro
+ * certificado", para cuando el certificado ya se verificó (la cuenta ya
+ * pasó al paso 3) y el dueño volvió a mirar el paso 2 desde el stepper.
+ */
+export function resolveArcaStep2ViewMode(
+  naturalStep: ArcaWizardStep,
+): 'in_progress' | 'recap' {
+  return naturalStep === 2 ? 'in_progress' : 'recap';
+}
+
+// ── Paso 2: certificado pegado a mano ────────────────────────────────────────
+
+const CERT_BEGIN = '-----BEGIN CERTIFICATE-----';
+const CERT_END = '-----END CERTIFICATE-----';
+/** Un certificado real ronda varios miles de caracteres en base64; 500 alcanza para descartar cualquier cosa que no sea un certificado pegado entero. */
+const CERT_BODY_MIN_LENGTH = 500;
+const CERT_BODY_PATTERN = /^[A-Za-z0-9+/=]+$/;
+
+const CERT_FORMAT_ERROR =
+  'Pegá el certificado completo, desde -----BEGIN CERTIFICATE----- hasta -----END CERTIFICATE-----.';
+
+/**
+ * Valida el certificado pegado a mano en el paso 2 (sub-paso 4), ANTES de
+ * mandarlo a verificar contra ARCA.
+ *
+ * Es sólo el aviso temprano: el backend vuelve a validar de verdad (firma,
+ * CUIT, vigencia...) y ahí es donde puede rechazarlo con `ARCA_CERT_INVALID`
+ * y compañía. Esto sólo evita el viaje de red con algo que a todas luces no
+ * es un certificado — como pegar "aaaaaaaaaaaa", que antes de este chequeo
+ * se mandaba igual.
+ *
+ * Exige, en este orden: el marcador de apertura, el de cierre DESPUÉS del de
+ * apertura, y entre los dos un cuerpo (sacando espacios y saltos de línea,
+ * `\r\n` incluido) de al menos 500 caracteres que sean sólo base64
+ * (`[A-Za-z0-9+/=]`). No decodifica el base64 ni mira la fecha: eso es
+ * trabajo del backend.
+ */
+export function validatePastedCertificate(raw: string): string | null {
+  const text = raw.trim();
+  if (!text) return CERT_FORMAT_ERROR;
+
+  const beginIndex = text.indexOf(CERT_BEGIN);
+  if (beginIndex === -1) return CERT_FORMAT_ERROR;
+
+  const endIndex = text.indexOf(CERT_END, beginIndex + CERT_BEGIN.length);
+  if (endIndex === -1) return CERT_FORMAT_ERROR;
+
+  const body = text
+    .slice(beginIndex + CERT_BEGIN.length, endIndex)
+    .replace(/\s+/g, '');
+  if (body.length < CERT_BODY_MIN_LENGTH) return CERT_FORMAT_ERROR;
+  if (!CERT_BODY_PATTERN.test(body)) return CERT_FORMAT_ERROR;
+
+  return null;
+}
+
 // ── Paso 2: datos fiscales a mano (padrón de homologación sin el CUIT) ──────
 
 export type ArcaFiscalDataFormValues = {
