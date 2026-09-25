@@ -12,6 +12,7 @@ function makePaymentMethod(
     enabled: true,
     isDefault: false,
     isSystem: true,
+    invoiceMode: 'none',
     syncSeq: 1,
     version: 1,
     createdAt: '2026-09-20T12:49:00.000Z',
