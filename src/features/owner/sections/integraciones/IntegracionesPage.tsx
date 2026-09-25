@@ -10,19 +10,31 @@ import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useSucursal } from '../../context/SucursalContext';
 import { mpAccountQueryKey, useMpAccount } from '../../hooks/useMpAccount';
+import {
+  arcaAccountQueryKey,
+  useArcaAccount,
+} from '../../hooks/useArcaAccount';
 import { getEntityProfile } from '../../services/entities';
 import {
   createMpAuthorizationUrl,
   resyncMpPos,
   unlinkMpAccount,
 } from '../../services/mercado-pago';
+import { unlinkArcaAccount } from '../../services/arca';
+import { ArcaCard } from './ArcaCard';
 import { MercadoPagoCard } from './MercadoPagoCard';
-import { isAddressComplete, resolveMpCardState } from './validation';
+import {
+  isAddressComplete,
+  resolveArcaCardState,
+  resolveMpCardState,
+} from './validation';
 
 /**
- * Integraciones del panel del dueño. Hoy: Mercado Pago.
+ * Integraciones del panel del dueño: Mercado Pago y ARCA (facturación
+ * electrónica).
  *
- * La página consulta y muta; qué se dibuja lo decide `resolveMpCardState`.
+ * La página consulta y muta; qué se dibuja lo deciden `resolveMpCardState` y
+ * `resolveArcaCardState`, cada una en su propia tarjeta.
  */
 export function IntegracionesPage() {
   const { showToast } = useToast();
@@ -102,6 +114,38 @@ export function IntegracionesPage() {
       }),
   });
 
+  // ── ARCA (facturación electrónica) ────────────────────────────────────────
+  const arcaAccountQuery = useArcaAccount(sucursalId);
+
+  const arcaUnlinkMutation = useMutation({
+    mutationFn: () => unlinkArcaAccount(sucursalId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: arcaAccountQueryKey(sucursalId),
+      });
+      // También cambia lo que muestra la tabla de "Configurar emisión" (todos
+      // los medios vuelven a `invoiceMode: 'none'`), así que su caché se cae.
+      void queryClient.invalidateQueries({
+        queryKey: ['payment-methods', sucursalId],
+      });
+      showToast({
+        message: 'Desvinculamos ARCA de esta sede.',
+        kind: 'success',
+      });
+    },
+    onError: (error) =>
+      showToast({
+        message: translateApiError(error, { endpoint: 'arca.unlink' }),
+        kind: 'error',
+      }),
+  });
+
+  const arcaAccount = arcaAccountQuery.data ?? null;
+  const arcaState = useMemo(
+    () => resolveArcaCardState(arcaAccount),
+    [arcaAccount],
+  );
+
   const account = accountQuery.data ?? null;
   const addressComplete = isAddressComplete(entityQuery.data);
 
@@ -119,8 +163,13 @@ export function IntegracionesPage() {
   );
 
   // La dirección decide entre `address-incomplete` y `unlinked`: mostrar la
-  // tarjeta antes de tenerla haría parpadear el aviso equivocado.
-  if (accountQuery.isLoading || entityQuery.isLoading) {
+  // tarjeta antes de tenerla haría parpadear el aviso equivocado. Se espera
+  // también a la cuenta de ARCA para que las dos tarjetas aparezcan juntas.
+  if (
+    accountQuery.isLoading ||
+    entityQuery.isLoading ||
+    arcaAccountQuery.isLoading
+  ) {
     return (
       <div>
         {header}
@@ -201,6 +250,36 @@ export function IntegracionesPage() {
         onUnlink={() => unlinkMutation.mutate()}
         onResync={() => resyncMutation.mutate()}
       />
+
+      <div style={{ marginTop: 16 }}>
+        {arcaAccountQuery.isError ? (
+          <Alert
+            variant="err"
+            icon={<IconAlert size={16} />}
+            title="No pudimos consultar tu integración con ARCA"
+            description={translateApiError(arcaAccountQuery.error, {
+              endpoint: 'arca.getAccount',
+            })}
+            action={
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => void arcaAccountQuery.refetch()}
+              >
+                Reintentar
+              </Button>
+            }
+          />
+        ) : (
+          <ArcaCard
+            state={arcaState}
+            account={arcaAccount}
+            canManage={canManage}
+            unlinking={arcaUnlinkMutation.isPending}
+            onUnlink={() => arcaUnlinkMutation.mutate()}
+          />
+        )}
+      </div>
     </div>
   );
 }
