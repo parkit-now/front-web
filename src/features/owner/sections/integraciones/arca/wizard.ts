@@ -172,14 +172,19 @@ export function validatePastedCertificate(raw: string): string | null {
 // ── Paso 2: datos fiscales a mano (padrón de homologación sin el CUIT) ──────
 
 /**
- * Qué comprobante emite cada condición frente al IVA, en palabras del dueño.
- * Se muestra al confirmar los datos fiscales: la condición decide la letra de
+ * Qué facturas emite cada condición frente al IVA, en palabras del dueño. Se
+ * muestra al confirmar los datos fiscales: la condición decide las letras de
  * TODAS las facturas, así que tiene que quedar claro antes de guardarla.
+ *
+ * Describe la CONDICIÓN, no lo que Parkit emite hoy: aunque por ahora sólo se
+ * factura a consumidor final (B o C), un responsable inscripto también emite A
+ * a clientes con CUIT (Etapa 5). La regla vive en
+ * `backend/src/arca/resolve-voucher.ts`.
  */
-export function describeInvoiceLetter(condicion: ArcaTaxCondition): string {
+export function describeInvoiceLetters(condicion: ArcaTaxCondition): string {
   return condicion === 'responsable_inscripto'
-    ? 'Factura B a consumidor final'
-    : 'Factura C';
+    ? 'Factura B a consumidor final y Factura A a clientes con CUIT que sean responsables inscriptos o monotributistas'
+    : 'siempre Factura C, a cualquier cliente';
 }
 
 export type ArcaFiscalDataFormValues = {

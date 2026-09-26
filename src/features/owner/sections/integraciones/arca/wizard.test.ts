@@ -11,7 +11,7 @@ import {
   validateArcaPtoVta,
   validateArcaStep1Form,
   validatePastedCertificate,
-  describeInvoiceLetter,
+  describeInvoiceLetters,
 } from './wizard';
 
 function makeAccount(overrides: Partial<ArcaAccount> = {}): ArcaAccount {
@@ -285,12 +285,15 @@ describe('validateArcaConstancia', () => {
   });
 });
 
-describe('describeInvoiceLetter', () => {
-  it('responsable inscripto emite B; monotributo y exento, C', () => {
-    expect(describeInvoiceLetter('responsable_inscripto')).toBe(
-      'Factura B a consumidor final',
-    );
-    expect(describeInvoiceLetter('monotributo')).toBe('Factura C');
-    expect(describeInvoiceLetter('exento')).toBe('Factura C');
+describe('describeInvoiceLetters', () => {
+  it('responsable inscripto: B a consumidor final y A a clientes con CUIT', () => {
+    const text = describeInvoiceLetters('responsable_inscripto');
+    expect(text).toContain('Factura B a consumidor final');
+    expect(text).toContain('Factura A');
+  });
+
+  it('monotributo y exento: siempre C', () => {
+    expect(describeInvoiceLetters('monotributo')).toContain('Factura C');
+    expect(describeInvoiceLetters('exento')).toContain('Factura C');
   });
 });

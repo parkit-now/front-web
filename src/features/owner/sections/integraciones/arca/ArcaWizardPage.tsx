@@ -53,7 +53,7 @@ import {
   validateArcaFiscalDataForm,
   validateArcaPtoVta,
   validateArcaStep1Form,
-  describeInvoiceLetter,
+  describeInvoiceLetters,
   validatePastedCertificate,
   type ArcaFiscalDataFormValues,
   type ArcaWizardNumericStep,
@@ -2134,8 +2134,8 @@ function FiscalDataForm({
             </p>
             {values.condicionIva && (
               <p style={{ margin: 0 }}>
-                Con esta condición vas a emitir{' '}
-                <strong>{describeInvoiceLetter(values.condicionIva)}</strong>.
+                Con esta condición emitís{' '}
+                <strong>{describeInvoiceLetters(values.condicionIva)}</strong>.
                 Revisá que coincida con tu constancia de inscripción: define la
                 letra de todas tus facturas.
               </p>

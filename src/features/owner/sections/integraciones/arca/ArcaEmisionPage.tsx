@@ -238,7 +238,8 @@ export function ArcaEmisionPage() {
             {isResponsableInscripto
               ? 'Responsable Inscripto'
               : 'Monotributo/Exento'}
-            ) vas a emitir <strong>{facturaLetra}</strong>.
+            ), al cobrar se emite automáticamente{' '}
+            <strong>{facturaLetra}</strong>.
           </p>
 
           {methodsQuery.isLoading || !draft ? (
