@@ -1,6 +1,7 @@
 import type { components } from '../../../generated/api-types';
 import { apiRequest, apiRequestFile } from '../../../lib/api/client';
 import { getSession } from '../../../lib/supabase/session';
+import { pdfFileName } from '../sections/operacion/invoiceUtils';
 
 export type Invoice = components['schemas']['InvoiceDto'];
 export type InvoiceSummary = components['schemas']['InvoiceSummaryDto'];
@@ -92,12 +93,6 @@ export async function issueInvoiceBatch(
     results.push(...page.results);
   }
   return results;
-}
-
-/** Siempre termina en `.pdf`, venga como venga el nombre. */
-export function pdfFileName(name: string | null, fallback: string): string {
-  const base = (name ?? '').trim() || fallback;
-  return /\.pdf$/i.test(base) ? base : `${base}.pdf`;
 }
 
 /**

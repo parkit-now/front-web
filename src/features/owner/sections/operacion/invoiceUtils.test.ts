@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { pdfFileName } from '../../services/invoices';
 import {
   canIssueInvoice,
   countInvoiceChips,
   formatVoucherNumber,
+  pdfFileName,
   resolveInvoiceState,
   voucherLabel,
 } from './invoiceUtils';

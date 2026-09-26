@@ -175,3 +175,9 @@ export function receiverDescription(
     ? `${invoice.receptorNombre} · CUIT ${cuit}`
     : `CUIT ${cuit}`;
 }
+
+/** Siempre termina en `.pdf`, venga como venga el nombre. */
+export function pdfFileName(name: string | null, fallback: string): string {
+  const base = (name ?? '').trim() || fallback;
+  return /\.pdf$/i.test(base) ? base : `${base}.pdf`;
+}
