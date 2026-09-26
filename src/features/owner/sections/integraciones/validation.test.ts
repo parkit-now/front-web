@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { MpAccount } from '../../services/mercado-pago';
 import type { ArcaAccount } from '../../services/arca';
 import {
+  formatArcaCertDate,
   formatCuit,
   isAddressComplete,
   resolveArcaCardState,
@@ -220,5 +221,13 @@ describe('formatCuit', () => {
 
   it('devuelve el valor tal cual si no son 11 dígitos', () => {
     expect(formatCuit('123')).toBe('123');
+  });
+});
+
+describe('renovación del certificado ARCA', () => {
+  it('formatea el vencimiento en hora argentina', () => {
+    // 02:00 UTC del 16/10 todavía es 15/10 en Buenos Aires.
+    expect(formatArcaCertDate('2026-10-16T02:00:00.000Z')).toBe('15/10/2026');
+    expect(formatArcaCertDate(null)).toBe('');
   });
 });

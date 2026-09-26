@@ -10,6 +10,7 @@ import { fmtDateTimeAr } from '../../../../shared/utils/fmt';
 import type { ArcaAccount } from '../../services/arca';
 import {
   ARCA_TAX_CONDITION_LABELS,
+  formatArcaCertDate,
   formatCuit,
   type ArcaCardState,
 } from './validation';
@@ -169,18 +170,22 @@ export function ArcaCard({
               <Alert
                 variant="warn"
                 icon={<IconAlert size={16} />}
-                title={`El certificado vence en ${state.daysLeft} ${
+                title={`Tu certificado vence el ${formatArcaCertDate(
+                  account.certExpiresAt,
+                )} (en ${state.daysLeft} ${
                   state.daysLeft === 1 ? 'día' : 'días'
-                }.`}
-                description="Generá uno nuevo desde el wizard de vinculación antes de que venza: hasta entonces seguís facturando normal."
+                }).`}
+                description="Renovalo para seguir facturando. Hasta que venza seguís facturando normal."
+                action={canManage ? <RenewLink /> : undefined}
               />
             )}
             {state.kind === 'broken' && (
               <Alert
                 variant="err"
                 icon={<IconAlert size={18} />}
-                title="El certificado de ARCA está vencido"
-                description="No se pueden emitir facturas hasta que generes uno nuevo. Los cobros se siguen registrando normal, sólo no se factura."
+                title="La facturación está pausada: el certificado venció"
+                description="Los cobros se siguen registrando normal, pero no se factura hasta que renueves el certificado."
+                action={canManage ? <RenewLink /> : undefined}
               />
             )}
 
@@ -280,6 +285,18 @@ export function ArcaCard({
         onClose={() => setConfirmOpen(false)}
       />
     </Card>
+  );
+}
+
+function RenewLink() {
+  return (
+    <Link
+      to="arca/renovar"
+      className="pk-btn pk-btn-primary pk-btn-sm"
+      style={{ textDecoration: 'none' }}
+    >
+      Renovar certificado
+    </Link>
   );
 }
 

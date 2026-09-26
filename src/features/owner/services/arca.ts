@@ -181,3 +181,36 @@ export async function setArcaSalesPoint(
     bearer: await bearer(),
   });
 }
+
+/**
+ * GET /tenants/:tenantId/arca/account/renewal/csr — solo owner. La solicitud
+ * (CSR) para renovar el certificado, con el MISMO alias que el vigente: en
+ * ARCA va a «Agregar certificado» sobre ese alias, que conserva los servicios
+ * asociados. Si el job diario todavía no la preparó, se genera en el momento.
+ * 409 `ARCA_LINK_STEP_INVALID` si la cuenta no está vinculada.
+ */
+export async function getArcaRenewalCsr(tenantId: string): Promise<ArcaCsr> {
+  return apiRequest<ArcaCsr>({
+    method: 'GET',
+    path: `/tenants/${tenantId}/arca/account/renewal/csr`,
+    bearer: await bearer(),
+  });
+}
+
+/**
+ * POST /tenants/:tenantId/arca/account/renewal/certificate — solo owner. El
+ * certificado renovado (PEM pegado). Lo verifica contra ARCA y lo cambia en
+ * todas las sedes que comparten el certificado; una cuenta vencida vuelve a
+ * facturar. Mismos errores 422 que `uploadArcaCertificate` (salvo el padrón).
+ */
+export async function uploadArcaRenewalCertificate(
+  tenantId: string,
+  body: UploadArcaCertificateInput,
+): Promise<ArcaAccount> {
+  return apiRequest<ArcaAccount>({
+    method: 'POST',
+    path: `/tenants/${tenantId}/arca/account/renewal/certificate`,
+    body,
+    bearer: await bearer(),
+  });
+}

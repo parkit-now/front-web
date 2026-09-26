@@ -184,6 +184,20 @@ export function resolveArcaCardState(
   return { kind: 'linked' };
 }
 
+const AR_DATE = new Intl.DateTimeFormat('es-AR', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  timeZone: 'America/Argentina/Buenos_Aires',
+});
+
+/** `dd/mm/aaaa` en hora argentina, para «Tu certificado vence el ...». */
+export function formatArcaCertDate(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '' : AR_DATE.format(date);
+}
+
 /** Condición frente al IVA, en castellano, para mostrar en la tarjeta y el wizard. */
 export const ARCA_TAX_CONDITION_LABELS: Record<
   NonNullable<ArcaAccount['condicionIva']>,

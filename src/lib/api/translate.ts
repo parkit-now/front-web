@@ -87,7 +87,9 @@ export type EndpointKey =
   | 'arca.uploadCertificate'
   | 'arca.listReusableCertificates'
   | 'arca.reuseCertificate'
-  | 'arca.setSalesPoint';
+  | 'arca.setSalesPoint'
+  | 'arca.getRenewalCsr'
+  | 'arca.uploadRenewalCertificate';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;

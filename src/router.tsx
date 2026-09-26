@@ -17,6 +17,7 @@ import {
 } from './features/owner/sections/integraciones/MercadoPagoCallbackPage';
 import { ArcaWizardPage } from './features/owner/sections/integraciones/arca/ArcaWizardPage';
 import { ArcaEmisionPage } from './features/owner/sections/integraciones/arca/ArcaEmisionPage';
+import { ArcaRenovarPage } from './features/owner/sections/integraciones/arca/ArcaRenovarPage';
 import { TasasPage } from './features/owner/sections/tasas/TasasPage';
 import { TiposVehiculoPage } from './features/owner/sections/tipos-de-vehiculo/TiposVehiculoPage';
 import { VehiculosPage } from './features/owner/sections/vehiculos/VehiculosPage';
@@ -93,6 +94,7 @@ const ownerSectionRoutes = [
   { path: 'integraciones', element: <IntegracionesPage /> },
   { path: 'integraciones/arca/vincular', element: <ArcaWizardPage /> },
   { path: 'integraciones/arca/emision', element: <ArcaEmisionPage /> },
+  { path: 'integraciones/arca/renovar', element: <ArcaRenovarPage /> },
   { path: 'config', element: <ConfigPage /> },
 ];
 
