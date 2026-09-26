@@ -384,3 +384,118 @@
     width: 100%;
   }
 }
+
+/* Facturación en el Historial */
+.operation-invoice-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.operation-invoice-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.operation-invoice-chip b {
+  color: var(--text-1);
+  font-family: var(--mono);
+}
+
+.operation-invoice-chip[aria-pressed='true'] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.operation-invoice-chip[aria-pressed='true'] b {
+  color: var(--brand);
+}
+
+.operation-invoice-cell {
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+  white-space: nowrap;
+}
+
+.operation-invoice-cell small {
+  color: var(--text-3);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.operation-invoice {
+  margin-top: 22px;
+}
+
+.operation-invoice-error {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--warn-border);
+  background: var(--warn-bg);
+  color: var(--text-1);
+  font-size: 13px;
+}
+
+.operation-invoice-error p {
+  margin: 0;
+}
+
+.operation-invoice-error details {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.operation-invoice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.operation-batch-summary {
+  margin: 0 0 12px;
+  color: var(--text-1);
+  font-weight: 700;
+}
+
+.operation-batch-list {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.operation-batch-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 13px;
+}
+
+.operation-batch-error {
+  color: var(--text-2);
+  text-align: right;
+}
