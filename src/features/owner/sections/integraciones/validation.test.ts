@@ -7,6 +7,8 @@ import {
   isAddressComplete,
   resolveArcaCardState,
   resolveMpCardState,
+  isArcaInvoiceDataMissing,
+  resolveArcaIibb,
 } from './validation';
 
 const NOW = new Date('2026-09-20T12:00:00.000Z');
@@ -229,5 +231,29 @@ describe('renovación del certificado ARCA', () => {
     // 02:00 UTC del 16/10 todavía es 15/10 en Buenos Aires.
     expect(formatArcaCertDate('2026-10-16T02:00:00.000Z')).toBe('15/10/2026');
     expect(formatArcaCertDate(null)).toBe('');
+  });
+});
+
+describe('isArcaInvoiceDataMissing', () => {
+  it('faltan si no hay IIBB o no hay inicio de actividades', () => {
+    expect(
+      isArcaInvoiceDataMissing({ iibb: null, inicioActividad: '2020-01-01' }),
+    ).toBe(true);
+    expect(
+      isArcaInvoiceDataMissing({ iibb: 'Exento', inicioActividad: null }),
+    ).toBe(true);
+    expect(
+      isArcaInvoiceDataMissing({
+        iibb: 'Exento',
+        inicioActividad: '2020-01-01',
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('resolveArcaIibb', () => {
+  it('vacío → «No contribuyente» (RG 1415); si no, lo tipeado', () => {
+    expect(resolveArcaIibb('  ')).toBe('No contribuyente');
+    expect(resolveArcaIibb(' 901-123456-7 ')).toBe('901-123456-7');
   });
 });

@@ -1,5 +1,11 @@
 import type { CashSession } from '../../services/cash-sessions';
+import type { Invoice } from '../../services/invoices';
 import type { Entry, PaymentTransaction } from '../../services/operations';
+import {
+  invoiceLetter,
+  resolveInvoiceState,
+  type InvoiceState,
+} from './invoiceUtils';
 
 export type EntryHistoryRow = Entry & {
   enteredAtLocalDate: string;
@@ -7,7 +13,21 @@ export type EntryHistoryRow = Entry & {
   paymentLines: PaymentTransaction[];
   paymentMethodValues: string[];
   paidTotal: number | null;
+  invoice: Invoice | null;
+  invoiceState: InvoiceState;
+  /** `A` / `B` / `C`, o `''`: para el filtro «Comprobante». */
+  invoiceLetterValue: string;
+  /** «Razón social · CUIT» del receptor de la A, o `''`: filtro «Receptor». */
+  invoiceReceiver: string;
 };
+
+const DOC_TIPO_CUIT = 80;
+
+function receiverLabel(invoice: Invoice | null): string {
+  if (!invoice || invoice.receptorDocTipo !== DOC_TIPO_CUIT) return '';
+  const cuit = invoice.receptorDocNro ?? '';
+  return invoice.receptorNombre ? `${invoice.receptorNombre} · ${cuit}` : cuit;
+}
 
 export interface PaymentMethodSummary {
   pmId: string;
@@ -69,7 +89,11 @@ export function cashSessionLabel(session: CashSession): string {
 export function attachPaymentsToEntries(
   entries: Entry[],
   transactions: PaymentTransaction[],
+  invoices: Invoice[] = [],
 ): EntryHistoryRow[] {
+  const invoiceByEntryId = new Map(
+    invoices.map((invoice) => [invoice.entryId, invoice]),
+  );
   const paymentsByEntryId = new Map<string, PaymentTransaction[]>();
   for (const tx of transactions) {
     const lines = paymentsByEntryId.get(tx.entryId);
@@ -87,6 +111,22 @@ export function attachPaymentsToEntries(
           ? entry.amountPaid
           : null;
 
+    const invoice = invoiceByEntryId.get(entry.id) ?? null;
+    const invoiceState = resolveInvoiceState(
+      {
+        leftAt: entry.leftAt,
+        paidTotal,
+        manuallyInvoiced: entry.manuallyInvoiced,
+      },
+      invoice ?? undefined,
+    );
+    // La letra y el receptor sólo cuentan si la factura existe en ARCA o se
+    // está por emitir; una `not_required` no es comprobante de nada.
+    const countsAsVoucher =
+      invoiceState !== 'none' &&
+      invoiceState !== 'na' &&
+      invoiceState !== 'manual';
+
     return {
       ...entry,
       enteredAtLocalDate: localDateKey(entry.enteredAt),
@@ -94,6 +134,12 @@ export function attachPaymentsToEntries(
       paymentLines,
       paymentMethodValues: paymentLines.map(paymentMethodFilterValue),
       paidTotal,
+      invoice,
+      invoiceState,
+      invoiceLetterValue: countsAsVoucher
+        ? (invoiceLetter(invoice?.cbteTipo) ?? '')
+        : '',
+      invoiceReceiver: countsAsVoucher ? receiverLabel(invoice) : '',
     };
   });
 }

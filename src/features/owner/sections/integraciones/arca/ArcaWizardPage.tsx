@@ -41,7 +41,13 @@ import {
   type ArcaTaxCondition,
 } from '../../../services/arca';
 import { fmtDateTimeAr } from '../../../../../shared/utils/fmt';
-import { ARCA_TAX_CONDITION_LABELS, formatCuit } from '../validation';
+import {
+  ARCA_TAX_CONDITION_LABELS,
+  formatCuit,
+  resolveArcaIibb,
+  validateArcaInicioActividad,
+} from '../validation';
+import { IibbNoContribuyenteDialog } from './IibbNoContribuyenteDialog';
 import {
   resolveArcaStep1ViewMode,
   resolveArcaStep2ViewMode,
@@ -219,7 +225,7 @@ export function ArcaWizardPage() {
     mutationFn: (input: { cuit: string; iibb: string }) =>
       createArcaAccount(sucursalId, {
         cuit: input.cuit,
-        ...(input.iibb.trim() ? { iibb: input.iibb.trim() } : {}),
+        iibb: input.iibb.trim(),
       }),
     // Toda solicitud nueva (primera vez, "Cambiar CUIT" o volver a vincular
     // después de desvincular) arranca el paso 2 de cero. Al re-vincular el
@@ -305,7 +311,6 @@ export function ArcaWizardPage() {
       razonSocial: string;
       condicionIva: ArcaTaxCondition;
       domicilioFiscal: string;
-      inicioActividad?: string;
     }) => updateArcaAccount(sucursalId, input),
     onSuccess: (result) => {
       setCertResult(null);
@@ -316,8 +321,8 @@ export function ArcaWizardPage() {
 
   // ── Paso 3: punto de venta ───────────────────────────────────────────────────
   const salesPointMutation = useMutation({
-    mutationFn: (input: { ptoVta: number }) =>
-      setArcaSalesPoint(sucursalId, { ptoVta: input.ptoVta }),
+    mutationFn: (input: { ptoVta: number; inicioActividad: string }) =>
+      setArcaSalesPoint(sucursalId, input),
     onSuccess: (result) => {
       syncAccount(result);
       showToast({ message: 'ARCA quedó vinculada.', kind: 'success' });
@@ -489,9 +494,6 @@ export function ArcaWizardPage() {
                             condicionIva:
                               values.condicionIva as ArcaTaxCondition,
                             domicilioFiscal: values.domicilioFiscal,
-                            ...(values.inicioActividad
-                              ? { inicioActividad: values.inicioActividad }
-                              : {}),
                           })
                         }
                       />
@@ -667,6 +669,11 @@ function Step1Form({
   const [cuit, setCuit] = useState(initialValues?.cuit ?? '');
   const [iibb, setIibb] = useState(initialValues?.iibb ?? '');
   const [errors, setErrors] = useState<{ cuit?: string }>({});
+  const [confirmingNoIibb, setConfirmingNoIibb] = useState(false);
+
+  function submit() {
+    onSubmit({ cuit: normalizeArcaCuit(cuit), iibb: resolveArcaIibb(iibb) });
+  }
 
   function handleSubmit() {
     const validation = validateArcaStep1Form({ cuit, iibb });
@@ -675,7 +682,12 @@ function Step1Form({
       return;
     }
     setErrors({});
-    onSubmit({ cuit: normalizeArcaCuit(cuit), iibb });
+    // Vacío se imprime «No contribuyente»: se confirma antes de seguir.
+    if (!iibb.trim()) {
+      setConfirmingNoIibb(true);
+      return;
+    }
+    submit();
   }
 
   return (
@@ -706,7 +718,8 @@ function Step1Form({
             error={errors.cuit ?? undefined}
             onChange={(e) => {
               setCuit(e.target.value);
-              if (errors.cuit) setErrors({});
+              if (errors.cuit)
+                setErrors((prev) => ({ ...prev, cuit: undefined }));
             }}
             disabled={pending}
           />
@@ -714,19 +727,32 @@ function Step1Form({
             Con o sin guiones.
           </p>
         </div>
-        <Input
-          label="Ingresos Brutos (opcional)"
-          placeholder="901-123456-7"
-          value={iibb}
-          onChange={(e) => setIibb(e.target.value)}
-          disabled={pending}
-        />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <Input
+            label="Ingresos Brutos"
+            placeholder="901-123456-7"
+            value={iibb}
+            onChange={(e) => setIibb(e.target.value)}
+            disabled={pending}
+          />
+          <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}>
+            Tu número de inscripción: va impreso en cada factura.
+          </p>
+        </div>
       </div>
       <div style={ROW}>
         <Button variant="primary" loading={pending} onClick={handleSubmit}>
           {submitLabel}
         </Button>
       </div>
+      <IibbNoContribuyenteDialog
+        open={confirmingNoIibb}
+        onClose={() => setConfirmingNoIibb(false)}
+        onConfirm={() => {
+          setConfirmingNoIibb(false);
+          submit();
+        }}
+      />
     </div>
   );
 }
@@ -1774,7 +1800,6 @@ function FiscalDataForm({
     razonSocial: '',
     condicionIva: '',
     domicilioFiscal: '',
-    inicioActividad: '',
   });
   const [errors, setErrors] = useState<
     Partial<Record<keyof ArcaFiscalDataFormValues, string>>
@@ -1865,13 +1890,6 @@ function FiscalDataForm({
           onChange={(e) => set('domicilioFiscal', e.target.value)}
           disabled={pending}
         />
-        <Input
-          label="Inicio de actividad (opcional)"
-          type="date"
-          value={values.inicioActividad}
-          onChange={(e) => set('inicioActividad', e.target.value)}
-          disabled={pending}
-        />
       </div>
       <p style={HINT}>
         Cargalos tal como figuran en tu constancia de inscripción de ARCA.
@@ -1897,12 +1915,6 @@ function FiscalDataForm({
                 ARCA_TAX_CONDITION_LABELS[values.condicionIva]}
               <br />
               {values.domicilioFiscal.trim()}
-              {values.inicioActividad && (
-                <>
-                  <br />
-                  Inicio de actividad: {values.inicioActividad}
-                </>
-              )}
             </p>
             {values.condicionIva && (
               <p style={{ margin: 0 }}>
@@ -1927,21 +1939,25 @@ function Step3Form({
   account: {
     environment: ArcaEnvironment;
     condicionIva?: ArcaTaxCondition | null;
+    inicioActividad?: string | null;
   };
   pending: boolean;
-  onSubmit: (values: { ptoVta: number }) => void;
+  onSubmit: (values: { ptoVta: number; inicioActividad: string }) => void;
 }) {
   const [ptoVta, setPtoVta] = useState('');
+  const [inicioActividad, setInicioActividad] = useState(
+    account.inicioActividad ?? '',
+  );
   const [error, setError] = useState<string | null>(null);
+  const [inicioError, setInicioError] = useState<string | null>(null);
 
   function handleSubmit() {
     const ptoVtaError = validateArcaPtoVta(ptoVta);
-    if (ptoVtaError) {
-      setError(ptoVtaError);
-      return;
-    }
-    setError(null);
-    onSubmit({ ptoVta: Number(ptoVta) });
+    const dateError = validateArcaInicioActividad(inicioActividad);
+    setError(ptoVtaError);
+    setInicioError(dateError);
+    if (ptoVtaError || dateError) return;
+    onSubmit({ ptoVta: Number(ptoVta), inicioActividad });
   }
 
   const posLabel =
@@ -1983,6 +1999,25 @@ function Step3Form({
         }}
         disabled={pending}
       />
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <Input
+          label="Fecha de inicio de actividades"
+          required
+          type="date"
+          value={inicioActividad}
+          error={inicioError ?? undefined}
+          onChange={(e) => {
+            setInicioActividad(e.target.value);
+            if (inicioError) setInicioError(null);
+          }}
+          disabled={pending}
+        />
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}>
+          Va impresa en cada factura. Figura en tu constancia de inscripción de
+          ARCA.
+        </p>
+      </div>
 
       <div style={ROW}>
         <Button variant="primary" loading={pending} onClick={handleSubmit}>

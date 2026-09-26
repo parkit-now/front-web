@@ -1124,3 +1124,85 @@
     display: none;
   }
 }
+
+/* Filtro por rango numérico (p. ej. monto) */
+.dt-filter-number-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 42px;
+  padding: 0 11px;
+  border-radius: 12px;
+  background: #f7f8fa;
+}
+
+.dt-filter-number-inputs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-3);
+}
+
+.dt-filter-number-inputs input {
+  width: 84px;
+  height: 32px;
+  border: 1px solid #d7e2ef;
+  border-radius: 8px;
+  padding: 0 8px;
+  background: #fff;
+  color: var(--color-text);
+  font-size: 13px;
+}
+
+/* Selección de filas */
+.dt-select-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--brand);
+}
+
+.dt-select-checkbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.dt-selection-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid #c9dcf2;
+  border-radius: 12px;
+  background: #f2f7fd;
+  font-size: 13px;
+}
+
+.dt-selection-count {
+  color: var(--text-1);
+  font-weight: 700;
+}
+
+.dt-selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dt-selection-clear {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dt-selection-clear:hover {
+  color: var(--text-1);
+  text-decoration: underline;
+}

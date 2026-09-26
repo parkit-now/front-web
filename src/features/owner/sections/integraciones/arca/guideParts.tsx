@@ -3,6 +3,7 @@ import { Button } from '../../../../../shared/components/ui/Button';
 import { IconExternalLink } from '../../../../../shared/components/icons';
 import type { ArcaCsr } from '../../../services/arca';
 import { ARCA_LOGIN_URL } from './links';
+import { saveBlob } from '../../../../../shared/utils/download';
 
 /*
  * Piezas de la guía paso a paso de ARCA que comparten el wizard de
@@ -10,15 +11,7 @@ import { ARCA_LOGIN_URL } from './links';
  */
 
 export function downloadTextFile(fileName: string, content: string): void {
-  const blob = new Blob([content], { type: 'application/x-pem-file' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  saveBlob(new Blob([content], { type: 'application/x-pem-file' }), fileName);
 }
 
 /**

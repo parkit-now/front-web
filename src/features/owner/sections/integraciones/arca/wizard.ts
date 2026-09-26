@@ -47,7 +47,11 @@ export type ArcaStep1FieldErrors = Partial<
   Record<keyof ArcaStep1FormValues, string>
 >;
 
-/** Ingresos Brutos es opcional: sólo se valida el CUIT. */
+/**
+ * Sólo se valida el CUIT. Ingresos Brutos vacío no es un error: se imprime
+ * «No contribuyente» (RG 1415), pero el formulario lo confirma antes
+ * (`IibbNoContribuyenteDialog`), porque una playa casi siempre está alcanzada.
+ */
 export function validateArcaStep1Form(
   values: ArcaStep1FormValues,
 ): ArcaStep1FieldErrors {
@@ -187,8 +191,6 @@ export type ArcaFiscalDataFormValues = {
   razonSocial: string;
   condicionIva: ArcaTaxCondition | '';
   domicilioFiscal: string;
-  /** AAAA-MM-DD, opcional. */
-  inicioActividad: string;
 };
 
 export type ArcaFiscalDataFieldErrors = Partial<

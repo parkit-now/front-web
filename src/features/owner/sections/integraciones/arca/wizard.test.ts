@@ -83,7 +83,7 @@ describe('validateArcaStep1Form', () => {
     );
   });
 
-  it('no exige Ingresos Brutos', () => {
+  it('Ingresos Brutos vacío no es un error (se confirma como «No contribuyente»)', () => {
     expect(validateArcaStep1Form({ cuit: '20-12345678-6', iibb: '' })).toEqual(
       {},
     );
@@ -95,10 +95,9 @@ describe('validateArcaFiscalDataForm', () => {
     razonSocial: 'Estacionamientos del Centro S.A.',
     condicionIva: 'responsable_inscripto' as const,
     domicilioFiscal: 'Av. Corrientes 1234, CABA',
-    inicioActividad: '',
   };
 
-  it('acepta el formulario mínimo, sin inicio de actividad', () => {
+  it('acepta el formulario completo', () => {
     expect(validateArcaFiscalDataForm(base)).toEqual({});
   });
 
@@ -107,7 +106,6 @@ describe('validateArcaFiscalDataForm', () => {
       razonSocial: '',
       condicionIva: '',
       domicilioFiscal: '',
-      inicioActividad: '',
     });
     expect(errors.razonSocial).toBeTruthy();
     expect(errors.condicionIva).toBeTruthy();

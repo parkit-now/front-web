@@ -12,6 +12,7 @@ import {
   ARCA_TAX_CONDITION_LABELS,
   formatArcaCertDate,
   formatCuit,
+  isArcaInvoiceDataMissing,
   type ArcaCardState,
 } from './validation';
 
@@ -177,6 +178,25 @@ export function ArcaCard({
                 }).`}
                 description="Renovalo para seguir facturando. Hasta que venza seguís facturando normal."
                 action={canManage ? <RenewLink /> : undefined}
+              />
+            )}
+            {state.kind !== 'broken' && isArcaInvoiceDataMissing(account) && (
+              <Alert
+                variant="warn"
+                icon={<IconAlert size={16} />}
+                title="Faltan Ingresos Brutos o la fecha de inicio de actividades"
+                description="Van impresos en cada factura. Completalos en «Configurar emisión»."
+                action={
+                  canManage ? (
+                    <Link
+                      to="arca/emision"
+                      className="pk-btn pk-btn-secondary pk-btn-sm"
+                      style={{ textDecoration: 'none' }}
+                    >
+                      Completar
+                    </Link>
+                  ) : undefined
+                }
               />
             )}
             {state.kind === 'broken' && (

@@ -24,6 +24,12 @@ import {
   type PaymentMethodInvoiceMode,
 } from '../../../services/entities';
 import {
+  isArcaInvoiceDataMissing,
+  resolveArcaIibb,
+  validateArcaInicioActividad,
+} from '../validation';
+import { IibbNoContribuyenteDialog } from './IibbNoContribuyenteDialog';
+import {
   buildInvoiceModeDraft,
   describeInvoiceEffect,
   didIvaRateChange,
@@ -83,6 +89,9 @@ export function ArcaEmisionPage() {
 
   const [draft, setDraft] = useState<InvoiceModeDraft | null>(null);
   const [ivaRateDraft, setIvaRateDraft] = useState('');
+  const [iibbDraft, setIibbDraft] = useState('');
+  const [inicioDraft, setInicioDraft] = useState('');
+  const [confirmingNoIibb, setConfirmingNoIibb] = useState(false);
 
   // Se resincroniza cada vez que llega una lista nueva del servidor, igual
   // que `ConfigPerfil`: al guardar se invalida la query y el borrador vuelve
@@ -92,7 +101,10 @@ export function ArcaEmisionPage() {
   }, [methodsQuery.data]);
 
   useEffect(() => {
-    if (account) setIvaRateDraft(String(account.ivaRate));
+    if (!account) return;
+    setIvaRateDraft(String(account.ivaRate));
+    setIibbDraft(account.iibb ?? '');
+    setInicioDraft(account.inicioActividad ?? '');
   }, [account]);
 
   // Se espera el refetch: hasta que el borrador no se resincroniza con lo que
@@ -121,12 +133,19 @@ export function ArcaEmisionPage() {
           invoiceMode: change.invoiceMode,
         });
       }
-      if (
-        account &&
+      if (!account) return;
+      const ivaChanged =
         isResponsableInscripto &&
-        didIvaRateChange(account.ivaRate, ivaRateDraft)
-      ) {
-        await updateArcaAccount(sucursalId, { ivaRate: Number(ivaRateDraft) });
+        didIvaRateChange(account.ivaRate, ivaRateDraft);
+      const iibb = resolveArcaIibb(iibbDraft);
+      const iibbChanged = iibb !== (account.iibb ?? '');
+      const inicioChanged = inicioDraft !== (account.inicioActividad ?? '');
+      if (ivaChanged || iibbChanged || inicioChanged) {
+        await updateArcaAccount(sucursalId, {
+          ...(ivaChanged ? { ivaRate: Number(ivaRateDraft) } : {}),
+          ...(iibbChanged ? { iibb } : {}),
+          ...(inicioChanged ? { inicioActividad: inicioDraft } : {}),
+        });
       }
     },
     onSuccess: async () => {
@@ -259,9 +278,14 @@ export function ArcaEmisionPage() {
 
   // "Guardar" sólo se habilita con algo para guardar: sin cambios (o recién
   // guardado) no hay nada que mandar.
+  const inicioError = validateArcaInicioActividad(inicioDraft);
   const hasChanges =
     diffInvoiceModes(methodsQuery.data ?? [], draft ?? {}).length > 0 ||
-    (isResponsableInscripto && didIvaRateChange(account.ivaRate, ivaRateDraft));
+    (isResponsableInscripto &&
+      didIvaRateChange(account.ivaRate, ivaRateDraft)) ||
+    resolveArcaIibb(iibbDraft) !== (account.iibb ?? '') ||
+    inicioDraft !== (account.inicioActividad ?? '');
+  const invoiceDataMissing = isArcaInvoiceDataMissing(account);
 
   const facturaLetra = isResponsableInscripto
     ? 'Factura B a consumidor final'
@@ -270,6 +294,17 @@ export function ArcaEmisionPage() {
   return (
     <div>
       {header}
+
+      {invoiceDataMissing && (
+        <div style={{ marginBottom: 12 }}>
+          <Alert
+            variant="warn"
+            icon={<IconAlert size={16} />}
+            title="Completá Ingresos Brutos y la fecha de inicio de actividades"
+            description="Van impresos en cada factura (RG 1415). Cargalos abajo y guardá: las facturas ya emitidas los toman en su PDF."
+          />
+        </div>
+      )}
 
       <Card padding="lg">
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -375,6 +410,42 @@ export function ArcaEmisionPage() {
             </div>
           )}
 
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 280px))',
+              gap: 12,
+            }}
+          >
+            <Input
+              label="Ingresos Brutos"
+              placeholder="901-123456-7"
+              value={iibbDraft}
+              onChange={(e) => setIibbDraft(e.target.value)}
+              disabled={!canManage || saveMutation.isPending}
+            />
+            <Input
+              label="Fecha de inicio de actividades"
+              required
+              type="date"
+              value={inicioDraft}
+              error={
+                invoiceDataMissing ||
+                inicioDraft !== (account.inicioActividad ?? '')
+                  ? (inicioError ?? undefined)
+                  : undefined
+              }
+              onChange={(e) => setInicioDraft(e.target.value)}
+              disabled={!canManage || saveMutation.isPending}
+            />
+          </div>
+          <p
+            style={{ margin: '-8px 0 0', fontSize: 12, color: 'var(--text-3)' }}
+          >
+            Van impresos en cada factura, tal como figuran en tu constancia de
+            inscripción.
+          </p>
+
           {isResponsableInscripto && (
             <div style={{ maxWidth: 220 }}>
               <Input
@@ -411,8 +482,12 @@ export function ArcaEmisionPage() {
               <Button
                 variant="primary"
                 loading={saveMutation.isPending}
-                disabled={!hasChanges}
-                onClick={() => saveMutation.mutate()}
+                disabled={!hasChanges || !!inicioError}
+                onClick={() => {
+                  // Vacío se imprime «No contribuyente»: se confirma antes.
+                  if (!iibbDraft.trim()) setConfirmingNoIibb(true);
+                  else saveMutation.mutate();
+                }}
               >
                 Guardar
               </Button>
@@ -420,6 +495,15 @@ export function ArcaEmisionPage() {
           </div>
         </div>
       </Card>
+
+      <IibbNoContribuyenteDialog
+        open={confirmingNoIibb}
+        onClose={() => setConfirmingNoIibb(false)}
+        onConfirm={() => {
+          setConfirmingNoIibb(false);
+          saveMutation.mutate();
+        }}
+      />
     </div>
   );
 }

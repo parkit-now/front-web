@@ -89,7 +89,11 @@ export type EndpointKey =
   | 'arca.reuseCertificate'
   | 'arca.setSalesPoint'
   | 'arca.getRenewalCsr'
-  | 'arca.uploadRenewalCertificate';
+  | 'arca.uploadRenewalCertificate'
+  | 'invoices.issue'
+  | 'invoices.batch'
+  | 'invoices.pdf'
+  | 'entries.setManuallyInvoiced';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;
@@ -275,6 +279,8 @@ const CODE_MESSAGES: Record<string, string> = {
   ARCA_POS_NOT_FOUND:
     'El punto de venta no existe en ARCA o no es de web services.',
   ARCA_POS_DISABLED: 'El punto de venta está bloqueado o dado de baja en ARCA.',
+  ARCA_FISCAL_DATA_INCOMPLETE:
+    'Faltan Ingresos Brutos o la fecha de inicio de actividades: van impresos en la factura.',
 
   // Facturas emitidas por ARCA a partir de un cobro (ver front-desktop, que es
   // quien las emite). Se traducen acá también porque los errores de la cuenta
@@ -291,6 +297,8 @@ const CODE_MESSAGES: Record<string, string> = {
     'ARCA no tiene datos de ese CUIT. Revisalo o emití la factura como B.',
   INVOICE_RECEIVER_NOT_A:
     'Ese CUIT no puede recibir Factura A (no es Responsable Inscripto ni Monotributista). Emitila como B.',
+  INVOICE_NOT_ISSUED: 'La factura todavía no se emitió: no tiene PDF.',
+  INVOICE_PDF_FAILED: 'No se pudo generar el PDF. Probá de nuevo en un rato.',
 
   // Validacion (envoltorio — el detalle por campo se traduce con
   // translateValidationCode).
@@ -344,6 +352,16 @@ const STATUS_MESSAGES: Record<number, string> = {
 function readProblemCode(error: ApiError): string | undefined {
   const code = (error.problem as { code?: unknown } | null)?.code;
   return typeof code === 'string' && code.length > 0 ? code : undefined;
+}
+
+/**
+ * Texto de un `code` que no llega como error HTTP sino dentro de un dato (p.
+ * ej. el `errorCode` de una factura). `undefined` si no hay traducción.
+ */
+export function translateErrorCode(
+  code: string | null | undefined,
+): string | undefined {
+  return code ? CODE_MESSAGES[code] : undefined;
 }
 
 export function translateApiError(

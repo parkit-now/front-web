@@ -5,6 +5,7 @@ import type {
 } from '@tanstack/react-table';
 
 export const NON_PICKABLE_COLUMN_IDS = new Set([
+  'select',
   'acciones',
   'actions',
   'Acciones',
@@ -29,6 +30,25 @@ export function normalizeText(value: unknown): string {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim();
+}
+
+/** Rango numérico de un filtro (p. ej. monto): cualquiera de los dos extremos. */
+export type NumberRange = { min?: number; max?: number };
+
+export function isNumberRangeActive(range: NumberRange | undefined): boolean {
+  return range?.min !== undefined || range?.max !== undefined;
+}
+
+/** Extremos inclusivos; una fila sin número sólo pasa si no hay rango. */
+export function inNumberRange(
+  value: unknown,
+  range: NumberRange | undefined,
+): boolean {
+  if (!range || !isNumberRangeActive(range)) return true;
+  if (typeof value !== 'number' || Number.isNaN(value)) return false;
+  if (range.min !== undefined && value < range.min) return false;
+  if (range.max !== undefined && value > range.max) return false;
+  return true;
 }
 
 function isEmptyValue(value: unknown): boolean {
