@@ -209,11 +209,18 @@ export function isArcaInvoiceDataMissing(
   return !account.iibb?.trim() || !account.inicioActividad;
 }
 
-/** Mensaje del campo Ingresos Brutos, o `null` si está bien. */
-export function validateArcaIibb(raw: string): string | null {
-  return raw.trim()
-    ? null
-    : 'Ingresá tu número de Ingresos Brutos, o «Exento» si no estás inscripto';
+/**
+ * Lo que se imprime en la factura cuando no hay número de Ingresos Brutos.
+ * Es la alternativa que da la RG 1415 («número de inscripción ... o condición
+ * de no contribuyente»). NO es lo mismo que «Exento»: un exento está dentro
+ * del impuesto y en general tiene número; un no contribuyente no está
+ * alcanzado y no tiene inscripción.
+ */
+export const IIBB_NO_CONTRIBUYENTE = 'No contribuyente';
+
+/** El IIBB a guardar: lo tipeado, o «No contribuyente» si quedó vacío. */
+export function resolveArcaIibb(raw: string): string {
+  return raw.trim() || IIBB_NO_CONTRIBUYENTE;
 }
 
 /** Mensaje del campo inicio de actividades (AAAA-MM-DD), o `null`. */

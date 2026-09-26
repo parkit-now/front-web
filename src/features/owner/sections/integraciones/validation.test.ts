@@ -8,6 +8,7 @@ import {
   resolveArcaCardState,
   resolveMpCardState,
   isArcaInvoiceDataMissing,
+  resolveArcaIibb,
 } from './validation';
 
 const NOW = new Date('2026-09-20T12:00:00.000Z');
@@ -247,5 +248,12 @@ describe('isArcaInvoiceDataMissing', () => {
         inicioActividad: '2020-01-01',
       }),
     ).toBe(false);
+  });
+});
+
+describe('resolveArcaIibb', () => {
+  it('vacío → «No contribuyente» (RG 1415); si no, lo tipeado', () => {
+    expect(resolveArcaIibb('  ')).toBe('No contribuyente');
+    expect(resolveArcaIibb(' 901-123456-7 ')).toBe('901-123456-7');
   });
 });

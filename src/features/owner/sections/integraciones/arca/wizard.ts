@@ -1,5 +1,4 @@
 import type { ArcaAccount, ArcaTaxCondition } from '../../../services/arca';
-import { validateArcaIibb } from '../validation';
 import { validateArcaCuit } from './cuit';
 
 /**
@@ -49,8 +48,9 @@ export type ArcaStep1FieldErrors = Partial<
 >;
 
 /**
- * CUIT e Ingresos Brutos, los dos obligatorios: IIBB va impreso en la factura
- * (RG 1415), como número o como «Exento» / «No contribuyente».
+ * Sólo se valida el CUIT. Ingresos Brutos vacío no es un error: se imprime
+ * «No contribuyente» (RG 1415), pero el formulario lo confirma antes
+ * (`IibbNoContribuyenteDialog`), porque una playa casi siempre está alcanzada.
  */
 export function validateArcaStep1Form(
   values: ArcaStep1FormValues,
@@ -58,8 +58,6 @@ export function validateArcaStep1Form(
   const errors: ArcaStep1FieldErrors = {};
   const cuitError = validateArcaCuit(values.cuit);
   if (cuitError) errors.cuit = cuitError;
-  const iibbError = validateArcaIibb(values.iibb);
-  if (iibbError) errors.iibb = iibbError;
   return errors;
 }
 

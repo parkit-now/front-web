@@ -44,8 +44,10 @@ import { fmtDateTimeAr } from '../../../../../shared/utils/fmt';
 import {
   ARCA_TAX_CONDITION_LABELS,
   formatCuit,
+  resolveArcaIibb,
   validateArcaInicioActividad,
 } from '../validation';
+import { IibbNoContribuyenteDialog } from './IibbNoContribuyenteDialog';
 import {
   resolveArcaStep1ViewMode,
   resolveArcaStep2ViewMode,
@@ -666,16 +668,26 @@ function Step1Form({
 }) {
   const [cuit, setCuit] = useState(initialValues?.cuit ?? '');
   const [iibb, setIibb] = useState(initialValues?.iibb ?? '');
-  const [errors, setErrors] = useState<{ cuit?: string; iibb?: string }>({});
+  const [errors, setErrors] = useState<{ cuit?: string }>({});
+  const [confirmingNoIibb, setConfirmingNoIibb] = useState(false);
+
+  function submit() {
+    onSubmit({ cuit: normalizeArcaCuit(cuit), iibb: resolveArcaIibb(iibb) });
+  }
 
   function handleSubmit() {
     const validation = validateArcaStep1Form({ cuit, iibb });
-    if (validation.cuit || validation.iibb) {
+    if (validation.cuit) {
       setErrors(validation);
       return;
     }
     setErrors({});
-    onSubmit({ cuit: normalizeArcaCuit(cuit), iibb });
+    // Vacío se imprime «No contribuyente»: se confirma antes de seguir.
+    if (!iibb.trim()) {
+      setConfirmingNoIibb(true);
+      return;
+    }
+    submit();
   }
 
   return (
@@ -718,20 +730,13 @@ function Step1Form({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <Input
             label="Ingresos Brutos"
-            required
             placeholder="901-123456-7"
             value={iibb}
-            error={errors.iibb ?? undefined}
-            onChange={(e) => {
-              setIibb(e.target.value);
-              if (errors.iibb)
-                setErrors((prev) => ({ ...prev, iibb: undefined }));
-            }}
+            onChange={(e) => setIibb(e.target.value)}
             disabled={pending}
           />
           <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}>
-            Va impreso en cada factura. Si no estás inscripto, poné «Exento» o
-            «No contribuyente».
+            Tu número de inscripción: va impreso en cada factura.
           </p>
         </div>
       </div>
@@ -740,6 +745,14 @@ function Step1Form({
           {submitLabel}
         </Button>
       </div>
+      <IibbNoContribuyenteDialog
+        open={confirmingNoIibb}
+        onClose={() => setConfirmingNoIibb(false)}
+        onConfirm={() => {
+          setConfirmingNoIibb(false);
+          submit();
+        }}
+      />
     </div>
   );
 }

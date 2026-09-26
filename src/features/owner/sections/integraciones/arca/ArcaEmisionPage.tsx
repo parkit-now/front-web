@@ -25,9 +25,10 @@ import {
 } from '../../../services/entities';
 import {
   isArcaInvoiceDataMissing,
-  validateArcaIibb,
+  resolveArcaIibb,
   validateArcaInicioActividad,
 } from '../validation';
+import { IibbNoContribuyenteDialog } from './IibbNoContribuyenteDialog';
 import {
   buildInvoiceModeDraft,
   describeInvoiceEffect,
@@ -90,6 +91,7 @@ export function ArcaEmisionPage() {
   const [ivaRateDraft, setIvaRateDraft] = useState('');
   const [iibbDraft, setIibbDraft] = useState('');
   const [inicioDraft, setInicioDraft] = useState('');
+  const [confirmingNoIibb, setConfirmingNoIibb] = useState(false);
 
   // Se resincroniza cada vez que llega una lista nueva del servidor, igual
   // que `ConfigPerfil`: al guardar se invalida la query y el borrador vuelve
@@ -135,12 +137,13 @@ export function ArcaEmisionPage() {
       const ivaChanged =
         isResponsableInscripto &&
         didIvaRateChange(account.ivaRate, ivaRateDraft);
-      const iibbChanged = iibbDraft.trim() !== (account.iibb ?? '');
+      const iibb = resolveArcaIibb(iibbDraft);
+      const iibbChanged = iibb !== (account.iibb ?? '');
       const inicioChanged = inicioDraft !== (account.inicioActividad ?? '');
       if (ivaChanged || iibbChanged || inicioChanged) {
         await updateArcaAccount(sucursalId, {
           ...(ivaChanged ? { ivaRate: Number(ivaRateDraft) } : {}),
-          ...(iibbChanged ? { iibb: iibbDraft.trim() } : {}),
+          ...(iibbChanged ? { iibb } : {}),
           ...(inicioChanged ? { inicioActividad: inicioDraft } : {}),
         });
       }
@@ -275,13 +278,12 @@ export function ArcaEmisionPage() {
 
   // "Guardar" sólo se habilita con algo para guardar: sin cambios (o recién
   // guardado) no hay nada que mandar.
-  const iibbError = validateArcaIibb(iibbDraft);
   const inicioError = validateArcaInicioActividad(inicioDraft);
   const hasChanges =
     diffInvoiceModes(methodsQuery.data ?? [], draft ?? {}).length > 0 ||
     (isResponsableInscripto &&
       didIvaRateChange(account.ivaRate, ivaRateDraft)) ||
-    iibbDraft.trim() !== (account.iibb ?? '') ||
+    resolveArcaIibb(iibbDraft) !== (account.iibb ?? '') ||
     inicioDraft !== (account.inicioActividad ?? '');
   const invoiceDataMissing = isArcaInvoiceDataMissing(account);
 
@@ -417,14 +419,8 @@ export function ArcaEmisionPage() {
           >
             <Input
               label="Ingresos Brutos"
-              required
-              placeholder="901-123456-7 o «Exento»"
+              placeholder="901-123456-7"
               value={iibbDraft}
-              error={
-                invoiceDataMissing || iibbDraft !== (account.iibb ?? '')
-                  ? (iibbError ?? undefined)
-                  : undefined
-              }
               onChange={(e) => setIibbDraft(e.target.value)}
               disabled={!canManage || saveMutation.isPending}
             />
@@ -486,8 +482,12 @@ export function ArcaEmisionPage() {
               <Button
                 variant="primary"
                 loading={saveMutation.isPending}
-                disabled={!hasChanges || !!iibbError || !!inicioError}
-                onClick={() => saveMutation.mutate()}
+                disabled={!hasChanges || !!inicioError}
+                onClick={() => {
+                  // Vacío se imprime «No contribuyente»: se confirma antes.
+                  if (!iibbDraft.trim()) setConfirmingNoIibb(true);
+                  else saveMutation.mutate();
+                }}
               >
                 Guardar
               </Button>
@@ -495,6 +495,15 @@ export function ArcaEmisionPage() {
           </div>
         </div>
       </Card>
+
+      <IibbNoContribuyenteDialog
+        open={confirmingNoIibb}
+        onClose={() => setConfirmingNoIibb(false)}
+        onConfirm={() => {
+          setConfirmingNoIibb(false);
+          saveMutation.mutate();
+        }}
+      />
     </div>
   );
 }

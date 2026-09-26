@@ -83,13 +83,10 @@ describe('validateArcaStep1Form', () => {
     );
   });
 
-  it('exige Ingresos Brutos: un número o «Exento»', () => {
-    expect(
-      validateArcaStep1Form({ cuit: '20-12345678-6', iibb: ' ' }).iibb,
-    ).toBeTruthy();
-    expect(
-      validateArcaStep1Form({ cuit: '20-12345678-6', iibb: 'Exento' }),
-    ).toEqual({});
+  it('Ingresos Brutos vacío no es un error (se confirma como «No contribuyente»)', () => {
+    expect(validateArcaStep1Form({ cuit: '20-12345678-6', iibb: '' })).toEqual(
+      {},
+    );
   });
 });
 
