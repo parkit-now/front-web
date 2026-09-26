@@ -825,13 +825,16 @@ function ArcaLoginLink() {
       href={ARCA_LOGIN_URL}
       target="_blank"
       rel="noopener noreferrer"
-      className="pk-btn pk-btn-secondary pk-btn-sm"
+      // Primario (azul): es LA acción del sub-paso, tiene que saltar a la vista.
+      className="pk-btn pk-btn-primary pk-btn-sm"
       style={{
         textDecoration: 'none',
         display: 'inline-flex',
         alignItems: 'center',
         gap: 6,
+        // Ancho del contenido, tanto en contenedores flex como grid.
         alignSelf: 'flex-start',
+        justifySelf: 'start',
       }}
     >
       Entrar a ARCA
@@ -1416,10 +1419,6 @@ function Step2Upload({
         <>
           <p style={HINT}>Ingresá con tu CUIT y tu clave fiscal.</p>
           <ArcaLoginLink />
-          <GuideImage
-            src="/arca-guide/homologacion/01-login.png"
-            alt="Pantalla de ARCA para ingresar con clave fiscal"
-          />
         </>
       ),
       primaryAction: {
