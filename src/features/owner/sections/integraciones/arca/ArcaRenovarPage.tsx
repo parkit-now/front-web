@@ -61,10 +61,15 @@ export function ArcaRenovarPage() {
   const renewable =
     account?.status === 'linked' || account?.status === 'cert_expired';
 
+  // Apenas se verifica el certificado nuevo, la solicitud deja de pedirse:
+  // sin esto, limpiar el caché con la pantalla todavía montada la vuelve a
+  // pedir y el backend prepara OTRA renovación, ya para el certificado nuevo.
+  const [renewed, setRenewed] = useState(false);
+
   const csrQuery = useQuery({
     queryKey: ['arca', 'renewal-csr', sucursalId],
     queryFn: () => getArcaRenewalCsr(sucursalId),
-    enabled: Boolean(sucursalId) && renewable && canManage,
+    enabled: Boolean(sucursalId) && renewable && canManage && !renewed,
     // Es la misma solicitud hasta que se renueva: no hay nada que refrescar.
     staleTime: Infinity,
   });
@@ -73,10 +78,8 @@ export function ArcaRenovarPage() {
     mutationFn: (certificate: string) =>
       uploadArcaRenewalCertificate(sucursalId, { certificate }),
     onSuccess: async (updated) => {
+      setRenewed(true);
       queryClient.setQueryData(arcaAccountQueryKey(sucursalId), updated);
-      queryClient.removeQueries({
-        queryKey: ['arca', 'renewal-csr', sucursalId],
-      });
       const until = formatArcaCertDate(updated.certExpiresAt);
       showToast({
         kind: 'success',
@@ -85,6 +88,9 @@ export function ArcaRenovarPage() {
           : 'Certificado renovado.',
       });
       await navigate('../integraciones');
+      queryClient.removeQueries({
+        queryKey: ['arca', 'renewal-csr', sucursalId],
+      });
     },
   });
 
