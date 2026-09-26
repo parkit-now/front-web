@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { MpAccount } from '../../services/mercado-pago';
-import { isAddressComplete, resolveMpCardState } from './validation';
+import type { ArcaAccount } from '../../services/arca';
+import {
+  formatCuit,
+  isAddressComplete,
+  resolveArcaCardState,
+  resolveMpCardState,
+} from './validation';
 
 const NOW = new Date('2026-09-20T12:00:00.000Z');
 
@@ -128,5 +134,91 @@ describe('resolveMpCardState', () => {
     expect(
       resolveMpCardState({ account, addressComplete: true, now: NOW }),
     ).toEqual({ kind: 'expiring', daysLeft: 0 });
+  });
+});
+
+function makeArcaAccount(overrides: Partial<ArcaAccount> = {}): ArcaAccount {
+  return {
+    id: '9f1c2b3a-4d5e-4f6a-8b9c-0d1e2f3a4b5c',
+    certAlias: 'parkit1a2b3c4d',
+    certExpiresAt: daysFromNow(365),
+    condicionIva: 'responsable_inscripto',
+    cuit: '20123456783',
+    domicilioFiscal: 'Av. Corrientes 1234, CABA',
+    environment: 'homologacion',
+    fiscalDataEditable: false,
+    iibb: null,
+    inicioActividad: '2020-01-01',
+    ivaRate: 21,
+    linkedAt: '2026-09-14T01:00:00.000Z',
+    ptoVta: 3,
+    razonSocial: 'Estacionamientos del Centro S.A.',
+    status: 'linked',
+    ...overrides,
+  };
+}
+
+describe('resolveArcaCardState', () => {
+  it('sin cuenta ofrece vincular', () => {
+    expect(resolveArcaCardState(null, NOW)).toEqual({ kind: 'unlinked' });
+  });
+
+  it('pending_certificate está en curso', () => {
+    const account = makeArcaAccount({ status: 'pending_certificate' });
+    expect(resolveArcaCardState(account, NOW)).toEqual({
+      kind: 'in_progress',
+    });
+  });
+
+  it('pending_sales_point también está en curso', () => {
+    const account = makeArcaAccount({ status: 'pending_sales_point' });
+    expect(resolveArcaCardState(account, NOW)).toEqual({
+      kind: 'in_progress',
+    });
+  });
+
+  it('cert_expired está rota aunque la fecha diga otra cosa', () => {
+    const account = makeArcaAccount({
+      status: 'cert_expired',
+      certExpiresAt: daysFromNow(200),
+    });
+    expect(resolveArcaCardState(account, NOW)).toEqual({ kind: 'broken' });
+  });
+
+  it('linked con el certificado ya vencido está rota', () => {
+    const account = makeArcaAccount({ certExpiresAt: daysFromNow(-1) });
+    expect(resolveArcaCardState(account, NOW)).toEqual({ kind: 'broken' });
+  });
+
+  it('a 30 días avisa que está por vencer (umbral inclusive)', () => {
+    const account = makeArcaAccount({ certExpiresAt: daysFromNow(30) });
+    expect(resolveArcaCardState(account, NOW)).toEqual({
+      kind: 'expiring',
+      daysLeft: 30,
+    });
+  });
+
+  it('a 31 días todavía está tranquila', () => {
+    const account = makeArcaAccount({ certExpiresAt: daysFromNow(31) });
+    expect(resolveArcaCardState(account, NOW)).toEqual({ kind: 'linked' });
+  });
+
+  it('sin certExpiresAt (homologación) queda linked', () => {
+    const account = makeArcaAccount({ certExpiresAt: null });
+    expect(resolveArcaCardState(account, NOW)).toEqual({ kind: 'linked' });
+  });
+});
+
+describe('formatCuit', () => {
+  it('formatea 11 dígitos como 20-12345678-3', () => {
+    expect(formatCuit('20123456783')).toBe('20-12345678-3');
+  });
+
+  it('normaliza un CUIT con guiones antes de formatear', () => {
+    expect(formatCuit('20-12345678-3')).toBe('20-12345678-3');
+  });
+
+  it('devuelve el valor tal cual si no son 11 dígitos', () => {
+    expect(formatCuit('123')).toBe('123');
   });
 });

@@ -39,6 +39,13 @@ export type PaymentMethodSummary =
  * dueño. `mercadopago_qr` es el que crea la integración al vincular la cuenta.
  */
 export type PaymentMethodType = components['schemas']['PaymentMethodType'];
+/**
+ * Facturación al cobrar con este medio: `none` no factura, `auto` emite al
+ * cobrar, `manual` deja la factura pendiente para el Historial. `auto`/`manual`
+ * responden 409 `ARCA_NOT_LINKED` si la sede no tiene ARCA vinculada.
+ */
+export type PaymentMethodInvoiceMode =
+  components['schemas']['PaymentMethodInvoiceMode'];
 export type TogglePaymentMethodInput =
   components['schemas']['TogglePaymentMethodDto'];
 export type CreatePaymentMethodInput =

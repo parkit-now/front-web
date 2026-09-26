@@ -4,6 +4,7 @@ import {
   type EntityAddress,
 } from '../../../../shared/components/AddressPicker/addressUtils';
 import type { MpAccount } from '../../services/mercado-pago';
+import type { ArcaAccount } from '../../services/arca';
 
 /**
  * Lógica pura de la tarjeta de Mercado Pago: de la cuenta cruda del backend al
@@ -120,4 +121,82 @@ export function resolveMpCardState(input: {
   }
 
   return { kind: 'linked' };
+}
+
+// ── ARCA (facturación electrónica) ──────────────────────────────────────────
+
+/** Estado visual de la tarjeta de ARCA en Integraciones. */
+export type ArcaCardState =
+  | { kind: 'unlinked' }
+  | { kind: 'in_progress' }
+  | { kind: 'linked' }
+  | { kind: 'expiring'; daysLeft: number }
+  | { kind: 'broken' };
+
+/** A partir de acá avisamos que el certificado está por vencer. */
+export const ARCA_CERT_EXPIRING_THRESHOLD_DAYS = 30;
+
+/**
+ * Resuelve qué mostrar en la tarjeta de ARCA, a partir de la cuenta cruda del
+ * backend.
+ *
+ * Precedencia:
+ *  1. Sin cuenta → `unlinked`. `null` es el camino feliz de una playa que
+ *     nunca vinculó (o se desvinculó): el backend responde 404
+ *     `ARCA_NOT_LINKED` y quien consulta lo traduce a `null` (ver
+ *     `useArcaAccount`).
+ *  2. `pending_certificate` / `pending_sales_point` → `in_progress`: el wizard
+ *     se arrancó pero no terminó.
+ *  3. `cert_expired`, o `linked` con `certExpiresAt` YA pasado → `broken`: no
+ *     se puede emitir hasta renovar el certificado.
+ *  4. `linked` con `certExpiresAt` a 30 días o menos → `expiring`.
+ *  5. Resto → `linked`.
+ */
+export function resolveArcaCardState(
+  account: ArcaAccount | null,
+  now: Date = new Date(),
+): ArcaCardState {
+  if (account === null) return { kind: 'unlinked' };
+
+  if (
+    account.status === 'pending_certificate' ||
+    account.status === 'pending_sales_point'
+  ) {
+    return { kind: 'in_progress' };
+  }
+
+  if (account.status === 'cert_expired') {
+    return { kind: 'broken' };
+  }
+
+  if (account.certExpiresAt) {
+    const expiresAt = new Date(account.certExpiresAt).getTime();
+    if (!Number.isNaN(expiresAt)) {
+      if (expiresAt <= now.getTime()) return { kind: 'broken' };
+
+      const daysLeft = daysUntil(account.certExpiresAt, now) ?? 0;
+      if (daysLeft <= ARCA_CERT_EXPIRING_THRESHOLD_DAYS) {
+        return { kind: 'expiring', daysLeft };
+      }
+    }
+  }
+
+  return { kind: 'linked' };
+}
+
+/** Condición frente al IVA, en castellano, para mostrar en la tarjeta y el wizard. */
+export const ARCA_TAX_CONDITION_LABELS: Record<
+  NonNullable<ArcaAccount['condicionIva']>,
+  string
+> = {
+  responsable_inscripto: 'Responsable Inscripto',
+  monotributo: 'Monotributo',
+  exento: 'Exento',
+};
+
+/** CUIT de 11 dígitos formateado `20-12345678-3`, para mostrar (no para mandar). */
+export function formatCuit(cuit: string): string {
+  const digits = cuit.replace(/\D/g, '');
+  if (digits.length !== 11) return cuit;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 10)}-${digits.slice(10)}`;
 }
