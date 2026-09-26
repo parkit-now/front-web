@@ -171,6 +171,17 @@ export function validatePastedCertificate(raw: string): string | null {
 
 // ── Paso 2: datos fiscales a mano (padrón de homologación sin el CUIT) ──────
 
+/**
+ * Qué comprobante emite cada condición frente al IVA, en palabras del dueño.
+ * Se muestra al confirmar los datos fiscales: la condición decide la letra de
+ * TODAS las facturas, así que tiene que quedar claro antes de guardarla.
+ */
+export function describeInvoiceLetter(condicion: ArcaTaxCondition): string {
+  return condicion === 'responsable_inscripto'
+    ? 'Factura B a consumidor final'
+    : 'Factura C';
+}
+
 export type ArcaFiscalDataFormValues = {
   razonSocial: string;
   condicionIva: ArcaTaxCondition | '';

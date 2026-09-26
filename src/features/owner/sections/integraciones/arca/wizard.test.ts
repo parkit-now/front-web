@@ -11,6 +11,7 @@ import {
   validateArcaPtoVta,
   validateArcaStep1Form,
   validatePastedCertificate,
+  describeInvoiceLetter,
 } from './wizard';
 
 function makeAccount(overrides: Partial<ArcaAccount> = {}): ArcaAccount {
@@ -281,5 +282,15 @@ describe('validateArcaConstancia', () => {
         environment: 'produccion',
       }),
     ).toBeNull();
+  });
+});
+
+describe('describeInvoiceLetter', () => {
+  it('responsable inscripto emite B; monotributo y exento, C', () => {
+    expect(describeInvoiceLetter('responsable_inscripto')).toBe(
+      'Factura B a consumidor final',
+    );
+    expect(describeInvoiceLetter('monotributo')).toBe('Factura C');
+    expect(describeInvoiceLetter('exento')).toBe('Factura C');
   });
 });

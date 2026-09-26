@@ -5,6 +5,7 @@ import { ApiError } from '../../../../../lib/api/client';
 import { Alert } from '../../../../../shared/components/ui/Alert';
 import { Button } from '../../../../../shared/components/ui/Button';
 import { Card } from '../../../../../shared/components/ui/Card';
+import { ConfirmDialog } from '../../../../../shared/components/ui/ConfirmDialog';
 import { Input } from '../../../../../shared/components/ui/Input';
 import { RequiredMark } from '../../../../../shared/components/ui/RequiredMark';
 import {
@@ -52,6 +53,7 @@ import {
   validateArcaFiscalDataForm,
   validateArcaPtoVta,
   validateArcaStep1Form,
+  describeInvoiceLetter,
   validatePastedCertificate,
   type ArcaFiscalDataFormValues,
   type ArcaWizardNumericStep,
@@ -2014,6 +2016,10 @@ function FiscalDataForm({
     if (errors[key]) setErrors((prev) => ({ ...prev, [key]: undefined }));
   }
 
+  const [confirming, setConfirming] = useState(false);
+
+  // Validar y, si está todo bien, pedir confirmación antes de guardar: la
+  // condición frente al IVA decide la letra de TODAS las facturas.
   function handleSubmit() {
     const validation = validateArcaFiscalDataForm(values);
     if (Object.keys(validation).length > 0) {
@@ -2021,6 +2027,11 @@ function FiscalDataForm({
       return;
     }
     setErrors({});
+    setConfirming(true);
+  }
+
+  function handleConfirm() {
+    setConfirming(false);
     onSubmit(values);
   }
 
@@ -2076,6 +2087,7 @@ function FiscalDataForm({
         <Input
           label="Domicilio fiscal"
           required
+          placeholder="Av. Corrientes 1234, CABA, Buenos Aires"
           value={values.domicilioFiscal}
           error={errors.domicilioFiscal}
           onChange={(e) => set('domicilioFiscal', e.target.value)}
@@ -2089,11 +2101,48 @@ function FiscalDataForm({
           disabled={pending}
         />
       </div>
+      <p style={HINT}>
+        Cargalos tal como figuran en tu constancia de inscripción de ARCA.
+      </p>
       <div style={ROW}>
         <Button variant="primary" loading={pending} onClick={handleSubmit}>
           Continuar
         </Button>
       </div>
+      <ConfirmDialog
+        open={confirming}
+        title="¿Los datos fiscales son correctos?"
+        confirmLabel="Sí, continuar"
+        cancelLabel="Revisar"
+        onClose={() => setConfirming(false)}
+        onConfirm={handleConfirm}
+        message={
+          <>
+            <p style={{ margin: '0 0 10px' }}>
+              <strong>{values.razonSocial.trim()}</strong>
+              <br />
+              {values.condicionIva &&
+                ARCA_TAX_CONDITION_LABELS[values.condicionIva]}
+              <br />
+              {values.domicilioFiscal.trim()}
+              {values.inicioActividad && (
+                <>
+                  <br />
+                  Inicio de actividad: {values.inicioActividad}
+                </>
+              )}
+            </p>
+            {values.condicionIva && (
+              <p style={{ margin: 0 }}>
+                Con esta condición vas a emitir{' '}
+                <strong>{describeInvoiceLetter(values.condicionIva)}</strong>.
+                Revisá que coincida con tu constancia de inscripción: define la
+                letra de todas tus facturas.
+              </p>
+            )}
+          </>
+        }
+      />
     </div>
   );
 }
