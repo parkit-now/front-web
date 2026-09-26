@@ -151,16 +151,6 @@ export function ArcaEmisionPage() {
     <SectionHeader
       title="Configurar emisión"
       subtitle="Elegí qué medios de pago facturan automáticamente al cobrar."
-      action={
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={<IconChevronLeft size={15} />}
-          onClick={() => void navigate('../integraciones')}
-        >
-          Volver a Integraciones
-        </Button>
-      }
     />
   );
 
@@ -386,8 +376,15 @@ export function ArcaEmisionPage() {
             </div>
           )}
 
-          {canManage && (
-            <div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Button
+              variant="secondary"
+              icon={<IconChevronLeft size={15} />}
+              onClick={() => void navigate('../integraciones')}
+            >
+              Volver
+            </Button>
+            {canManage && (
               <Button
                 variant="primary"
                 loading={saveMutation.isPending}
@@ -396,8 +393,8 @@ export function ArcaEmisionPage() {
               >
                 Guardar
               </Button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </Card>
     </div>
