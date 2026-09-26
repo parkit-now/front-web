@@ -56,7 +56,7 @@ import {
   type ArcaWizardStep,
 } from './wizard';
 import { normalizeArcaCuit } from './cuit';
-import { ARCA_LOGIN_URL } from './links';
+import { ARCA_LOGIN_URL, SUPPORT_CONTACT } from './links';
 import {
   applyCertVerifyError,
   EMPTY_CERT_PROGRESS,
@@ -151,8 +151,9 @@ export function ArcaWizardPage() {
   const [certProgress, setCertProgress] =
     useState<CertProgress>(EMPTY_CERT_PROGRESS);
   const [certVerifyError, setCertVerifyError] = useState<{
-    substep: CertSubstepId;
     message: string;
+    /** El sub-paso culpable (4 o 5), o `null` si el error no apunta a uno. */
+    culpritSubstep: CertSubstepId | null;
   } | null>(null);
 
   useEffect(() => {
@@ -286,7 +287,7 @@ export function ArcaWizardPage() {
       const effect = resolveCertVerifyErrorEffect(code);
       updateCertProgress((prev) => applyCertVerifyError(prev, code));
       setCertVerifyError({
-        substep: effect.substep,
+        culpritSubstep: effect.culpritSubstep,
         message: translateApiError(error, {
           endpoint: 'arca.uploadCertificate',
         }),
@@ -461,15 +462,6 @@ export function ArcaWizardPage() {
                         }
                         onVerify={(certificate) => {
                           setCertVerifyError(null);
-                          // El sub-paso 5 no tiene "Listo, sigo": reintentar
-                          // "Verificar" ES la forma de decir "ya lo arreglé"
-                          // cuando lo que había fallado era la autorización
-                          // de servicios.
-                          updateCertProgress((prev) =>
-                            prev.errorSubstep === 5
-                              ? { ...prev, errorSubstep: null }
-                              : prev,
-                          );
                           uploadCertMutation.mutate(certificate);
                         }}
                       />
@@ -1158,7 +1150,10 @@ function CertSubstepAccordion({
 }: {
   substeps: readonly CertSubstepDef[];
   progress: CertProgress;
-  verifyError: { substep: CertSubstepId; message: string } | null;
+  verifyError: {
+    message: string;
+    culpritSubstep: CertSubstepId | null;
+  } | null;
 }) {
   // Abrir un sub-paso ya completado para releerlo (o "Volver") es un override
   // LOCAL: en cuanto el progreso cambia (se completó otro, o hubo un error
@@ -1227,13 +1222,53 @@ function CertSubstepAccordion({
                   borderTop: '1px solid var(--border-soft)',
                 }}
               >
-                {verifyError && verifyError.substep === s.id && (
-                  <Alert
-                    variant="err"
-                    icon={<IconAlert size={16} />}
-                    title="ARCA no pudo verificar el certificado"
-                    description={verifyError.message}
-                  />
+                {/*
+                  El error de "Verificar" siempre se lee ACÁ, en el sub-paso
+                  6: es donde vive el botón, así que no importa cuál haya
+                  sido el sub-paso culpable (`resolveCertVerifyErrorEffect`
+                  siempre devuelve `openSubstep: 6`). Ese culpable (4 o 5) ya
+                  está marcado en rojo en su propio título; acá sólo se
+                  nombra, como pista de adónde ir.
+                */}
+                {verifyError && s.id === 6 && (
+                  <>
+                    <Alert
+                      variant="err"
+                      icon={<IconAlert size={16} />}
+                      title="No pudimos verificar la vinculación"
+                      description={`${verifyError.message} ${
+                        verifyError.culpritSubstep !== null
+                          ? `Revisá el paso ${verifyError.culpritSubstep} («${
+                              substeps.find(
+                                (x) => x.id === verifyError.culpritSubstep,
+                              )?.title ?? ''
+                            }»), que quedó marcado en rojo, y volvé a verificar.`
+                          : 'Revisá que hayas completado todos los pasos y volvé a intentar.'
+                      }`}
+                    />
+                    <p
+                      style={{
+                        margin: 0,
+                        fontSize: 12,
+                        color: 'var(--text-3)',
+                      }}
+                    >
+                      Si el problema sigue,{' '}
+                      {SUPPORT_CONTACT ? (
+                        <a
+                          href={SUPPORT_CONTACT.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'var(--brand)' }}
+                        >
+                          {SUPPORT_CONTACT.label}
+                        </a>
+                      ) : (
+                        'contactá a soporte'
+                      )}
+                      .
+                    </p>
+                  </>
                 )}
                 {s.body}
                 <div style={ROW}>
@@ -1293,7 +1328,10 @@ function Step2Upload({
   reusing: boolean;
   verifying: boolean;
   progress: CertProgress;
-  verifyError: { substep: CertSubstepId; message: string } | null;
+  verifyError: {
+    message: string;
+    culpritSubstep: CertSubstepId | null;
+  } | null;
   onSubstepDone: (id: CertSubstepId) => void;
   onReuse: (fromTenantId: string) => void;
   onVerify: (certificate: string) => void;
@@ -1308,8 +1346,11 @@ function Step2Upload({
   const certInvalid = certValidation !== null;
   const certError = certText.trim() ? certValidation : null;
 
-  // El sub-paso 5 es informativo (sin "Listo, sigo"): su primaryAction es
-  // "Verificar", la llamada real a ARCA.
+  // El sub-paso 6 es el único sin "Listo, sigo": termina en "Verificar", la
+  // llamada real a ARCA. Se deshabilita con el mismo criterio que "Listo,
+  // sigo" del sub-paso 4: si el certificado pegado no valida (incluido el
+  // caso de una recarga que se llevó puesto el texto — ver el aviso en el
+  // body del sub-paso 6).
   const verifyAction: CertSubstepPrimaryAction = {
     label: 'Verificar',
     variant: 'primary',
@@ -1318,6 +1359,25 @@ function Step2Upload({
     loadingHint: 'Puede tardar varios segundos: estamos hablando con ARCA.',
     onClick: () => onVerify(certText),
   };
+
+  // Mismo texto en los dos entornos: verificar es lo mismo lo hayas
+  // certificado en homologación o en producción.
+  const verifySubstepBody = (
+    <>
+      <p style={HINT}>
+        Con todo listo en ARCA, verificamos que Parkit pueda usar tu
+        certificado. Puede tardar unos segundos.
+      </p>
+      {/* El texto pegado es estado LOCAL (no se persiste): una recarga justo
+          acá se lo lleva puesto, aunque el progreso (sub-pasos 1 a 5 ya
+          completados) siga intacto en localStorage. */}
+      {!certText.trim() && (
+        <p style={{ ...HINT, color: 'var(--text-3)' }}>
+          Volvé al paso 4 y pegá el certificado de nuevo.
+        </p>
+      )}
+    </>
+  );
 
   const homologacionSubsteps: CertSubstepDef[] = [
     {
@@ -1519,6 +1579,15 @@ function Step2Upload({
           />
         </>
       ),
+      primaryAction: {
+        label: 'Listo, sigo →',
+        onClick: () => onSubstepDone(5),
+      },
+    },
+    {
+      id: 6,
+      title: 'Verificá la vinculación',
+      body: verifySubstepBody,
       primaryAction: verifyAction,
     },
   ];
@@ -1643,6 +1712,15 @@ function Step2Upload({
           <ArcaLoginLink />
         </>
       ),
+      primaryAction: {
+        label: 'Listo, sigo →',
+        onClick: () => onSubstepDone(5),
+      },
+    },
+    {
+      id: 6,
+      title: 'Verificá la vinculación',
+      body: verifySubstepBody,
       primaryAction: verifyAction,
     },
   ];

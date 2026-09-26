@@ -12,3 +12,13 @@
  */
 export const ARCA_LOGIN_URL =
   'https://auth.afip.gob.ar/contribuyente_/login.xhtml';
+
+/**
+ * Contacto de soporte para cuando "Verificar" sigue fallando después de
+ * revisar los pasos marcados. HOY es `null` a propósito: Parkit todavía no
+ * tiene un canal de soporte para el dueño — el usuario lo va a definir más
+ * adelante. Quien lo consuma (`Step2Upload`, sub-paso 6) ya sabe mostrar el
+ * aviso como texto plano ("contactá a soporte") mientras sea `null`, y como
+ * link cuando se complete con `{ label, href }`.
+ */
+export const SUPPORT_CONTACT: { label: string; href: string } | null = null;
