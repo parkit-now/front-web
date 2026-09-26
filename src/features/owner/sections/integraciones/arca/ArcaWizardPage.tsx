@@ -58,7 +58,11 @@ import {
   type ArcaWizardStep,
 } from './wizard';
 import { normalizeArcaCuit } from './cuit';
-import { ARCA_LOGIN_URL, SUPPORT_CONTACT } from './links';
+import {
+  ARCA_LOGIN_URL,
+  ARCA_ADMIN_RELACIONES_URL,
+  SUPPORT_CONTACT,
+} from './links';
 import {
   applyCertVerifyError,
   EMPTY_CERT_PROGRESS,
@@ -843,6 +847,34 @@ function ArcaLoginLink() {
   );
 }
 
+/** Link en línea a una pantalla de ARCA (azul, subrayado, nueva pestaña). */
+function ArcaInlineLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{
+        color: 'var(--brand)',
+        textDecoration: 'underline',
+        fontWeight: 600,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 3,
+      }}
+    >
+      {children}
+      <IconExternalLink size={12} />
+    </a>
+  );
+}
+
 /** Un valor para pegar en ARCA (alias, CUIT...), en monoespaciado, con botón de copiar. */
 function CopyRow({
   label,
@@ -1432,9 +1464,12 @@ function Step2Upload({
       body: (
         <>
           <p style={HINT}>
-            En <strong>Mis servicios</strong> buscá{' '}
-            <strong>WSASS – Autogestión Certificados Homologación</strong> y
-            abrilo.
+            En{' '}
+            <ArcaInlineLink href={ARCA_ADMIN_RELACIONES_URL}>
+              Mis servicios
+            </ArcaInlineLink>{' '}
+            buscá <strong>WSASS – Autogestión Certificados Homologación</strong>{' '}
+            y abrilo.
           </p>
           <GuideImage
             src="/arca-guide/homologacion/05-wsass-en-mis-servicios.png"
@@ -1446,7 +1481,10 @@ function Step2Upload({
             >
               <li style={HINT}>
                 En el inicio de ARCA, entrá a{' '}
-                <strong>Administrador de relaciones</strong>.
+                <ArcaInlineLink href={ARCA_ADMIN_RELACIONES_URL}>
+                  Administrador de relaciones
+                </ArcaInlineLink>
+                .
                 <div style={{ marginTop: 6 }}>
                   <GuideImage
                     src="/arca-guide/homologacion/02-mis-servicios.png"
@@ -1641,13 +1679,21 @@ function Step2Upload({
       body: (
         <>
           <p style={HINT}>
-            En <strong>Mis servicios</strong> buscá{' '}
-            <strong>Administración de Certificados Digitales</strong> y abrilo.
+            En{' '}
+            <ArcaInlineLink href={ARCA_ADMIN_RELACIONES_URL}>
+              Mis servicios
+            </ArcaInlineLink>{' '}
+            buscá <strong>Administración de Certificados Digitales</strong> y
+            abrilo.
           </p>
           <Disclosure summary="¿No te aparece? Adherilo (se hace una sola vez)">
             <ol style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 8 }}>
               <li style={HINT}>
-                Entrá a <strong>Administrador de relaciones</strong>.
+                Entrá a{' '}
+                <ArcaInlineLink href={ARCA_ADMIN_RELACIONES_URL}>
+                  Administrador de relaciones
+                </ArcaInlineLink>
+                .
               </li>
               <li style={HINT}>
                 Apretá <strong>Adherir servicio</strong>.
@@ -1732,8 +1778,11 @@ function Step2Upload({
       body: (
         <>
           <p style={HINT}>
-            Entrá a <strong>Administrador de relaciones</strong> →{' '}
-            <strong>Nueva relación</strong> y asociá a ese certificado{' '}
+            Entrá a{' '}
+            <ArcaInlineLink href={ARCA_ADMIN_RELACIONES_URL}>
+              Administrador de relaciones
+            </ArcaInlineLink>{' '}
+            → <strong>Nueva relación</strong> y asociá a ese certificado{' '}
             <strong>Facturación Electrónica</strong> y{' '}
             <strong>Constancia de Inscripción</strong>.
           </p>

@@ -14,6 +14,16 @@ export const ARCA_LOGIN_URL =
   'https://auth.afip.gob.ar/contribuyente_/login.xhtml';
 
 /**
+ * Administrador de Relaciones de Clave Fiscal: desde acá se adhieren los
+ * servicios (WSASS, Administración de Certificados Digitales) y se asocian
+ * los web services al certificado en producción. Con la sesión del portal
+ * abierta entra directo (lo verificó el usuario navegando ARCA); sin sesión,
+ * ARCA pide el login. Si ARCA la cambia, se ajusta acá.
+ */
+export const ARCA_ADMIN_RELACIONES_URL =
+  'https://serviciosweb.afip.gob.ar/claveFiscal/adminRel/main.aspx';
+
+/**
  * Contacto de soporte para cuando "Verificar" sigue fallando después de
  * revisar los pasos marcados. HOY es `null` a propósito: Parkit todavía no
  * tiene un canal de soporte para el dueño — el usuario lo va a definir más
