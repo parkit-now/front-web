@@ -198,6 +198,20 @@ describe('validatePastedCertificate', () => {
     expect(validatePastedCertificate('aaaaaaaaaaaa')).toBeTruthy();
   });
 
+  it('si pegó la solicitud (CSR) en vez del certificado, se lo dice', () => {
+    const csr = `-----BEGIN CERTIFICATE REQUEST-----\n${body}\n-----END CERTIFICATE REQUEST-----`;
+    expect(validatePastedCertificate(csr)).toMatch(/solicitud \(CSR\)/);
+  });
+
+  it('dice qué parte falta: el principio o el final', () => {
+    expect(
+      validatePastedCertificate(`${body}\n-----END CERTIFICATE-----`),
+    ).toMatch(/principio/);
+    expect(
+      validatePastedCertificate(`-----BEGIN CERTIFICATE-----\n${body}`),
+    ).toMatch(/final/);
+  });
+
   it('rechaza si falta el marcador de cierre', () => {
     expect(
       validatePastedCertificate(`-----BEGIN CERTIFICATE-----\n${body}`),

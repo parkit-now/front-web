@@ -116,6 +116,14 @@ const CERT_BODY_PATTERN = /^[A-Za-z0-9+/=]+$/;
 
 const CERT_FORMAT_ERROR =
   'Pegá el certificado completo, desde -----BEGIN CERTIFICATE----- hasta -----END CERTIFICATE-----.';
+const CERT_IS_CSR_ERROR =
+  'Eso es la solicitud (CSR), no el certificado. Pegá lo que ARCA te muestra en «Resultado», después de apretar «Crear DN y Obtener Certificado».';
+const CERT_MISSING_END_ERROR =
+  'Falta el final del certificado: copialo completo, hasta -----END CERTIFICATE-----.';
+const CERT_MISSING_BEGIN_ERROR =
+  'Falta el principio del certificado: copialo completo, desde -----BEGIN CERTIFICATE-----.';
+const CERT_TRUNCATED_ERROR =
+  'El certificado está incompleto o tiene caracteres de más. Copialo de nuevo, entero, desde ARCA.';
 
 /**
  * Valida el certificado pegado a mano en el paso 2 (sub-paso 4), ANTES de
@@ -123,31 +131,40 @@ const CERT_FORMAT_ERROR =
  *
  * Es sólo el aviso temprano: el backend vuelve a validar de verdad (firma,
  * CUIT, vigencia...) y ahí es donde puede rechazarlo con `ARCA_CERT_INVALID`
- * y compañía. Esto sólo evita el viaje de red con algo que a todas luces no
- * es un certificado — como pegar "aaaaaaaaaaaa", que antes de este chequeo
- * se mandaba igual.
+ * y compañía. Esto evita el viaje de red con algo que a todas luces no es un
+ * certificado — como pegar "aaaaaaaaaaaa".
  *
- * Exige, en este orden: el marcador de apertura, el de cierre DESPUÉS del de
- * apertura, y entre los dos un cuerpo (sacando espacios y saltos de línea,
- * `\r\n` incluido) de al menos 500 caracteres que sean sólo base64
+ * Cada falla tiene su mensaje, porque "no es válido" solo no le dice al dueño
+ * qué hizo mal. El error más probable es pegar la SOLICITUD: en WSASS el
+ * cuadro de la solicitud y el del resultado están uno arriba del otro y se
+ * ven casi iguales.
+ *
+ * Exige el marcador de apertura, el de cierre DESPUÉS del de apertura, y
+ * entre los dos un cuerpo (sacando espacios y saltos de línea, `\r\n`
+ * incluido) de al menos 500 caracteres que sean sólo base64
  * (`[A-Za-z0-9+/=]`). No decodifica el base64 ni mira la fecha: eso es
  * trabajo del backend.
  */
 export function validatePastedCertificate(raw: string): string | null {
   const text = raw.trim();
   if (!text) return CERT_FORMAT_ERROR;
+  if (text.includes('CERTIFICATE REQUEST')) return CERT_IS_CSR_ERROR;
 
   const beginIndex = text.indexOf(CERT_BEGIN);
-  if (beginIndex === -1) return CERT_FORMAT_ERROR;
-
-  const endIndex = text.indexOf(CERT_END, beginIndex + CERT_BEGIN.length);
-  if (endIndex === -1) return CERT_FORMAT_ERROR;
+  const endIndex = text.indexOf(
+    CERT_END,
+    beginIndex === -1 ? 0 : beginIndex + CERT_BEGIN.length,
+  );
+  if (beginIndex === -1 && endIndex === -1) return CERT_FORMAT_ERROR;
+  if (beginIndex === -1) return CERT_MISSING_BEGIN_ERROR;
+  if (endIndex === -1) return CERT_MISSING_END_ERROR;
 
   const body = text
     .slice(beginIndex + CERT_BEGIN.length, endIndex)
     .replace(/\s+/g, '');
-  if (body.length < CERT_BODY_MIN_LENGTH) return CERT_FORMAT_ERROR;
-  if (!CERT_BODY_PATTERN.test(body)) return CERT_FORMAT_ERROR;
+  if (body.length < CERT_BODY_MIN_LENGTH || !CERT_BODY_PATTERN.test(body)) {
+    return CERT_TRUNCATED_ERROR;
+  }
 
   return null;
 }
