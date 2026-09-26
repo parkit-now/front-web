@@ -19,6 +19,18 @@ export type DataTableServerState = {
   onGlobalFilterChange?: (value: string) => void;
 };
 
+/**
+ * Selección de filas (controlada). Con esto la tabla suma una columna de
+ * checkboxes y, mientras haya algo elegido, una barra con `actions`.
+ */
+export type DataTableRowSelection<TData> = {
+  selectedIds: readonly string[];
+  onChange: (ids: string[]) => void;
+  /** Qué filas se pueden elegir (p. ej. sólo las que se pueden facturar). */
+  canSelect?: (row: TData) => boolean;
+  actions?: ReactNode;
+};
+
 export type DataTableProps<TData> = {
   data: TData[];
   columns: ColumnDef<TData, unknown>[];
@@ -46,4 +58,6 @@ export type DataTableProps<TData> = {
   refreshDisabled?: boolean;
   serverState?: DataTableServerState;
   onRowClick?: (row: TData) => void;
+  /** Requiere `getRowId`: la selección se guarda por id. */
+  rowSelection?: DataTableRowSelection<TData>;
 };

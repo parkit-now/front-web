@@ -1,4 +1,5 @@
 import {
+  type ColumnDef,
   type ColumnFiltersState,
   flexRender,
   type FilterFn,
@@ -9,6 +10,7 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   type PaginationState,
+  type RowSelectionState,
   type SortingFn,
   type SortingState,
   type Updater,
@@ -33,13 +35,16 @@ import type { DataTableProps } from './types';
 import {
   caseInsensitiveSort,
   getPaginationPageCount,
+  inNumberRange,
   normalizeText,
+  type NumberRange,
 } from './utils';
 
 declare module '@tanstack/react-table' {
   interface FilterFns {
     includesSome: FilterFn<unknown>;
     dateRange: FilterFn<unknown>;
+    numberRange: FilterFn<unknown>;
   }
 }
 
@@ -85,6 +90,42 @@ const dateRangeFilter: FilterFn<unknown> = (row, columnId, value) => {
   const toKey = format(range.to ?? range.from, 'yyyy-MM-dd');
   return key >= fromKey && key <= toKey;
 };
+
+const numberRangeFilter: FilterFn<unknown> = (row, columnId, value) =>
+  inNumberRange(row.getValue(columnId), value as NumberRange | undefined);
+
+/** Columna de checkboxes para `rowSelection`. */
+function selectionColumn<TData>(): ColumnDef<TData, unknown> {
+  return {
+    id: 'select',
+    size: 44,
+    enableSorting: false,
+    enableHiding: false,
+    header: ({ table }) => (
+      <input
+        type="checkbox"
+        className="dt-select-checkbox"
+        aria-label="Seleccionar las filas de esta página"
+        checked={table.getIsAllPageRowsSelected()}
+        ref={(input) => {
+          if (input) input.indeterminate = table.getIsSomePageRowsSelected();
+        }}
+        onChange={table.getToggleAllPageRowsSelectedHandler()}
+      />
+    ),
+    cell: ({ row }) => (
+      <input
+        type="checkbox"
+        className="dt-select-checkbox"
+        aria-label="Seleccionar fila"
+        checked={row.getIsSelected()}
+        disabled={!row.getCanSelect()}
+        onClick={(event) => event.stopPropagation()}
+        onChange={row.getToggleSelectedHandler()}
+      />
+    ),
+  };
+}
 
 function makeGlobalFilter<TData>(searchableKeys?: string[]): FilterFn<TData> {
   return (row, _columnId, value) => {
@@ -135,6 +176,7 @@ export function DataTable<TData>({
   refreshDisabled,
   serverState,
   onRowClick,
+  rowSelection,
 }: DataTableProps<TData>) {
   const [globalFilter, setGlobalFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
@@ -192,10 +234,26 @@ export function DataTable<TData>({
     serverStateRef.current?.onGlobalFilterChange?.(globalFilter);
   }, [globalFilter]);
 
+  const selectable = Boolean(rowSelection);
+  const tableColumns = useMemo(
+    () => (selectable ? [selectionColumn<TData>(), ...columns] : columns),
+    [columns, selectable],
+  );
+  const rowSelectionState = useMemo<RowSelectionState>(
+    () =>
+      Object.fromEntries(
+        (rowSelection?.selectedIds ?? []).map((id) => [id, true]),
+      ),
+    [rowSelection?.selectedIds],
+  );
+  const selectionRef = useRef(rowSelection);
+  selectionRef.current = rowSelection;
+
   const table = useReactTable({
     data,
-    columns,
+    columns: tableColumns,
     state: {
+      rowSelection: rowSelectionState,
       columnFilters,
       globalFilter,
       sorting,
@@ -205,6 +263,21 @@ export function DataTable<TData>({
       pagination,
     },
     getRowId,
+    enableRowSelection: (row) =>
+      selectionRef.current
+        ? (selectionRef.current.canSelect?.(row.original) ?? true)
+        : false,
+    onRowSelectionChange: (updater: Updater<RowSelectionState>) => {
+      const selection = selectionRef.current;
+      if (!selection) return;
+      const next =
+        typeof updater === 'function' ? updater(rowSelectionState) : updater;
+      selection.onChange(
+        Object.entries(next)
+          .filter(([, isSelected]) => isSelected)
+          .map(([id]) => id),
+      );
+    },
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: (updater: Updater<string>) => {
       setGlobalFilter((current) => {
@@ -240,6 +313,7 @@ export function DataTable<TData>({
     filterFns: {
       includesSome: includesSomeFilter,
       dateRange: dateRangeFilter,
+      numberRange: numberRangeFilter,
     },
     defaultColumn: {
       filterFn: 'includesSome',
@@ -436,6 +510,24 @@ export function DataTable<TData>({
         </div>
       </div>
 
+      {rowSelection && rowSelection.selectedIds.length > 0 ? (
+        <div className="dt-selection-bar" role="status">
+          <span className="dt-selection-count">
+            {rowSelection.selectedIds.length === 1
+              ? '1 seleccionada'
+              : `${rowSelection.selectedIds.length} seleccionadas`}
+          </span>
+          <div className="dt-selection-actions">{rowSelection.actions}</div>
+          <button
+            type="button"
+            className="dt-selection-clear"
+            onClick={() => rowSelection.onChange([])}
+          >
+            Limpiar selección
+          </button>
+        </div>
+      ) : null}
+
       <div className="dt-scroll-shell">
         <table className="dt-table">
           <thead>
@@ -510,6 +602,9 @@ export function DataTable<TData>({
                           if (event.key !== 'Enter' && event.key !== ' ') {
                             return;
                           }
+                          // El espacio sobre el checkbox de la fila lo tilda,
+                          // no abre el detalle.
+                          if (event.target !== event.currentTarget) return;
                           event.preventDefault();
                           onRowClick(row.original);
                         }
