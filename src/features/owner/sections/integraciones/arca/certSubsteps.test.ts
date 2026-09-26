@@ -27,10 +27,31 @@ describe('resolveOpenCertSubstep', () => {
     ).toBe(5);
   });
 
-  it('un sub-paso en rojo gana y se abre él, aunque haya otros sin completar después', () => {
+  it('con 1 a 5 completados, el destino es el 6 (verificar)', () => {
     expect(
-      resolveOpenCertSubstep({ completed: [1, 2, 3, 4], errorSubstep: 4 }),
-    ).toBe(4);
+      resolveOpenCertSubstep({
+        completed: [1, 2, 3, 4, 5],
+        errorSubstep: null,
+      }),
+    ).toBe(6);
+  });
+
+  it('con un sub-paso en rojo, el abierto sigue siendo el 6 (ahí se lee el aviso)', () => {
+    expect(
+      resolveOpenCertSubstep({ completed: [1, 2, 3, 4, 5], errorSubstep: 4 }),
+    ).toBe(6);
+    expect(
+      resolveOpenCertSubstep({ completed: [1, 2, 3, 4, 5], errorSubstep: 5 }),
+    ).toBe(6);
+  });
+
+  // Progreso guardado por una versión anterior (sin el 6): con el 4
+  // completado y el 5 todavía no, el destino natural sigue siendo el 5 — el
+  // dueño lo confirma y de ahí pasa solo al 6, que es nuevo.
+  it('progreso viejo (sin el 5 completado) retoma en el 5', () => {
+    expect(
+      resolveOpenCertSubstep({ completed: [1, 2, 3, 4], errorSubstep: null }),
+    ).toBe(5);
   });
 });
 
@@ -49,21 +70,43 @@ describe('resolveCertSubstepState', () => {
   it('los de después quedan bloqueados', () => {
     expect(resolveCertSubstepState(4, base)).toBe('locked');
     expect(resolveCertSubstepState(5, base)).toBe('locked');
+    expect(resolveCertSubstepState(6, base)).toBe('locked');
   });
 
-  it('el sub-paso 5 nunca es "completed": es current recién con 1-4 listos', () => {
-    const done: CertProgress = { completed: [1, 2, 3, 4], errorSubstep: null };
-    expect(resolveCertSubstepState(5, done)).toBe('current');
+  it('el 5 se completa con "Listo, sigo" como los anteriores', () => {
+    const done: CertProgress = {
+      completed: [1, 2, 3, 4, 5],
+      errorSubstep: null,
+    };
+    expect(resolveCertSubstepState(5, done)).toBe('completed');
+  });
+
+  it('el sub-paso 6 nunca es "completed": es current recién con 1-5 listos', () => {
+    const done: CertProgress = {
+      completed: [1, 2, 3, 4, 5],
+      errorSubstep: null,
+    };
+    expect(resolveCertSubstepState(6, done)).toBe('current');
   });
 
   it('el error pisa a "completed": un sub-paso ya confirmado puede volver a fallar', () => {
     const withError: CertProgress = {
-      completed: [1, 2, 3, 4],
+      completed: [1, 2, 3, 4, 5],
       errorSubstep: 4,
     };
     expect(resolveCertSubstepState(4, withError)).toBe('error');
-    // El 5 pasa a bloqueado de nuevo: no se puede verificar con el 4 en rojo.
-    expect(resolveCertSubstepState(5, withError)).toBe('locked');
+    // El resto de los completados (el 5) sigue verde: el culpable es el 4.
+    expect(resolveCertSubstepState(5, withError)).toBe('completed');
+    // El 6 sigue abierto (current), no bloqueado: ahí se lee el aviso.
+    expect(resolveCertSubstepState(6, withError)).toBe('current');
+  });
+
+  it('el 6 nunca se marca en rojo, aunque errorSubstep apunte a otro', () => {
+    const withError: CertProgress = {
+      completed: [1, 2, 3, 4, 5],
+      errorSubstep: 5,
+    };
+    expect(resolveCertSubstepState(6, withError)).toBe('current');
   });
 });
 
@@ -80,7 +123,7 @@ describe('markCertSubstepDone', () => {
 
   it('rehacer el sub-paso en rojo lo vuelve a poner verde', () => {
     const next = markCertSubstepDone(
-      { completed: [1, 2, 3, 4], errorSubstep: 4 },
+      { completed: [1, 2, 3, 4, 5], errorSubstep: 4 },
       4,
     );
     expect(next.errorSubstep).toBeNull();
@@ -94,13 +137,22 @@ describe('markCertSubstepDone', () => {
     );
     expect(next.errorSubstep).toBe(4);
   });
+
+  it('el 5 se marca completado igual que los anteriores', () => {
+    const next = markCertSubstepDone(
+      { completed: [1, 2, 3, 4], errorSubstep: null },
+      5,
+    );
+    expect(next.completed).toEqual([1, 2, 3, 4, 5]);
+    expect(resolveOpenCertSubstep(next)).toBe(6);
+  });
 });
 
 describe('resolveCertVerifyErrorEffect', () => {
-  it('ARCA_CERT_NOT_AUTHORIZED manda al 5 y lo marca', () => {
+  it('ARCA_CERT_NOT_AUTHORIZED abre el 6 y marca el 5', () => {
     expect(resolveCertVerifyErrorEffect('ARCA_CERT_NOT_AUTHORIZED')).toEqual({
-      substep: 5,
-      markError: true,
+      openSubstep: 6,
+      culpritSubstep: 5,
     });
   });
 
@@ -109,28 +161,28 @@ describe('resolveCertVerifyErrorEffect', () => {
     'ARCA_CERT_CUIT_MISMATCH',
     'ARCA_CERT_EXPIRED',
     'ARCA_CERT_KEY_MISMATCH',
-  ])('%s manda al 4 y lo marca', (code) => {
+  ])('%s abre el 6 y marca el 4', (code) => {
     expect(resolveCertVerifyErrorEffect(code)).toEqual({
-      substep: 4,
-      markError: true,
+      openSubstep: 6,
+      culpritSubstep: 4,
     });
   });
 
-  it('ARCA_UNAVAILABLE se queda en el 5 pero no marca nada', () => {
+  it('ARCA_UNAVAILABLE abre el 6 sin marcar ningún sub-paso', () => {
     expect(resolveCertVerifyErrorEffect('ARCA_UNAVAILABLE')).toEqual({
-      substep: 5,
-      markError: false,
+      openSubstep: 6,
+      culpritSubstep: null,
     });
   });
 
-  it('un código desconocido (o sin código) también cae en el 5 sin marcar', () => {
+  it('un código desconocido (o sin código) también abre el 6 sin marcar', () => {
     expect(resolveCertVerifyErrorEffect(undefined)).toEqual({
-      substep: 5,
-      markError: false,
+      openSubstep: 6,
+      culpritSubstep: null,
     });
     expect(resolveCertVerifyErrorEffect('ALGO_RARO')).toEqual({
-      substep: 5,
-      markError: false,
+      openSubstep: 6,
+      culpritSubstep: null,
     });
   });
 });
@@ -143,7 +195,7 @@ describe('applyCertVerifyError', () => {
 
   it('marca el sub-paso 5 cuando falta autorizar servicios', () => {
     const next = applyCertVerifyError(
-      { completed: [1, 2, 3, 4], errorSubstep: null },
+      { completed: [1, 2, 3, 4, 5], errorSubstep: null },
       'ARCA_CERT_NOT_AUTHORIZED',
     );
     expect(next.errorSubstep).toBe(5);
@@ -153,7 +205,7 @@ describe('applyCertVerifyError', () => {
   // responde en el reintento. El 4 sigue sin arreglarse.
   it('un error que no marca nada NO borra un rojo previo', () => {
     const withError: CertProgress = {
-      completed: [1, 2, 3, 4],
+      completed: [1, 2, 3, 4, 5],
       errorSubstep: 4,
     };
     const next = applyCertVerifyError(withError, 'ARCA_UNAVAILABLE');
@@ -176,6 +228,7 @@ describe('resolvePreviousCertSubstep', () => {
     [3, 2],
     [4, 3],
     [5, 4],
+    [6, 5],
   ] as const)('el anterior a %i es %i', (id, previous) => {
     expect(resolvePreviousCertSubstep(id)).toBe(previous);
   });

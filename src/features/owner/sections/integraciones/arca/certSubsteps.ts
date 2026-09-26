@@ -12,10 +12,16 @@
  * igual desde el sub-paso 1, sólo pierde la memoria entre recargas.
  */
 
-/** Los 5 sub-pasos del certificado, en los dos entornos. */
-export type CertSubstepId = 1 | 2 | 3 | 4 | 5;
+/**
+ * Los 6 sub-pasos del certificado, en los dos entornos. El 5 ("Autorizá los
+ * servicios") es informativo y termina en "Listo, sigo →"; la verificación
+ * contra ARCA se separó a un sub-paso propio, el 6 ("Verificá la
+ * vinculación"), para que un error de "Verificar" tenga un lugar fijo donde
+ * mostrarse sin importar cuál sub-paso haya sido el culpable.
+ */
+export type CertSubstepId = 1 | 2 | 3 | 4 | 5 | 6;
 
-export const CERT_SUBSTEP_IDS: readonly CertSubstepId[] = [1, 2, 3, 4, 5];
+export const CERT_SUBSTEP_IDS: readonly CertSubstepId[] = [1, 2, 3, 4, 5, 6];
 
 /**
  * Estado visual del título del acordeón:
@@ -34,12 +40,18 @@ export type CertSubstepVisualState =
 /**
  * Progreso persistido del acordeón.
  *
- * `completed` sólo guarda los sub-pasos 1 a 4: son los que se confirman a
- * mano con "Listo, sigo →". El 5 no tiene ese botón — termina en "Verificar",
- * que es una llamada al backend, no una casilla que el dueño tilda.
+ * `completed` guarda los sub-pasos 1 a 5: son los que se confirman a mano
+ * con "Listo, sigo →". El 6 no tiene ese botón — termina en "Verificar", que
+ * es una llamada al backend, no una casilla que el dueño tilda.
  *
- * `errorSubstep` es el sub-paso que el último error de "Verificar" dejó
- * marcado en rojo, o `null` si no hay ninguno marcado.
+ * `errorSubstep` es el sub-paso CULPABLE que el último error de "Verificar"
+ * dejó marcado en rojo (4 o 5), o `null` si no hay ninguno marcado. Nunca es
+ * `6`: ese sub-paso no se marca en rojo, sólo es donde se lee el aviso (ver
+ * `resolveOpenCertSubstep`).
+ *
+ * Migración: progreso guardado por una versión anterior (5 sub-pasos, sin el
+ * 6) sigue cargando bien — `completed` es un subconjunto válido igual, y con
+ * el 5 ya completado el dueño simplemente retoma en el 6, que es nuevo.
  */
 export interface CertProgress {
   completed: readonly CertSubstepId[];
@@ -52,18 +64,22 @@ export const EMPTY_CERT_PROGRESS: CertProgress = {
 };
 
 /**
- * Cuál sub-paso tiene que estar abierto por defecto: el que quedó marcado en
- * rojo (hay que arreglarlo antes de seguir), o si no hay ninguno, el primero
- * sin completar. El 5 nunca aparece en `completed` (no tiene botón propio),
- * así que es el destino natural una vez que 1 a 4 están listos.
+ * Cuál sub-paso tiene que estar abierto por defecto.
+ *
+ * Es el primero sin completar entre 1 y 5, o el 6 una vez que los 5 están
+ * listos — el 6 nunca aparece en `completed` (no tiene botón propio), así
+ * que es el destino natural. Esto vale INCLUSO con un `errorSubstep` marcado:
+ * el sub-paso culpable (4 o 5) sigue en `completed` (marcarlo en rojo no lo
+ * saca de ahí), así que el loop lo salta igual y llega al 6, que es donde
+ * hay que leer el aviso del error. El dueño llega al sub-paso rojo clickeando
+ * su título (no está bloqueado, sólo en error) o con "Volver" desde el 6.
  */
 export function resolveOpenCertSubstep(progress: CertProgress): CertSubstepId {
-  if (progress.errorSubstep !== null) return progress.errorSubstep;
   for (const id of CERT_SUBSTEP_IDS) {
-    if (id === 5) return 5;
+    if (id === 6) return 6;
     if (!progress.completed.includes(id)) return id;
   }
-  return 5;
+  return 6;
 }
 
 /**
@@ -86,11 +102,11 @@ export function resolveCertSubstepState(
   progress: CertProgress,
 ): CertSubstepVisualState {
   if (progress.errorSubstep === id) return 'error';
-  if (id !== 5 && progress.completed.includes(id)) return 'completed';
+  if (id !== 6 && progress.completed.includes(id)) return 'completed';
   return id === resolveOpenCertSubstep(progress) ? 'current' : 'locked';
 }
 
-/** Marca un sub-paso (1 a 4) como confirmado con "Listo, sigo →". */
+/** Marca un sub-paso (1 a 5) como confirmado con "Listo, sigo →". */
 export function markCertSubstepDone(
   progress: CertProgress,
   id: CertSubstepId,
@@ -104,16 +120,24 @@ export function markCertSubstepDone(
   return { completed, errorSubstep };
 }
 
-/** A qué sub-paso manda cada `code` de un 422 al verificar el certificado. */
+/** A qué sub-paso manda cada `code` de un error al verificar la vinculación. */
 export interface CertVerifyErrorEffect {
-  /** Sub-paso donde mostrar el aviso (siempre hay uno: es donde vive "Verificar"). */
-  substep: CertSubstepId;
-  /** Si además hay que pintar ESE sub-paso en rojo. */
-  markError: boolean;
+  /**
+   * Dónde se abre y se lee el aviso: SIEMPRE el 6 ("Verificá la
+   * vinculación"), que es donde vive el botón "Verificar". Antes (con 5
+   * sub-pasos) esto variaba; ahora que la verificación tiene su propio
+   * sub-paso, el aviso siempre se lee ahí.
+   */
+  openSubstep: CertSubstepId;
+  /**
+   * El sub-paso CULPABLE — el que hay que arreglar y el que se marca en
+   * rojo — o `null` si el error no apunta a uno en particular.
+   */
+  culpritSubstep: CertSubstepId | null;
 }
 
 /**
- * Mapeo código → sub-paso, para saber qué arreglar.
+ * Mapeo código → sub-paso culpable, para saber qué arreglar.
  *
  *  - `ARCA_CERT_NOT_AUTHORIZED`: falta autorizar los servicios → sub-paso 5.
  *  - `ARCA_CERT_INVALID` / `ARCA_CERT_CUIT_MISMATCH` / `ARCA_CERT_EXPIRED`:
@@ -123,29 +147,29 @@ export interface CertVerifyErrorEffect {
  *    sub-paso 3 (generar de nuevo con el CSR de acá); el mensaje traducido
  *    ya lo aclara.
  *  - Cualquier otro código (`ARCA_UNAVAILABLE`, un 500, etc.): no es culpa de
- *    ningún sub-paso puntual — se avisa en el 5 (ahí vive el botón) SIN
- *    pintar nada en rojo.
+ *    ningún sub-paso puntual — `culpritSubstep: null`, no se pinta nada en
+ *    rojo.
  */
 export function resolveCertVerifyErrorEffect(
   code: string | undefined,
 ): CertVerifyErrorEffect {
   switch (code) {
     case 'ARCA_CERT_NOT_AUTHORIZED':
-      return { substep: 5, markError: true };
+      return { openSubstep: 6, culpritSubstep: 5 };
     case 'ARCA_CERT_INVALID':
     case 'ARCA_CERT_CUIT_MISMATCH':
     case 'ARCA_CERT_EXPIRED':
     case 'ARCA_CERT_KEY_MISMATCH':
-      return { substep: 4, markError: true };
+      return { openSubstep: 6, culpritSubstep: 4 };
     default:
-      return { substep: 5, markError: false };
+      return { openSubstep: 6, culpritSubstep: null };
   }
 }
 
 /**
  * Aplica el efecto de un error de "Verificar" al progreso guardado.
  *
- * OJO: si el código no marca ningún sub-paso (`markError: false`), el
+ * OJO: si el código no marca ningún sub-paso (`culpritSubstep: null`), el
  * progreso NO se toca. Si ya había un sub-paso en rojo de un intento
  * anterior (por ejemplo, un certificado inválido) y este intento nuevo
  * falla por algo genérico (`ARCA_UNAVAILABLE`), ese rojo anterior sigue
@@ -156,8 +180,8 @@ export function applyCertVerifyError(
   code: string | undefined,
 ): CertProgress {
   const effect = resolveCertVerifyErrorEffect(code);
-  if (!effect.markError) return progress;
-  return { ...progress, errorSubstep: effect.substep };
+  if (effect.culpritSubstep === null) return progress;
+  return { ...progress, errorSubstep: effect.culpritSubstep };
 }
 
 // ── Persistencia (localStorage) ──────────────────────────────────────────────
