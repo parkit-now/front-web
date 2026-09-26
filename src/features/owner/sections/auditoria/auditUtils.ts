@@ -4,6 +4,7 @@ import type { AuditEvent, AuditSeverity } from '../../services/audit';
 export type AuditActionKind =
   | 'entry.corrected'
   | 'entry.undercharged'
+  | 'invoice.cert_expired'
   | 'other';
 
 export type AuditOrigin = 'history' | 'operational_exit' | 'unknown';
@@ -284,13 +285,30 @@ function paymentMethodNames(
 export function actionKindFor(action: string): AuditActionKind {
   if (action === 'entry.corrected') return 'entry.corrected';
   if (action === 'entry.undercharged') return 'entry.undercharged';
+  if (action === 'invoice.cert_expired') return 'invoice.cert_expired';
   return 'other';
 }
+
+/** Acciones que no tienen vista propia pero sí un nombre legible. */
+const OTHER_ACTION_LABELS: Record<string, string> = {
+  'arca_account.linked': 'ARCA vinculada',
+  'arca_account.unlinked': 'ARCA desvinculada',
+  'arca_account.renewal_prepared': 'Renovación del certificado preparada',
+  'arca_account.certificate_renewed': 'Certificado de ARCA renovado',
+  'arca_account.certificate_expired': 'Certificado de ARCA vencido',
+};
 
 export function actionLabelFor(action: string): string {
   if (action === 'entry.corrected') return 'Corrección de estadía';
   if (action === 'entry.undercharged') return 'Cobro menor al sugerido';
-  return action;
+  if (action === 'invoice.cert_expired') return 'Cobro sin factura';
+  return OTHER_ACTION_LABELS[action] ?? action;
+}
+
+function certExpiredSummary(metadata: Record<string, unknown>): string {
+  const plate = readString(metadata, 'plate');
+  const prefix = plate ? `Cobro sin factura en ${plate}` : 'Cobro sin factura';
+  return `${prefix}: certificado de ARCA vencido`;
 }
 
 export function originLabelFor(origin: AuditOrigin): string {
@@ -405,6 +423,16 @@ function moneyImpactFor(
     };
   }
 
+  if (action === 'invoice.cert_expired') {
+    // No es plata perdida (se cobró): es plata sin comprobante. No suma a la
+    // pérdida posible, sólo se muestra.
+    const charged = readNumber(metadata, 'chargedAmount');
+    return {
+      label: charged === null ? '-' : `Sin facturar ${fmtMoney0(charged)}`,
+      amount: null,
+    };
+  }
+
   if (action === 'entry.corrected') {
     const economicImpact = readEconomicImpact(metadata);
     if (
@@ -466,7 +494,9 @@ export function buildAuditRow(event: AuditEvent): AuditRow {
       ? correctionSummary(metadata, before, after, changedFields)
       : event.action === 'entry.undercharged'
         ? underchargeSummary(metadata)
-        : actionLabelFor(event.action);
+        : event.action === 'invoice.cert_expired'
+          ? certExpiredSummary(metadata)
+          : actionLabelFor(event.action);
   const rateNames = snapshotValues(before, after, 'rateSnapshotName');
   const vehicleBrands = snapshotValues(before, after, 'vehicleBrand');
   const vehicleModels = snapshotValues(before, after, 'vehicleModel');

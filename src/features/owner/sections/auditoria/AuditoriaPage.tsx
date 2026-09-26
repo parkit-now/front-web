@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef, ColumnFiltersState } from '@tanstack/react-table';
 import { endOfDay, format, startOfDay } from 'date-fns';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { DataTable } from '../../../../features/data-table';
 import { Pagination } from '../../../../features/data-table/components/Pagination';
 import { translateApiError } from '../../../../lib/api/translate';
@@ -84,6 +84,7 @@ function actionBadgeVariant(
 ): 'brand' | 'warn' | 'default' {
   if (kind === 'entry.corrected') return 'brand';
   if (kind === 'entry.undercharged') return 'warn';
+  if (kind === 'invoice.cert_expired') return 'warn';
   return 'default';
 }
 
@@ -375,6 +376,30 @@ function UnderchargedDetail({ row }: { row: AuditRow }) {
           <span>Porcentaje</span>
           <strong>{percent === null ? '-' : `${percent}%`}</strong>
         </div>
+      </div>
+    </section>
+  );
+}
+
+function CertExpiredDetail({ row }: { row: AuditRow }) {
+  const charged = metadataNumber(row.metadata, 'chargedAmount');
+  return (
+    <section className="audit2-detail-section">
+      <h3>Factura pendiente</h3>
+      <p className="audit2-muted">
+        Se cobraron {charged === null ? 'el monto' : fmtMoney0(charged)} con un
+        medio que factura, pero el certificado de ARCA estaba vencido y la
+        factura quedó pendiente. Renová el certificado desde Integraciones para
+        volver a facturar.
+      </p>
+      <div>
+        <Link
+          to="../integraciones/arca/renovar"
+          className="pk-btn pk-btn-secondary pk-btn-sm"
+          style={{ textDecoration: 'none' }}
+        >
+          Renovar certificado
+        </Link>
       </div>
     </section>
   );
@@ -784,6 +809,9 @@ function AuditDetailDrawer({
           ) : null}
           {row.actionKind === 'entry.undercharged' ? (
             <UnderchargedDetail row={row} />
+          ) : null}
+          {row.actionKind === 'invoice.cert_expired' ? (
+            <CertExpiredDetail row={row} />
           ) : null}
           {row.actionKind === 'other' ? (
             <GenericMetadataDetail row={row} />
@@ -1223,6 +1251,7 @@ export function AuditoriaPage() {
                   value: 'entry.undercharged',
                   label: 'Cobro menor al sugerido',
                 },
+                { value: 'invoice.cert_expired', label: 'Cobro sin factura' },
                 { value: 'other', label: 'Otros eventos' },
               ],
               origin: [

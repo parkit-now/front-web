@@ -190,6 +190,29 @@ export function ArcaEmisionPage() {
     );
   }
 
+  if (account?.status === 'cert_expired') {
+    return (
+      <div>
+        {header}
+        <Alert
+          variant="err"
+          icon={<IconAlert size={16} />}
+          title="La facturación está pausada: el certificado venció"
+          description="Renová el certificado para volver a facturar y configurar la emisión."
+          action={
+            <Link
+              to="../integraciones/arca/renovar"
+              className="pk-btn pk-btn-primary pk-btn-sm"
+              style={{ textDecoration: 'none' }}
+            >
+              Renovar certificado
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
+
   if (account === null || account.status !== 'linked') {
     return (
       <div>

@@ -254,4 +254,36 @@ describe('audit utils', () => {
       ]),
     ).toBe('Efectivo: $3.000 · Mercado Pago: $2.000');
   });
+
+  it('cobro sin factura por certificado vencido: tipo propio, patente y monto sin sumar pérdida', () => {
+    const row = buildAuditRow(
+      event({
+        action: 'invoice.cert_expired',
+        metadata: {
+          origin: 'operational_exit',
+          plate: 'AE123BG',
+          ticketNumber: 1,
+          chargedAmount: 4200,
+          invoiceId: 'inv-1',
+        },
+      }),
+    );
+
+    expect(row.actionKind).toBe('invoice.cert_expired');
+    expect(row.actionLabel).toBe('Cobro sin factura');
+    expect(row.summary).toBe(
+      'Cobro sin factura en AE123BG: certificado de ARCA vencido',
+    );
+    expect(row.plate).toBe('AE123BG');
+    expect(row.impactAmount).toBeNull();
+  });
+
+  it('los eventos de ARCA sin vista propia muestran un nombre legible', () => {
+    const row = buildAuditRow(
+      event({ action: 'arca_account.certificate_expired', severity: 'warn' }),
+    );
+
+    expect(row.actionKind).toBe('other');
+    expect(row.actionLabel).toBe('Certificado de ARCA vencido');
+  });
 });
