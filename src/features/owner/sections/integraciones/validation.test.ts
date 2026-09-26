@@ -147,7 +147,6 @@ function makeArcaAccount(overrides: Partial<ArcaAccount> = {}): ArcaAccount {
     domicilioFiscal: 'Av. Corrientes 1234, CABA',
     environment: 'homologacion',
     fiscalDataEditable: false,
-    hasSalesPointConstancia: false,
     iibb: null,
     inicioActividad: '2020-01-01',
     ivaRate: 21,

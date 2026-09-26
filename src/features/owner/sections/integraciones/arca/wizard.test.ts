@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { ArcaAccount } from '../../../services/arca';
 import {
-  ARCA_CONSTANCIA_MAX_BYTES,
   resolveArcaStep1ViewMode,
   resolveArcaStep2ViewMode,
   resolveArcaWizardStep,
   resolveClickableArcaWizardSteps,
-  validateArcaConstancia,
   validateArcaFiscalDataForm,
   validateArcaPtoVta,
   validateArcaStep1Form,
@@ -24,7 +22,6 @@ function makeAccount(overrides: Partial<ArcaAccount> = {}): ArcaAccount {
     domicilioFiscal: null,
     environment: 'homologacion',
     fiscalDataEditable: true,
-    hasSalesPointConstancia: false,
     iibb: null,
     inicioActividad: null,
     ivaRate: 21,
@@ -238,50 +235,6 @@ describe('validatePastedCertificate', () => {
     const cuerpoConSimbolos = `${'A'.repeat(400)}+/==${'B'.repeat(120)}`;
     const cert = `-----BEGIN CERTIFICATE-----\n${cuerpoConSimbolos}\n-----END CERTIFICATE-----`;
     expect(validatePastedCertificate(cert)).toBeNull();
-  });
-});
-
-describe('validateArcaConstancia', () => {
-  it('en homologación es opcional', () => {
-    expect(
-      validateArcaConstancia({ file: null, environment: 'homologacion' }),
-    ).toBeNull();
-  });
-
-  it('en producción es obligatoria', () => {
-    expect(
-      validateArcaConstancia({ file: null, environment: 'produccion' }),
-    ).toBeTruthy();
-  });
-
-  it('rechaza un archivo que no es PDF', () => {
-    expect(
-      validateArcaConstancia({
-        file: { type: 'image/png', size: 100 },
-        environment: 'produccion',
-      }),
-    ).toBeTruthy();
-  });
-
-  it('rechaza un PDF de más de 5 MB', () => {
-    expect(
-      validateArcaConstancia({
-        file: {
-          type: 'application/pdf',
-          size: ARCA_CONSTANCIA_MAX_BYTES + 1,
-        },
-        environment: 'produccion',
-      }),
-    ).toBeTruthy();
-  });
-
-  it('acepta un PDF dentro del límite', () => {
-    expect(
-      validateArcaConstancia({
-        file: { type: 'application/pdf', size: 1024 },
-        environment: 'produccion',
-      }),
-    ).toBeNull();
   });
 });
 

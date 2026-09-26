@@ -87,7 +87,6 @@ export type EndpointKey =
   | 'arca.uploadCertificate'
   | 'arca.listReusableCertificates'
   | 'arca.reuseCertificate'
-  | 'arca.uploadConstancia'
   | 'arca.setSalesPoint';
 
 export type TranslateContext = {
@@ -274,7 +273,6 @@ const CODE_MESSAGES: Record<string, string> = {
   ARCA_POS_NOT_FOUND:
     'El punto de venta no existe en ARCA o no es de web services.',
   ARCA_POS_DISABLED: 'El punto de venta está bloqueado o dado de baja en ARCA.',
-  ARCA_POS_CONSTANCIA_REQUIRED: 'Subí la constancia del punto de venta.',
 
   // Facturas emitidas por ARCA a partir de un cobro (ver front-desktop, que es
   // quien las emite). Se traducen acá también porque los errores de la cuenta

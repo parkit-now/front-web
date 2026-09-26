@@ -33,6 +33,14 @@ export const ARCA_ADMIN_RELACIONES_URL =
   'https://serviciosweb.afip.gob.ar/claveFiscal/adminRel/main.aspx';
 
 /**
+ * «Administración de puntos de venta y domicilios», donde el dueño da de alta
+ * el punto de venta de web services (paso 3 del wizard). TODO: reemplazar por
+ * la URL directa del servicio cuando la confirme el usuario desde su sesión
+ * de ARCA; mientras tanto lleva a «Mis servicios», donde está listado.
+ */
+export const ARCA_PUNTOS_DE_VENTA_URL = ARCA_MY_SERVICES_URL;
+
+/**
  * Contacto de soporte para cuando "Verificar" sigue fallando después de
  * revisar los pasos marcados. HOY es `null` a propósito: Parkit todavía no
  * tiene un canal de soporte para el dueño — el usuario lo va a definir más

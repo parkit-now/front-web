@@ -1,8 +1,4 @@
-import type {
-  ArcaAccount,
-  ArcaEnvironment,
-  ArcaTaxCondition,
-} from '../../../services/arca';
+import type { ArcaAccount, ArcaTaxCondition } from '../../../services/arca';
 import { validateArcaCuit } from './cuit';
 
 /**
@@ -232,35 +228,6 @@ export function validateArcaPtoVta(raw: string): string | null {
   const value = Number(trimmed);
   if (value < 1 || value > 99998) {
     return 'El punto de venta tiene que estar entre 1 y 99998';
-  }
-  return null;
-}
-
-/** Tamaño máximo de la constancia del punto de venta (PDF), en bytes. */
-export const ARCA_CONSTANCIA_MAX_BYTES = 5 * 1024 * 1024;
-
-/**
- * Valida el archivo de la constancia del punto de venta.
- *
- * Obligatoria SOLO en producción: en homologación el punto de venta ni
- * siquiera hace falta darlo de alta en ARCA, así que pedir la constancia ahí
- * sería un freno sin motivo.
- */
-export function validateArcaConstancia(input: {
-  file: { type: string; size: number } | null;
-  environment: ArcaEnvironment;
-}): string | null {
-  const { file, environment } = input;
-  if (!file) {
-    return environment === 'produccion'
-      ? 'Subí la constancia del punto de venta'
-      : null;
-  }
-  if (file.type !== 'application/pdf') {
-    return 'La constancia tiene que ser un PDF';
-  }
-  if (file.size > ARCA_CONSTANCIA_MAX_BYTES) {
-    return 'La constancia no puede pesar más de 5 MB';
   }
   return null;
 }

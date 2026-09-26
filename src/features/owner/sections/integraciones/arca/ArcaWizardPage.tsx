@@ -35,7 +35,6 @@ import {
   setArcaSalesPoint,
   updateArcaAccount,
   uploadArcaCertificate,
-  uploadArcaSalesPointConstancia,
   type ArcaAccount,
   type ArcaCertificateResult,
   type ArcaCsr,
@@ -49,7 +48,6 @@ import {
   resolveArcaStep2ViewMode,
   resolveArcaWizardStep,
   resolveClickableArcaWizardSteps,
-  validateArcaConstancia,
   validateArcaFiscalDataForm,
   validateArcaPtoVta,
   validateArcaStep1Form,
@@ -63,6 +61,7 @@ import { normalizeArcaCuit } from './cuit';
 import {
   ARCA_LOGIN_URL,
   ARCA_MY_SERVICES_URL,
+  ARCA_PUNTOS_DE_VENTA_URL,
   ARCA_ADMIN_RELACIONES_URL,
   SUPPORT_CONTACT,
 } from './links';
@@ -321,12 +320,8 @@ export function ArcaWizardPage() {
 
   // ── Paso 3: punto de venta ───────────────────────────────────────────────────
   const salesPointMutation = useMutation({
-    mutationFn: async (input: { ptoVta: number; constancia: File | null }) => {
-      if (input.constancia) {
-        await uploadArcaSalesPointConstancia(sucursalId, input.constancia);
-      }
-      return setArcaSalesPoint(sucursalId, { ptoVta: input.ptoVta });
-    },
+    mutationFn: (input: { ptoVta: number }) =>
+      setArcaSalesPoint(sucursalId, { ptoVta: input.ptoVta }),
     onSuccess: (result) => {
       syncAccount(result);
       showToast({ message: 'ARCA quedó vinculada.', kind: 'success' });
@@ -2157,34 +2152,19 @@ function Step3Form({
     condicionIva?: ArcaTaxCondition | null;
   };
   pending: boolean;
-  onSubmit: (values: { ptoVta: number; constancia: File | null }) => void;
+  onSubmit: (values: { ptoVta: number }) => void;
 }) {
   const [ptoVta, setPtoVta] = useState('');
-  const [file, setFile] = useState<File | null>(null);
-  const [errors, setErrors] = useState<{ ptoVta?: string; file?: string }>({});
-
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const selected = e.target.files?.[0] ?? null;
-    e.target.value = '';
-    setFile(selected);
-    if (errors.file) setErrors((prev) => ({ ...prev, file: undefined }));
-  }
+  const [error, setError] = useState<string | null>(null);
 
   function handleSubmit() {
     const ptoVtaError = validateArcaPtoVta(ptoVta);
-    const fileError = validateArcaConstancia({
-      file,
-      environment: account.environment,
-    });
-    if (ptoVtaError || fileError) {
-      setErrors({
-        ptoVta: ptoVtaError ?? undefined,
-        file: fileError ?? undefined,
-      });
+    if (ptoVtaError) {
+      setError(ptoVtaError);
       return;
     }
-    setErrors({});
-    onSubmit({ ptoVta: Number(ptoVta), constancia: file });
+    setError(null);
+    onSubmit({ ptoVta: Number(ptoVta) });
   }
 
   const posLabel =
@@ -2199,16 +2179,16 @@ function Step3Form({
           Punto de venta
         </h3>
         <p style={HINT}>
-          En ARCA: "Administración de puntos de venta y domicilios" → Agregar →{' '}
-          {posLabel}.
+          En ARCA, entrá a{' '}
+          <ArcaInlineLink href={ARCA_PUNTOS_DE_VENTA_URL}>
+            Administración de puntos de venta y domicilios
+          </ArcaInlineLink>{' '}
+          → <strong>Agregar</strong> → <strong>{posLabel}</strong>.
         </p>
-        <div style={{ marginTop: 8 }}>
-          <ArcaLoginLink />
-        </div>
         {account.environment === 'homologacion' ? (
           <p style={{ ...HINT, color: 'var(--text-3)', marginTop: 8 }}>
             En homologación no hace falta darlo de alta en ARCA: cualquier
-            número sirve para probar, y la constancia es opcional.
+            número sirve para probar.
           </p>
         ) : null}
       </div>
@@ -2219,41 +2199,13 @@ function Step3Form({
         inputMode="numeric"
         placeholder="3"
         value={ptoVta}
-        error={errors.ptoVta}
+        error={error ?? undefined}
         onChange={(e) => {
           setPtoVta(e.target.value);
-          if (errors.ptoVta)
-            setErrors((prev) => ({ ...prev, ptoVta: undefined }));
+          if (error) setError(null);
         }}
         disabled={pending}
       />
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <label className="pk-label">
-          Constancia del punto de venta (PDF, máx. 5 MB)
-          {account.environment === 'produccion' ? (
-            <RequiredMark />
-          ) : (
-            ' (opcional)'
-          )}
-        </label>
-        <input
-          type="file"
-          accept="application/pdf"
-          onChange={handleFileChange}
-          disabled={pending}
-        />
-        {file && (
-          <p style={{ ...HINT, color: 'var(--text-3)' }}>
-            Archivo cargado: {file.name}
-          </p>
-        )}
-        {errors.file && (
-          <p style={{ margin: 0, fontSize: 12, color: 'var(--err-text)' }}>
-            {errors.file}
-          </p>
-        )}
-      </div>
 
       <div style={ROW}>
         <Button variant="primary" loading={pending} onClick={handleSubmit}>

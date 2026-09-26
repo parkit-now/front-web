@@ -800,26 +800,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/tenants/{tenantId}/arca/account/sales-point/constancia": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Upload the sales point constancia (PDF, max 5MB)
-         * @description Raw PDF bytes (`Content-Type: application/pdf`). Required before step 3 in production only.
-         */
-        put: operations["arcaUploadSalesPointConstancia"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/tenants/{tenantId}/audit": {
         parameters: {
             query?: never;
@@ -2159,8 +2139,6 @@ export interface components {
             environment: components["schemas"]["ArcaEnvironment"];
             /** @description Si los datos fiscales se pueden cargar a mano (sólo homologación, donde el padrón no tiene los CUIT reales). */
             fiscalDataEditable: boolean;
-            /** @description Si se subió la constancia del punto de venta (obligatoria en producción). */
-            hasSalesPointConstancia: boolean;
             /** Format: uuid */
             id: string;
             iibb?: string | null;
@@ -7351,7 +7329,7 @@ export interface operations {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
-            /** @description ARCA_POS_NOT_FOUND, ARCA_POS_DISABLED, ARCA_POS_CONSTANCIA_REQUIRED, ARCA_PADRON_NOT_FOUND. */
+            /** @description ARCA_POS_NOT_FOUND, ARCA_POS_DISABLED, ARCA_PADRON_NOT_FOUND. */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7362,58 +7340,6 @@ export interface operations {
             };
             /** @description ARCA_UNAVAILABLE. */
             503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-        };
-    };
-    arcaUploadSalesPointConstancia: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description ID of the entity (parking lot / tenant). */
-                tenantId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/pdf": string;
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ArcaAccountDto"];
-                };
-            };
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description Not a member of the entity, or not an `owner` for a write operation. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetailsDto"];
-                };
-            };
-            /** @description ARCA_LINK_STEP_INVALID. */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };

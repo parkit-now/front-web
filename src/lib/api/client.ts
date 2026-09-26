@@ -55,14 +55,6 @@ export type RequestOptions = {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   path: string;
   body?: unknown;
-  /**
-   * Cuerpo crudo (no JSON), para endpoints que reciben un archivo tal cual —
-   * hoy sólo la constancia de punto de venta de ARCA, subida como
-   * `application/pdf` en vez de un DTO. Si se manda, `body` se ignora.
-   */
-  rawBody?: BodyInit;
-  /** `Content-Type` de `rawBody`. Ignorado si no hay `rawBody`. */
-  rawContentType?: string;
   bearer?: string;
 };
 
@@ -74,27 +66,17 @@ export async function apiRequest<TResponse>(
     Accept: 'application/json',
   };
 
-  if (options.rawBody !== undefined) {
-    headers['Content-Type'] =
-      options.rawContentType ?? 'application/octet-stream';
-  } else if (options.body !== undefined) {
+  if (options.body !== undefined) {
     headers['Content-Type'] = 'application/json';
   }
   if (options.bearer) {
     headers.Authorization = `Bearer ${options.bearer}`;
   }
 
-  const body =
-    options.rawBody !== undefined
-      ? options.rawBody
-      : options.body === undefined
-        ? undefined
-        : JSON.stringify(options.body);
-
   const response = await fetch(`${baseUrl}${options.path}`, {
     method: options.method,
     headers,
-    body,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
 
   if (response.status === 204) {

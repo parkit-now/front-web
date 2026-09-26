@@ -165,28 +165,9 @@ export async function reuseArcaCertificate(
 }
 
 /**
- * PUT /tenants/:tenantId/arca/account/sales-point/constancia — solo owner.
- * Sube la constancia del punto de venta como bytes crudos de PDF (máx 5 MB),
- * no como un DTO JSON. Obligatoria sólo en producción antes del alta del
- * punto de venta (`ARCA_POS_CONSTANCIA_REQUIRED` si falta).
- */
-export async function uploadArcaSalesPointConstancia(
-  tenantId: string,
-  file: Blob,
-): Promise<ArcaAccount> {
-  return apiRequest<ArcaAccount>({
-    method: 'PUT',
-    path: `/tenants/${tenantId}/arca/account/sales-point/constancia`,
-    rawBody: file,
-    rawContentType: 'application/pdf',
-    bearer: await bearer(),
-  });
-}
-
-/**
  * POST /tenants/:tenantId/arca/account/sales-point — solo owner. Da de alta el
  * punto de venta y, si sale bien, deja la cuenta `linked`. Errores 422:
- * `ARCA_POS_NOT_FOUND`, `ARCA_POS_DISABLED`, `ARCA_POS_CONSTANCIA_REQUIRED`,
+ * `ARCA_POS_NOT_FOUND`, `ARCA_POS_DISABLED`,
  * `ARCA_PADRON_NOT_FOUND`. 503 `ARCA_UNAVAILABLE`.
  */
 export async function setArcaSalesPoint(
