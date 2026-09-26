@@ -2136,8 +2136,6 @@ function FiscalDataForm({
               <p style={{ margin: 0 }}>
                 Con esta condición emitís{' '}
                 <strong>{describeInvoiceLetters(values.condicionIva)}</strong>.
-                Revisá que coincida con tu constancia de inscripción: define la
-                letra de todas tus facturas.
               </p>
             )}
           </>
