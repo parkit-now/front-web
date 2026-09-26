@@ -17,6 +17,7 @@ import {
 import {
   canIssueInvoice,
   formatIsoDay,
+  formatVoucherNumber,
   INVOICE_STATE_LABEL,
   INVOICE_STATE_VARIANT,
   receiverDescription,
@@ -99,7 +100,12 @@ export function InvoiceDetail({
     if (!invoice) return;
     setBusy('pdf');
     try {
-      const { blob, fileName } = await downloadInvoicePdf(tenantId, invoice.id);
+      const number = formatVoucherNumber(invoice.ptoVta, invoice.cbteNro);
+      const { blob, fileName } = await downloadInvoicePdf(
+        tenantId,
+        invoice.id,
+        [row.plate, invoice.cae, number].filter(Boolean).join('-'),
+      );
       saveBlob(blob, fileName);
     } catch (error) {
       showToast({

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { pdfFileName } from '../../services/invoices';
 import {
   canIssueInvoice,
   countInvoiceChips,
@@ -69,5 +70,19 @@ describe('canIssueInvoice', () => {
     expect(canIssueInvoice('error', true)).toBe(true);
     expect(canIssueInvoice('issued', true)).toBe(false);
     expect(canIssueInvoice('none', false)).toBe(false);
+  });
+});
+
+describe('pdfFileName', () => {
+  it('siempre termina en .pdf', () => {
+    expect(pdfFileName('AB123CD-86390928613357-0001-00000006.pdf', 'x')).toBe(
+      'AB123CD-86390928613357-0001-00000006.pdf',
+    );
+    expect(pdfFileName('AB123CD-863-0001-00000006', 'x')).toBe(
+      'AB123CD-863-0001-00000006.pdf',
+    );
+    expect(pdfFileName(null, 'AB123CD-863-0001-00000006')).toBe(
+      'AB123CD-863-0001-00000006.pdf',
+    );
   });
 });

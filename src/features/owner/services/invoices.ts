@@ -94,17 +94,33 @@ export async function issueInvoiceBatch(
   return results;
 }
 
-/** GET /tenants/:tenantId/invoices/:invoiceId/pdf — sólo facturas emitidas. */
+/** Siempre termina en `.pdf`, venga como venga el nombre. */
+export function pdfFileName(name: string | null, fallback: string): string {
+  const base = (name ?? '').trim() || fallback;
+  return /\.pdf$/i.test(base) ? base : `${base}.pdf`;
+}
+
+/**
+ * GET /tenants/:tenantId/invoices/:invoiceId/pdf — sólo facturas emitidas.
+ * El nombre (`PATENTE-CAE-0001-00000006.pdf`) lo arma el backend; `fallback`
+ * es por si el header no llega.
+ */
 export async function downloadInvoicePdf(
   tenantId: string,
   invoiceId: string,
+  fallback: string,
 ): Promise<{ blob: Blob; fileName: string }> {
   const { blob, fileName } = await apiRequestFile({
     method: 'GET',
     path: `/tenants/${encodeURIComponent(tenantId)}/invoices/${encodeURIComponent(invoiceId)}/pdf`,
     bearer: await bearer(),
   });
-  return { blob, fileName: fileName ?? 'factura.pdf' };
+  return {
+    // Con el tipo explícito el navegador lo guarda y lo abre como PDF aunque
+    // la respuesta llegue sin `Content-Type`.
+    blob: new Blob([blob], { type: 'application/pdf' }),
+    fileName: pdfFileName(fileName, fallback),
+  };
 }
 
 /**
