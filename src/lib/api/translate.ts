@@ -279,6 +279,8 @@ const CODE_MESSAGES: Record<string, string> = {
   ARCA_POS_NOT_FOUND:
     'El punto de venta no existe en ARCA o no es de web services.',
   ARCA_POS_DISABLED: 'El punto de venta está bloqueado o dado de baja en ARCA.',
+  ARCA_FISCAL_DATA_INCOMPLETE:
+    'Faltan Ingresos Brutos o la fecha de inicio de actividades: van impresos en la factura.',
 
   // Facturas emitidas por ARCA a partir de un cobro (ver front-desktop, que es
   // quien las emite). Se traducen acá también porque los errores de la cuenta

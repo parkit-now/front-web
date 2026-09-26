@@ -2524,8 +2524,11 @@ export interface components {
              * @example 20-12345678-3
              */
             cuit: string;
-            /** @example 901-123456-7 */
-            iibb?: string;
+            /**
+             * @description Número de inscripción en Ingresos Brutos, o la condición si no está inscripto («Exento», «No contribuyente»). Va impreso en la factura (RG 1415, Anexo II).
+             * @example 901-123456-7
+             */
+            iibb: string;
         };
         CreateCashSessionDto: {
             /**
@@ -4314,6 +4317,12 @@ export interface components {
             tokenType: string;
         };
         SetArcaSalesPointDto: {
+            /**
+             * Format: date
+             * @description Fecha de inicio de actividades: va impresa en la factura (RG 1415). Obligatoria si la cuenta todavía no la tiene.
+             * @example 2020-01-01
+             */
+            inicioActividad?: string;
             /** @example 3 */
             ptoVta: number;
         };
@@ -4590,6 +4599,11 @@ export interface components {
             condicionIva?: components["schemas"]["ArcaTaxCondition"];
             /** @description Sólo homologación (`fiscalDataEditable`). */
             domicilioFiscal?: string;
+            /**
+             * @description Número de inscripción en Ingresos Brutos, o la condición si no está inscripto («Exento», «No contribuyente»). Va impreso en la factura (RG 1415, Anexo II).
+             * @example 901-123456-7
+             */
+            iibb?: string;
             /**
              * Format: date
              * @description Va impresa en la factura. Editable en cualquier entorno.

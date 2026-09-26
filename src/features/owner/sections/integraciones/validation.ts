@@ -198,6 +198,30 @@ export function formatArcaCertDate(iso: string | null | undefined): string {
   return Number.isNaN(date.getTime()) ? '' : AR_DATE.format(date);
 }
 
+/**
+ * Faltan datos que van impresos en la factura (RG 1415, Anexo II): Ingresos
+ * Brutos y fecha de inicio de actividades. Una cuenta vinculada antes de que
+ * fueran obligatorios puede no tenerlos.
+ */
+export function isArcaInvoiceDataMissing(
+  account: Pick<ArcaAccount, 'iibb' | 'inicioActividad'>,
+): boolean {
+  return !account.iibb?.trim() || !account.inicioActividad;
+}
+
+/** Mensaje del campo Ingresos Brutos, o `null` si está bien. */
+export function validateArcaIibb(raw: string): string | null {
+  return raw.trim()
+    ? null
+    : 'Ingresá tu número de Ingresos Brutos, o «Exento» si no estás inscripto';
+}
+
+/** Mensaje del campo inicio de actividades (AAAA-MM-DD), o `null`. */
+export function validateArcaInicioActividad(raw: string): string | null {
+  if (!raw) return 'Ingresá la fecha de inicio de actividades';
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? null : 'La fecha no es válida';
+}
+
 /** Condición frente al IVA, en castellano, para mostrar en la tarjeta y el wizard. */
 export const ARCA_TAX_CONDITION_LABELS: Record<
   NonNullable<ArcaAccount['condicionIva']>,
