@@ -44,7 +44,7 @@ describe('countInvoiceChips', () => {
       ['pending', 'none', 'error', 'issued', 'manual', 'na'] as const
     ).map((invoiceState) => ({ invoiceState }));
 
-    expect(countInvoiceChips(rows)).toEqual({ all: 6, unbilled: 3, error: 1 });
+    expect(countInvoiceChips(rows)).toEqual({ all: 6, unbilled: 3 });
   });
 });
 

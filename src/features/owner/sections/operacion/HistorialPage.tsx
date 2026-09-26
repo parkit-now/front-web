@@ -87,7 +87,6 @@ const INVOICE_LETTER_OPTIONS = (['A', 'B', 'C'] as const).map((letter) => ({
 const INVOICE_CHIPS: ReadonlyArray<{ id: InvoiceChip; label: string }> = [
   { id: 'all', label: 'Todas' },
   { id: 'unbilled', label: 'Sin facturar' },
-  { id: 'error', label: 'Con error' },
 ];
 
 const moneySorting: SortingFn<EntryHistoryRow> = (left, right) => {
