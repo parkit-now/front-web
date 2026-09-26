@@ -24,6 +24,7 @@ import {
 import { fmtDateTimeAr, fmtMoney } from '../../../../shared/utils/fmt';
 import { useSucursal } from '../../context/SucursalContext';
 import { useArcaAccount } from '../../hooks/useArcaAccount';
+import type { ArcaTaxCondition } from '../../services/arca';
 import { listAllCashSessions } from '../../services/cash-sessions';
 import {
   issueInvoiceBatch,
@@ -183,6 +184,7 @@ function EntryDetailDrawer({
   cashSessionName,
   tenantId,
   arca,
+  emitter,
   onInvoiceChanged,
   onClose,
 }: {
@@ -190,6 +192,7 @@ function EntryDetailDrawer({
   cashSessionName: string | null;
   tenantId: string;
   arca: ArcaInvoicing;
+  emitter: ArcaTaxCondition | null;
   onInvoiceChanged: () => void;
   onClose: () => void;
 }) {
@@ -249,6 +252,7 @@ function EntryDetailDrawer({
               row={row}
               tenantId={tenantId}
               arca={arca}
+              emitter={emitter}
               onChanged={onInvoiceChanged}
             />
           ) : null}
@@ -790,6 +794,7 @@ export function HistorialPage() {
         }
         tenantId={sucursalId}
         arca={arca}
+        emitter={arcaQuery.data?.condicionIva ?? null}
         onInvoiceChanged={refreshInvoicing}
         onClose={() => setSelectedId(null)}
       />

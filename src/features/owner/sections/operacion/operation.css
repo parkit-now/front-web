@@ -413,7 +413,8 @@
   font-family: var(--mono);
 }
 
-.operation-invoice-chip[aria-pressed='true'] {
+.operation-invoice-chip[aria-pressed='true'],
+.operation-invoice-chip[aria-checked='true'] {
   border-color: var(--brand);
   background: var(--brand-soft);
   color: var(--brand);
@@ -438,6 +439,48 @@
 
 .operation-invoice {
   margin-top: 22px;
+}
+
+/* «Emitir factura»: receptor, lo que dijo el padrón y los botones. */
+.operation-invoice-issue {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.operation-invoice-receiver {
+  display: grid;
+  gap: 8px;
+}
+
+.operation-invoice-receiver .operation-invoice-chips {
+  margin: 0;
+}
+
+.operation-invoice-lookup {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.operation-invoice-lookup small {
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.operation-invoice-lookup.is-success {
+  color: var(--ok-text);
+}
+
+.operation-invoice-lookup.is-warning {
+  color: var(--warn-text);
+}
+
+.operation-invoice-lookup.is-info {
+  color: var(--text-2);
 }
 
 .operation-invoice-error {

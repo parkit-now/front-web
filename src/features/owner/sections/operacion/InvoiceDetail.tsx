@@ -9,13 +9,16 @@ import { Badge } from '../../../../shared/components/ui/Badge';
 import { Button } from '../../../../shared/components/ui/Button';
 import { Switch } from '../../../../shared/components/ui/Switch';
 import { saveBlob } from '../../../../shared/utils/download';
+import type { ArcaTaxCondition } from '../../services/arca';
 import {
   downloadInvoicePdf,
   issueInvoice,
   setEntryManuallyInvoiced,
 } from '../../services/invoices';
+import { InvoiceReceiverChooser } from './InvoiceReceiverChooser';
 import {
   canIssueInvoice,
+  expectedLetter,
   formatIsoDay,
   formatVoucherNumber,
   INVOICE_STATE_LABEL,
@@ -24,6 +27,7 @@ import {
   voucherLabel,
 } from './invoiceUtils';
 import type { EntryHistoryRow } from './operationUtils';
+import { useInvoiceReceiver } from './useInvoiceReceiver';
 
 /** Cómo factura la sede: con ARCA (vinculada o con el certificado vencido) o no. */
 export type ArcaInvoicing = 'linked' | 'cert_expired' | 'none';
@@ -52,15 +56,26 @@ export function InvoiceDetail({
   row,
   tenantId,
   arca,
+  emitter,
   onChanged,
 }: {
   row: EntryHistoryRow;
   tenantId: string;
   arca: ArcaInvoicing;
+  /** Condición IVA de la sede: decide la letra a consumidor final. */
+  emitter: ArcaTaxCondition | null;
   onChanged: () => void;
 }) {
   const { showToast } = useToast();
   const [busy, setBusy] = useState<'issue' | 'pdf' | 'manual' | null>(null);
+  // «Emitir factura» abre primero el receptor (consumidor final o CUIT).
+  const [issueOpen, setIssueOpen] = useState(false);
+  const receiver = useInvoiceReceiver(tenantId);
+  const letter = expectedLetter({
+    emitter,
+    choice: receiver.choice,
+    lookup: receiver.lookup,
+  });
   const { invoice, invoiceState } = row;
   const voucher = invoice ? voucherLabel(invoice) : null;
   const hasVoucher = invoiceState === 'issued' || invoiceState === 'issuing';
@@ -73,9 +88,10 @@ export function InvoiceDetail({
   async function issue() {
     setBusy('issue');
     try {
-      const result = await issueInvoice(tenantId, row.id);
+      const result = await issueInvoice(tenantId, row.id, receiver.cuitToSend);
       const label = voucherLabel(result) ?? 'La factura';
       if (result.status === 'issued') {
+        setIssueOpen(false);
         showToast({ message: `${label} emitida.`, kind: 'success' });
       } else {
         showToast({
@@ -192,6 +208,34 @@ export function InvoiceDetail({
         </div>
       ) : null}
 
+      {showIssue && issueOpen ? (
+        <div className="operation-invoice-issue">
+          <InvoiceReceiverChooser
+            receiver={receiver}
+            emitter={emitter}
+            disabled={busy !== null}
+          />
+          <div className="operation-invoice-actions">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy !== null}
+              onClick={() => setIssueOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              loading={busy === 'issue'}
+              disabled={busy !== null || !receiver.ready}
+              onClick={() => void issue()}
+            >
+              {letter ? `Emitir Factura ${letter}` : 'Emitir factura'}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="operation-invoice-actions">
         {invoiceState === 'issued' ? (
           <Button
@@ -204,16 +248,13 @@ export function InvoiceDetail({
             Descargar PDF
           </Button>
         ) : null}
-        {showIssue ? (
+        {showIssue && !issueOpen ? (
           <Button
             size="sm"
-            loading={busy === 'issue'}
             disabled={busy !== null}
-            onClick={() => void issue()}
+            onClick={() => setIssueOpen(true)}
           >
-            {invoiceState === 'error'
-              ? 'Reintentar'
-              : 'Emitir factura a consumidor final'}
+            {invoiceState === 'error' ? 'Reintentar' : 'Emitir factura'}
           </Button>
         ) : null}
         {showManual ? (

@@ -7,6 +7,8 @@ export type Invoice = components['schemas']['InvoiceDto'];
 export type InvoiceSummary = components['schemas']['InvoiceSummaryDto'];
 export type InvoiceStatus = components['schemas']['InvoiceStatus'];
 export type InvoiceBatchResult = components['schemas']['InvoiceBatchItemDto'];
+export type Taxpayer = components['schemas']['TaxpayerDto'];
+export type InvoiceReceiver = components['schemas']['InvoiceReceiverDto'];
 type InvoiceChangesResponse =
   components['schemas']['InvoiceChangesResponseDto'];
 type InvoiceBatchResponse = components['schemas']['InvoiceBatchResponseDto'];
@@ -56,19 +58,48 @@ export async function listInvoices(tenantId: string): Promise<Invoice[]> {
 
 /**
  * POST /tenants/:tenantId/entries/:entryId/invoice — emite (o reintenta) a
- * consumidor final. Que ARCA esté caída o rechace NO es un error HTTP: vuelve
- * en `status`/`errorCode` de la factura. Sí tiran los conflictos
+ * consumidor final o, con `receiverCuit`, identificada con ese CUIT (la letra
+ * la decide el padrón). Que ARCA esté caída o rechace NO es un error HTTP:
+ * vuelve en `status`/`errorCode` de la factura. Sí tiran los conflictos
  * (`INVOICE_ALREADY_ISSUED`, `INVOICE_IN_PROGRESS`, `INVOICE_NOT_INVOICEABLE`,
  * `ARCA_NOT_LINKED`).
  */
 export async function issueInvoice(
   tenantId: string,
   entryId: string,
+  receiverCuit?: string,
 ): Promise<InvoiceSummary> {
   return apiRequest<InvoiceSummary>({
     method: 'POST',
     path: `/tenants/${encodeURIComponent(tenantId)}/entries/${encodeURIComponent(entryId)}/invoice`,
-    body: {},
+    body: receiverCuit ? { receiverCuit } : {},
+    bearer: await bearer(),
+  });
+}
+
+/**
+ * GET /tenants/:tenantId/arca/taxpayers/:cuit — qué factura sale con este
+ * CUIT según el padrón de ARCA (con caché en el backend). 422
+ * `ARCA_CUIT_INVALID`, 503 `ARCA_UNAVAILABLE`.
+ */
+export async function lookupTaxpayer(
+  tenantId: string,
+  cuit: string,
+): Promise<Taxpayer> {
+  return apiRequest<Taxpayer>({
+    method: 'GET',
+    path: `/tenants/${encodeURIComponent(tenantId)}/arca/taxpayers/${encodeURIComponent(cuit)}`,
+    bearer: await bearer(),
+  });
+}
+
+/** GET /tenants/:tenantId/invoice-receivers — CUIT ya facturados en la sede. */
+export async function listInvoiceReceivers(
+  tenantId: string,
+): Promise<InvoiceReceiver[]> {
+  return apiRequest<InvoiceReceiver[]>({
+    method: 'GET',
+    path: `/tenants/${encodeURIComponent(tenantId)}/invoice-receivers?limit=20`,
     bearer: await bearer(),
   });
 }
