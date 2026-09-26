@@ -60,6 +60,7 @@ import {
 import { normalizeArcaCuit } from './cuit';
 import {
   ARCA_LOGIN_URL,
+  ARCA_MY_SERVICES_URL,
   ARCA_ADMIN_RELACIONES_URL,
   SUPPORT_CONTACT,
 } from './links';
@@ -1465,7 +1466,7 @@ function Step2Upload({
         <>
           <p style={HINT}>
             En{' '}
-            <ArcaInlineLink href={ARCA_ADMIN_RELACIONES_URL}>
+            <ArcaInlineLink href={ARCA_MY_SERVICES_URL}>
               Mis servicios
             </ArcaInlineLink>{' '}
             buscá <strong>WSASS – Autogestión Certificados Homologación</strong>{' '}
@@ -1515,7 +1516,11 @@ function Step2Upload({
               </li>
               <li style={HINT}>
                 <strong>Cerrá la sesión y volvé a entrar</strong>: WSASS va a
-                aparecer en Mis servicios.
+                aparecer en{' '}
+                <ArcaInlineLink href={ARCA_MY_SERVICES_URL}>
+                  Mis servicios
+                </ArcaInlineLink>
+                .
               </li>
             </ol>
           </Disclosure>
@@ -1680,7 +1685,7 @@ function Step2Upload({
         <>
           <p style={HINT}>
             En{' '}
-            <ArcaInlineLink href={ARCA_ADMIN_RELACIONES_URL}>
+            <ArcaInlineLink href={ARCA_MY_SERVICES_URL}>
               Mis servicios
             </ArcaInlineLink>{' '}
             buscá <strong>Administración de Certificados Digitales</strong> y
@@ -1704,7 +1709,12 @@ function Step2Upload({
                 confirmá con <strong>Continuar</strong>.
               </li>
               <li style={HINT}>
-                <strong>Cerrá la sesión y volvé a entrar.</strong>
+                <strong>Cerrá la sesión y volvé a entrar</strong>: el servicio
+                va a aparecer en{' '}
+                <ArcaInlineLink href={ARCA_MY_SERVICES_URL}>
+                  Mis servicios
+                </ArcaInlineLink>
+                .
               </li>
             </ol>
           </Disclosure>

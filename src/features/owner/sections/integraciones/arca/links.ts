@@ -14,6 +14,15 @@ export const ARCA_LOGIN_URL =
   'https://auth.afip.gob.ar/contribuyente_/login.xhtml';
 
 /**
+ * «Mis servicios» del portal de ARCA: la pantalla a la que te deja el login,
+ * con la lista de servicios adheridos (WSASS, Administración de Certificados
+ * Digitales...). Sin sesión, redirige al login. Sale de la navegación real
+ * del portal; si ARCA la cambia, se ajusta acá.
+ */
+export const ARCA_MY_SERVICES_URL =
+  'https://portalcf.cloud.afip.gob.ar/portal/app/';
+
+/**
  * Administrador de Relaciones de Clave Fiscal: desde acá se adhieren los
  * servicios (WSASS, Administración de Certificados Digitales) y se asocian
  * los web services al certificado en producción. Con la sesión del portal
