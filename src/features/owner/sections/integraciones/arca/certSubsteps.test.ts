@@ -8,6 +8,7 @@ import {
   resolveOpenCertSubstep,
   resolvePreviousCertSubstep,
   type CertProgress,
+  toggleExpandedCertSubstep,
 } from './certSubsteps';
 
 describe('resolveOpenCertSubstep', () => {
@@ -231,5 +232,21 @@ describe('resolvePreviousCertSubstep', () => {
     [6, 5],
   ] as const)('el anterior a %i es %i', (id, previous) => {
     expect(resolvePreviousCertSubstep(id)).toBe(previous);
+  });
+});
+
+describe('toggleExpandedCertSubstep', () => {
+  const progress: CertProgress = { completed: [1, 2], errorSubstep: null };
+
+  it('abre un sub-paso disponible sin cerrar los otros', () => {
+    expect(toggleExpandedCertSubstep([3], 1, progress)).toEqual([3, 1]);
+  });
+
+  it('cierra un sub-paso abierto, incluido el actual', () => {
+    expect(toggleExpandedCertSubstep([3, 1], 3, progress)).toEqual([1]);
+  });
+
+  it('un sub-paso bloqueado no se abre', () => {
+    expect(toggleExpandedCertSubstep([3], 5, progress)).toEqual([3]);
   });
 });

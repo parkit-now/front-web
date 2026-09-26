@@ -96,6 +96,21 @@ export function resolvePreviousCertSubstep(
   return index > 0 ? CERT_SUBSTEP_IDS[index - 1] : null;
 }
 
+/**
+ * Abre o cierra UN sub-paso del acordeón, sin tocar los demás: el dueño
+ * puede tener varios abiertos a la vez para comparar (por ejemplo, releer el
+ * 3 mientras completa el 5). Un sub-paso bloqueado no se abre nunca.
+ */
+export function toggleExpandedCertSubstep(
+  expanded: readonly CertSubstepId[],
+  id: CertSubstepId,
+  progress: CertProgress,
+): CertSubstepId[] {
+  if (expanded.includes(id)) return expanded.filter((x) => x !== id);
+  if (resolveCertSubstepState(id, progress) === 'locked') return [...expanded];
+  return [...expanded, id];
+}
+
 /** Estado visual de UN sub-paso puntual, para pintar su título. */
 export function resolveCertSubstepState(
   id: CertSubstepId,

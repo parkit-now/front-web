@@ -11,7 +11,9 @@ import {
   IconAlert,
   IconCheck,
   IconCheckCircle,
+  IconChevronDown,
   IconChevronLeft,
+  IconChevronRight,
   IconDownload,
   IconExternalLink,
   IconXCircle,
@@ -65,6 +67,7 @@ import {
   resolveCertSubstepState,
   resolveCertVerifyErrorEffect,
   resolveOpenCertSubstep,
+  toggleExpandedCertSubstep,
   resolvePreviousCertSubstep,
   saveCertProgress,
   type CertProgress,
@@ -530,7 +533,7 @@ export function ArcaWizardPage() {
                     // ejemplo, si el certificado venía de "reutilizar el de
                     // otra sede", sin pasar por el acordeón). No se persiste:
                     // es sólo para ESTA pantalla.
-                    progress={{ completed: [1, 2, 3], errorSubstep: null }}
+                    progress={REISSUE_CERT_PROGRESS}
                     verifyError={certVerifyError}
                     onSubstepDone={handleCertSubstepDone}
                     onReuse={() => {
@@ -1133,16 +1136,29 @@ interface CertSubstepDef {
 }
 
 /**
- * El acordeón de sub-pasos: sólo uno abierto a la vez, y bloqueado en
- * secuencia (no se puede abrir el N+1 sin completar el N). El estado de cada
- * título lo decide `resolveCertSubstepState` (`certSubsteps.ts`), puro y
- * testeado; acá sólo se pinta.
+ * El acordeón de sub-pasos, bloqueado en secuencia (no se puede abrir el N+1
+ * sin completar el N). Cada sub-paso disponible (completado o el actual) se
+ * abre y se cierra por separado con su título; los bloqueados no. El estado
+ * de cada título lo decide `resolveCertSubstepState` (`certSubsteps.ts`),
+ * puro y testeado; acá sólo se pinta.
  *
- * "Volver" (2 a 5) es un override LOCAL, igual que reabrir un completado
- * para mirarlo: NO toca el progreso (no descompleta nada), sólo cambia cuál
- * sub-paso está abierto. Por eso vive acá y no en `certSubsteps.ts` más allá
- * de `resolvePreviousCertSubstep`, que sólo calcula el número.
+ * Lo abierto es estado LOCAL: no toca el progreso. Cuando el progreso cambia
+ * (se completó un sub-paso, o volvió un error de "Verificar") se cierra todo
+ * y queda abierto sólo el sub-paso natural, para guiar al siguiente. "Volver"
+ * hace lo mismo con el anterior.
  */
+/**
+ * Progreso con el que se abre el acordeón al "Cargar otro certificado":
+ * los sub-pasos 1–3 dados por hechos, arranca en el 4. Constante de módulo y
+ * no un literal en el JSX: el acordeón reinicia lo abierto cuando cambia la
+ * referencia del progreso, y un literal nuevo en cada render lo reiniciaría
+ * siempre.
+ */
+const REISSUE_CERT_PROGRESS: CertProgress = {
+  completed: [1, 2, 3],
+  errorSubstep: null,
+};
+
 function CertSubstepAccordion({
   substeps,
   progress,
@@ -1155,19 +1171,16 @@ function CertSubstepAccordion({
     culpritSubstep: CertSubstepId | null;
   } | null;
 }) {
-  // Abrir un sub-paso ya completado para releerlo (o "Volver") es un override
-  // LOCAL: en cuanto el progreso cambia (se completó otro, o hubo un error
-  // nuevo) gana de nuevo el sub-paso natural.
-  const [manualOpen, setManualOpen] = useState<CertSubstepId | null>(null);
+  const [expanded, setExpanded] = useState<CertSubstepId[]>(() => [
+    resolveOpenCertSubstep(progress),
+  ]);
   useEffect(() => {
-    setManualOpen(null);
+    setExpanded([resolveOpenCertSubstep(progress)]);
   }, [progress]);
-
-  const openId = manualOpen ?? resolveOpenCertSubstep(progress);
 
   function handleBack(id: CertSubstepId) {
     const previous = resolvePreviousCertSubstep(id);
-    if (previous !== null) setManualOpen(previous);
+    if (previous !== null) setExpanded([previous]);
   }
 
   return (
@@ -1175,7 +1188,7 @@ function CertSubstepAccordion({
       {substeps.map((s) => {
         const state = resolveCertSubstepState(s.id, progress);
         const locked = state === 'locked';
-        const isOpen = openId === s.id;
+        const isOpen = expanded.includes(s.id);
         return (
           <div
             key={s.id}
@@ -1187,7 +1200,11 @@ function CertSubstepAccordion({
           >
             <button
               type="button"
-              onClick={() => !locked && setManualOpen(s.id)}
+              onClick={() =>
+                setExpanded((prev) =>
+                  toggleExpandedCertSubstep(prev, s.id, progress),
+                )
+              }
               disabled={locked}
               aria-expanded={isOpen}
               style={{
@@ -1212,6 +1229,18 @@ function CertSubstepAccordion({
               >
                 {s.title}
               </span>
+              {!locked && (
+                <span
+                  aria-hidden
+                  style={{ marginLeft: 'auto', color: 'var(--text-3)' }}
+                >
+                  {isOpen ? (
+                    <IconChevronDown size={16} />
+                  ) : (
+                    <IconChevronRight size={16} />
+                  )}
+                </span>
+              )}
             </button>
             {isOpen && (
               <div
