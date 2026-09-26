@@ -1,4 +1,6 @@
-import type { Invoice } from '../../services/invoices';
+import type { ArcaTaxCondition } from '../../services/arca';
+import type { Invoice, Taxpayer } from '../../services/invoices';
+import { isValidArcaCuit, normalizeArcaCuit } from '../integraciones/arca/cuit';
 
 // OJO: `formatVoucherNumber`, `invoiceLetter` y `resolveInvoiceState` están
 // duplicadas en front-desktop (`src/features/entries/invoiceUtils.ts`). Si
@@ -180,4 +182,151 @@ export function receiverDescription(
 export function pdfFileName(name: string | null, fallback: string): string {
   const base = (name ?? '').trim() || fallback;
   return /\.pdf$/i.test(base) ? base : `${base}.pdf`;
+}
+
+// ── Receptor: consumidor final o con CUIT ──────────────────────────────────
+// Gemelo del cobro del desktop (`front-desktop/src/features/entries/
+// invoiceUtils.ts`): si cambia acá, cambiar allá.
+
+export type InvoiceLetter = 'A' | 'B' | 'C';
+
+/** A quién se factura: consumidor final (la de siempre) o el CUIT del cliente. */
+export type ReceiverChoice = 'final' | 'cuit';
+
+/** La letra a consumidor final: B si la sede es RI; C si no. */
+export function consumerFinalLetter(
+  emitter: ArcaTaxCondition | null | undefined,
+): InvoiceLetter {
+  return emitter === 'responsable_inscripto' ? 'B' : 'C';
+}
+
+/** Cómo va la consulta al padrón del CUIT tipeado. */
+export type TaxpayerLookup =
+  | { readonly status: 'idle' }
+  | { readonly status: 'loading' }
+  | { readonly status: 'done'; readonly taxpayer: Taxpayer }
+  | { readonly status: 'error'; readonly message: string };
+
+/** `30712345671` → `30-71234567-1`. */
+export function formatCuit(raw: string): string {
+  const cuit = normalizeArcaCuit(raw);
+  return cuit.length === 11
+    ? `${cuit.slice(0, 2)}-${cuit.slice(2, 10)}-${cuit.slice(10)}`
+    : raw;
+}
+
+/** Mensaje del campo CUIT, o `null` si está bien. */
+export function receiverCuitError(raw: string): string | null {
+  const cuit = normalizeArcaCuit(raw);
+  if (cuit.length === 0) return 'Ingresá el CUIT del cliente.';
+  if (!isValidArcaCuit(cuit)) return 'El CUIT no es válido.';
+  return null;
+}
+
+/**
+ * El receptor que se manda al backend, o `undefined` = consumidor final.
+ *
+ * - Un CUIT que ARCA no tiene (producción) no se manda: la factura va a
+ *   consumidor final, como ya se le avisó al dueño.
+ * - Si la consulta falló (ARCA caída) se manda igual: el backend vuelve a
+ *   consultar al emitir y, si sigue caída, la factura queda para reintentar.
+ */
+export function receiverCuitToSend(input: {
+  readonly choice: ReceiverChoice;
+  readonly cuit: string;
+  readonly lookup: TaxpayerLookup;
+}): string | undefined {
+  if (input.choice !== 'cuit') return undefined;
+  const cuit = normalizeArcaCuit(input.cuit);
+  if (!isValidArcaCuit(cuit)) return undefined;
+  if (input.lookup.status === 'done' && !input.lookup.taxpayer.identified) {
+    return undefined;
+  }
+  return cuit;
+}
+
+/**
+ * Si ya se puede emitir: a consumidor final siempre; con CUIT, cuando es
+ * válido y la consulta al padrón terminó (bien o mal).
+ */
+export function isReceiverReady(input: {
+  readonly choice: ReceiverChoice;
+  readonly cuit: string;
+  readonly lookup: TaxpayerLookup;
+}): boolean {
+  if (input.choice === 'final') return true;
+  return (
+    isValidArcaCuit(input.cuit) &&
+    (input.lookup.status === 'done' || input.lookup.status === 'error')
+  );
+}
+
+/**
+ * La letra que va a salir, para el botón. `null` si no se sabe todavía: con
+ * CUIT y sin respuesta del padrón (una sede RI puede emitir A o B).
+ */
+export function expectedLetter(input: {
+  readonly emitter: ArcaTaxCondition | null | undefined;
+  readonly choice: ReceiverChoice;
+  readonly lookup: TaxpayerLookup;
+}): InvoiceLetter | null {
+  const consumer = consumerFinalLetter(input.emitter);
+  if (input.choice === 'final' || consumer === 'C') return consumer;
+  return input.lookup.status === 'done' ? input.lookup.taxpayer.letter : null;
+}
+
+export interface TaxpayerNotice {
+  readonly tone: 'success' | 'info' | 'warning';
+  readonly text: string;
+  readonly detail?: string;
+}
+
+/**
+ * La línea debajo del CUIT con lo que dijo el padrón: qué letra sale y a
+ * quién. `null` mientras no hay nada que decir.
+ */
+export function describeTaxpayerLookup(
+  lookup: TaxpayerLookup,
+): TaxpayerNotice | null {
+  switch (lookup.status) {
+    case 'idle':
+      return null;
+    case 'loading':
+      return { tone: 'info', text: 'Consultando ARCA…' };
+    case 'error':
+      return {
+        tone: 'warning',
+        text: lookup.message,
+        detail: 'Se vuelve a consultar al emitir.',
+      };
+    case 'done': {
+      const t = lookup.taxpayer;
+      if (!t.identified) {
+        return {
+          tone: 'warning',
+          text: 'ARCA no tiene datos de ese CUIT.',
+          detail: `Se emite Factura ${t.letter} a consumidor final.`,
+        };
+      }
+      const who = t.razonSocial ?? `CUIT ${formatCuit(t.cuit)}`;
+      if (t.assumed) {
+        return {
+          tone: 'info',
+          text: `Factura ${t.letter} · ${who}`,
+          detail:
+            'Homologación: ARCA no tiene datos de prueba de este CUIT, se toma como Responsable Inscripto.',
+        };
+      }
+      // Una sede RI que no puede emitir A (receptor exento, consumidor
+      // final): se aclara por qué sale B, que es lo que el cliente no espera.
+      return {
+        tone: t.letter === 'B' ? 'info' : 'success',
+        text: `Factura ${t.letter} · ${who}`,
+        detail:
+          t.letter === 'B' && t.condicionIva
+            ? `${t.condicionIva}: no recibe Factura A.`
+            : (t.condicionIva ?? undefined),
+      };
+    }
+  }
 }
