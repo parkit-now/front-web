@@ -129,7 +129,7 @@ export function ArcaCard({
                   className="pk-btn pk-btn-primary"
                   style={{ textDecoration: 'none' }}
                 >
-                  Vincular
+                  Vincular mi cuenta con ARCA
                 </Link>
               </div>
             ) : null}
