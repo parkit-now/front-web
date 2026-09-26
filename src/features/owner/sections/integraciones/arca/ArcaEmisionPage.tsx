@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert } from '../../../../../shared/components/ui/Alert';
 import { Button } from '../../../../../shared/components/ui/Button';
 import { Card } from '../../../../../shared/components/ui/Card';
 import { Input } from '../../../../../shared/components/ui/Input';
-import { IconAlert } from '../../../../../shared/components/icons';
+import {
+  IconAlert,
+  IconChevronLeft,
+} from '../../../../../shared/components/icons';
 import { SectionHeader } from '../../../../../shared/components/SectionHeader';
 import { useToast } from '../../../../../lib/notifications/ToastProvider';
 import { translateApiError } from '../../../../../lib/api/translate';
@@ -43,6 +46,15 @@ const TH_STYLE: React.CSSProperties = {
   color: 'var(--text-3)',
 };
 
+/** El selector de modo va chico: dos opciones cortas en una fila de tabla. */
+const MODE_SELECT_STYLE: React.CSSProperties = {
+  width: 'auto',
+  minWidth: 130,
+  height: 32,
+  padding: '4px 8px',
+  fontSize: 13,
+};
+
 const TD_STYLE: React.CSSProperties = {
   padding: '8px 10px',
   color: 'var(--text-1)',
@@ -57,6 +69,7 @@ export function ArcaEmisionPage() {
   const { showToast } = useToast();
   const { sucursalId, sucursal } = useSucursal();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const canManage = sucursal?.role === 'owner';
 
   const arcaQuery = useArcaAccount(sucursalId);
@@ -82,13 +95,18 @@ export function ArcaEmisionPage() {
     if (account) setIvaRateDraft(String(account.ivaRate));
   }, [account]);
 
-  function invalidate() {
-    void queryClient.invalidateQueries({
-      queryKey: PAYMENT_METHODS_QUERY_KEY(sucursalId),
-    });
-    void queryClient.invalidateQueries({
-      queryKey: arcaAccountQueryKey(sucursalId),
-    });
+  // Se espera el refetch: hasta que el borrador no se resincroniza con lo que
+  // confirmó el backend, "Guardar" seguiría viendo cambios y quedaría
+  // habilitado un instante después de guardar.
+  async function refresh() {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: PAYMENT_METHODS_QUERY_KEY(sucursalId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: arcaAccountQueryKey(sucursalId),
+      }),
+    ]);
   }
 
   const isResponsableInscripto =
@@ -111,8 +129,8 @@ export function ArcaEmisionPage() {
         await updateArcaAccount(sucursalId, { ivaRate: Number(ivaRateDraft) });
       }
     },
-    onSuccess: () => {
-      invalidate();
+    onSuccess: async () => {
+      await refresh();
       showToast({
         message: 'Guardamos la configuración de emisión.',
         kind: 'success',
@@ -133,6 +151,16 @@ export function ArcaEmisionPage() {
     <SectionHeader
       title="Configurar emisión"
       subtitle="Elegí qué medios de pago facturan automáticamente al cobrar."
+      action={
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<IconChevronLeft size={15} />}
+          onClick={() => void navigate('../integraciones')}
+        >
+          Volver a Integraciones
+        </Button>
+      }
     />
   );
 
@@ -215,6 +243,12 @@ export function ArcaEmisionPage() {
     }
     setDraft(next);
   }
+
+  // "Guardar" sólo se habilita con algo para guardar: sin cambios (o recién
+  // guardado) no hay nada que mandar.
+  const hasChanges =
+    diffInvoiceModes(methodsQuery.data ?? [], draft ?? {}).length > 0 ||
+    (isResponsableInscripto && didIvaRateChange(account.ivaRate, ivaRateDraft));
 
   const facturaLetra = isResponsableInscripto
     ? 'Factura B a consumidor final'
@@ -300,6 +334,7 @@ export function ArcaEmisionPage() {
                           {checked ? (
                             <select
                               className="pk-input"
+                              style={MODE_SELECT_STYLE}
                               value={mode}
                               onChange={(e) =>
                                 setMode(
@@ -356,6 +391,7 @@ export function ArcaEmisionPage() {
               <Button
                 variant="primary"
                 loading={saveMutation.isPending}
+                disabled={!hasChanges}
                 onClick={() => saveMutation.mutate()}
               >
                 Guardar
