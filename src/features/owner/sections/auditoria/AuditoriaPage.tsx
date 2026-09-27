@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef, ColumnFiltersState } from '@tanstack/react-table';
 import { endOfDay, format, startOfDay } from 'date-fns';
@@ -21,10 +21,17 @@ import {
   IconCar,
   IconClock,
   IconDollar,
+  IconMaximize,
   IconRefresh,
   IconShield,
   IconTrending,
 } from '../../../../shared/components/icons';
+import { Modal } from '../../../../shared/components/ui/Modal';
+import {
+  isLegacyEvidence,
+  plateCropStyle,
+  plateOverlayStyle,
+} from './lprImage';
 import { fmtDateTimeAr, fmtMoney0 } from '../../../../shared/utils/fmt';
 import { useSucursal } from '../../context/SucursalContext';
 import {
@@ -62,7 +69,14 @@ const AUDIT_INITIAL_COLUMN_VISIBILITY = {
 const AUDIT_INITIAL_COLUMN_FILTERS: ColumnFiltersState = [
   { id: 'severity', value: ['warn', 'crit'] },
 ];
+const LPR_ZOOM_MIN = 1;
+const LPR_ZOOM_MAX = 4;
+const LPR_ZOOM_STEP = 0.25;
 type AuditTab = 'events' | 'lpr';
+
+function clampLprZoom(value: number): number {
+  return Math.min(LPR_ZOOM_MAX, Math.max(LPR_ZOOM_MIN, value));
+}
 
 function severityVariant(
   severity: AuditRow['severity'],
@@ -438,6 +452,60 @@ function EvidenceImage({
   tenantId: string;
   event: LprDetectionEvent;
 }) {
+  // La MISMA queryKey que usa el modal: React Query comparte el resultado, así
+  // que ampliar no dispara un segundo request ni firma una segunda URL.
+  const [zoomed, setZoomed] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    panX: number;
+    panY: number;
+  } | null>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+
+  function updateZoom(delta: number, point?: { x: number; y: number }) {
+    const next = clampLprZoom(zoom + delta);
+    if (next === zoom) return;
+
+    const rect = frameRef.current?.getBoundingClientRect();
+    const origin = rect
+      ? {
+          x: point ? point.x - rect.left : rect.width / 2,
+          y: point ? point.y - rect.top : rect.height / 2,
+        }
+      : null;
+
+    if (next === 1 || !origin) {
+      setPan({ x: 0, y: 0 });
+      setZoom(next);
+      return;
+    }
+
+    setPan((current) => ({
+      x: origin.x - ((origin.x - current.x) / zoom) * next,
+      y: origin.y - ((origin.y - current.y) / zoom) * next,
+    }));
+    setZoom(next);
+  }
+
+  function resetZoom() {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }
+
+  useEffect(() => {
+    if (!zoomed) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [zoomed]);
+
   const imageQuery = useQuery({
     queryKey: [
       'lpr-event-image-url',
@@ -478,12 +546,141 @@ function EvidenceImage({
     );
   }
 
+  const bbox = event.plateBbox ?? null;
+  const legacy = isLegacyEvidence(event);
+
   return (
-    <img
-      className="lpr-review-image"
-      src={imageQuery.data}
-      alt={`Patente detectada ${lprPlate(event)}`}
-    />
+    <>
+      <button
+        type="button"
+        className="lpr-review-image-button"
+        onClick={() => setZoomed(true)}
+        aria-label={`Ver la imagen completa de la detección ${lprPlate(event)}`}
+      >
+        {/* Con bbox se acerca a la patente; sin él la imagen YA es el recorte
+            (formato viejo) y recortarla de nuevo dejaría unos pocos píxeles. */}
+        <img
+          className="lpr-review-image"
+          style={bbox ? plateCropStyle(bbox) : undefined}
+          src={imageQuery.data}
+          alt={`Patente detectada ${lprPlate(event)}`}
+        />
+        <span className="lpr-review-image-expand">
+          <IconMaximize size={13} />
+          Ver vehículo
+        </span>
+      </button>
+
+      <Modal
+        open={zoomed}
+        onClose={() => {
+          setZoomed(false);
+          resetZoom();
+        }}
+        title={`Detección ${lprPlate(event)}`}
+        width={960}
+        fitContent
+        bodyScrollable={false}
+        bodyStyle={{ overflow: 'hidden' }}
+      >
+        <div className="lpr-zoom-toolbar" aria-label="Zoom de imagen">
+          <button
+            type="button"
+            className="pk-btn pk-btn-secondary"
+            onClick={() => updateZoom(-LPR_ZOOM_STEP)}
+            disabled={zoom <= LPR_ZOOM_MIN}
+            aria-label="Alejar"
+          >
+            -
+          </button>
+          <span>{Math.round(zoom * 100)}%</span>
+          <button
+            type="button"
+            className="pk-btn pk-btn-secondary"
+            onClick={() => updateZoom(LPR_ZOOM_STEP)}
+            disabled={zoom >= LPR_ZOOM_MAX}
+            aria-label="Acercar"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            className="pk-btn pk-btn-secondary"
+            onClick={resetZoom}
+            disabled={zoom === 1}
+          >
+            Restablecer
+          </button>
+        </div>
+        <div
+          ref={frameRef}
+          className={`lpr-zoom-frame${zoom > 1 ? ' is-pannable' : ''}${dragging ? ' is-dragging' : ''}`}
+          onWheel={(wheelEvent) => {
+            wheelEvent.preventDefault();
+            updateZoom(wheelEvent.deltaY < 0 ? LPR_ZOOM_STEP : -LPR_ZOOM_STEP, {
+              x: wheelEvent.clientX,
+              y: wheelEvent.clientY,
+            });
+          }}
+          onPointerDown={(pointerEvent) => {
+            if (zoom <= 1 || pointerEvent.button !== 0) return;
+            pointerEvent.currentTarget.setPointerCapture(
+              pointerEvent.pointerId,
+            );
+            dragRef.current = {
+              pointerId: pointerEvent.pointerId,
+              startX: pointerEvent.clientX,
+              startY: pointerEvent.clientY,
+              panX: pan.x,
+              panY: pan.y,
+            };
+            setDragging(true);
+          }}
+          onPointerMove={(pointerEvent) => {
+            const drag = dragRef.current;
+            if (!drag || drag.pointerId !== pointerEvent.pointerId) return;
+            setPan({
+              x: drag.panX + pointerEvent.clientX - drag.startX,
+              y: drag.panY + pointerEvent.clientY - drag.startY,
+            });
+          }}
+          onPointerUp={(pointerEvent) => {
+            if (dragRef.current?.pointerId !== pointerEvent.pointerId) return;
+            dragRef.current = null;
+            setDragging(false);
+            pointerEvent.currentTarget.releasePointerCapture(
+              pointerEvent.pointerId,
+            );
+          }}
+          onPointerCancel={() => {
+            dragRef.current = null;
+            setDragging(false);
+          }}
+        >
+          <div
+            className="lpr-zoom-stage"
+            style={{
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            }}
+          >
+            <img
+              src={imageQuery.data}
+              alt={`Detección ${lprPlate(event)}`}
+              draggable={false}
+            />
+            {bbox ? (
+              <div className="lpr-zoom-plate" style={plateOverlayStyle(bbox)} />
+            ) : null}
+          </div>
+        </div>
+        {legacy ? (
+          <p className="lpr-zoom-note">
+            Detección anterior: de este evento sólo se conservó el recorte de la
+            patente, no la foto completa del vehículo.
+          </p>
+        ) : null}
+      </Modal>
+    </>
   );
 }
 

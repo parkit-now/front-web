@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { type CSSProperties, useEffect, useRef } from 'react';
 import { IconClose } from '../icons';
 
 interface ModalProps {
@@ -8,6 +8,9 @@ interface ModalProps {
   children: React.ReactNode;
   width?: number;
   footer?: React.ReactNode;
+  fitContent?: boolean;
+  bodyStyle?: CSSProperties;
+  bodyScrollable?: boolean;
 }
 
 export function Modal({
@@ -17,6 +20,9 @@ export function Modal({
   children,
   width = 480,
   footer,
+  fitContent = false,
+  bodyStyle,
+  bodyScrollable = true,
 }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const firstFocusRef = useRef<HTMLElement | null>(null);
@@ -93,8 +99,8 @@ export function Modal({
     >
       <div
         style={{
-          width: '100%',
-          maxWidth: width,
+          width: fitContent ? 'fit-content' : '100%',
+          maxWidth: fitContent ? `min(${width}px, calc(100vw - 32px))` : width,
           background: 'var(--card)',
           borderRadius: 'var(--r-xl)',
           boxShadow: 'var(--shadow-deep)',
@@ -131,7 +137,14 @@ export function Modal({
             <IconClose size={16} />
           </button>
         </div>
-        <div style={{ padding: 16, overflowY: 'auto', maxHeight: '70vh' }}>
+        <div
+          style={{
+            padding: 16,
+            overflowY: bodyScrollable ? 'auto' : 'visible',
+            maxHeight: bodyScrollable ? '70vh' : 'none',
+            ...bodyStyle,
+          }}
+        >
           {children}
         </div>
         {footer && (

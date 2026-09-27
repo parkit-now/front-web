@@ -94,6 +94,9 @@ a {
   flex-direction: column;
   min-height: 100vh;
   background: var(--bg-b);
+  cursor: zoom-in;
+  touch-action: none;
+  user-select: none;
 }
 
 .portal-body {
@@ -467,6 +470,119 @@ a {
   object-fit: cover;
   background: var(--bg-b);
   border-bottom: 1px solid var(--border-soft);
+}
+
+/* Contiene el recorte por transform: sin overflow hidden, la imagen escalada
+   se desborda de la tarjeta. */
+.lpr-review-image-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.lpr-review-image-button:focus-visible {
+  outline: 2px solid var(--accent, #3b82f6);
+  outline-offset: -2px;
+}
+
+.lpr-review-image-button .lpr-review-image {
+  border-bottom: 0;
+}
+
+.lpr-review-image-expand {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(13, 19, 32, 0.68);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.lpr-zoom-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.lpr-zoom-toolbar span {
+  min-width: 52px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-2);
+}
+
+.lpr-zoom-toolbar .pk-btn {
+  min-height: 36px;
+  padding-inline: 12px;
+}
+
+.lpr-zoom-toolbar .pk-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.lpr-zoom-frame {
+  width: fit-content;
+  max-width: calc(100vw - 64px);
+  max-height: calc(100vh - 176px);
+  overflow: hidden;
+  line-height: 0;
+  border-radius: 12px;
+  background: var(--bg-b);
+  cursor: zoom-in;
+  touch-action: none;
+  user-select: none;
+}
+
+.lpr-zoom-frame.is-pannable {
+  cursor: grab;
+}
+
+.lpr-zoom-frame.is-dragging {
+  cursor: grabbing;
+}
+
+.lpr-zoom-stage {
+  position: relative;
+  display: inline-block;
+  transform-origin: top left;
+  will-change: transform;
+}
+
+.lpr-zoom-frame img {
+  max-width: min(calc(100vw - 64px), 960px);
+  max-height: calc(100vh - 176px);
+  display: block;
+}
+
+.lpr-zoom-plate {
+  position: absolute;
+  border: 2px solid #22c55e;
+  border-radius: 2px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+}
+
+.lpr-zoom-note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--text-3);
 }
 
 .lpr-review-image-empty {
@@ -1036,4 +1152,27 @@ a {
 
 .dr-cal-day.is-range-middle .dr-cal-day-button:hover {
   background: var(--brand-100);
+}
+
+@media (max-width: 640px) {
+  .lpr-zoom-toolbar {
+    justify-content: flex-start;
+    max-width: calc(100vw - 64px);
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .lpr-zoom-frame {
+    max-width: calc(100vw - 64px);
+    max-height: calc(100vh - 196px);
+  }
+
+  .lpr-zoom-frame img {
+    max-width: calc(100vw - 64px);
+    max-height: calc(100vh - 196px);
+  }
+
+  .lpr-zoom-toolbar .pk-btn {
+    flex: 0 0 auto;
+  }
 }
