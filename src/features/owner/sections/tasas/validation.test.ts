@@ -22,6 +22,7 @@ function makeRate(overrides: Partial<Rate> = {}): Rate {
     autoFractionPrice: false,
     isActive: true,
     shortcutNumber: 1,
+    vehicleTypeId: null,
     version: 1,
     syncSeq: 1,
     createdAt: '2026-08-28T22:00:00.000Z',
@@ -97,6 +98,7 @@ describe('canSubmitRateForm', () => {
         fractionPriceArs: '300',
         mediaEstadiaPriceArs: '4000',
         autoFractionPrice: false,
+        vehicleTypeId: '',
       }),
     ).toBe(true);
   });
@@ -111,6 +113,7 @@ describe('canSubmitRateForm', () => {
         fractionPriceArs: '300',
         mediaEstadiaPriceArs: '4000',
         autoFractionPrice: false,
+        vehicleTypeId: '',
       }),
     ).toBe(false);
   });
@@ -125,6 +128,7 @@ describe('validateRateForm', () => {
     fractionPriceArs: '400',
     mediaEstadiaPriceArs: '4000',
     autoFractionPrice: false,
+    vehicleTypeId: '',
   };
 
   it('devuelve el payload numérico cuando todo está bien', () => {
@@ -141,7 +145,21 @@ describe('validateRateForm', () => {
       fractionPriceArs: 400,
       mediaEstadiaPriceArs: 4000,
       autoFractionPrice: false,
+      vehicleTypeId: null,
     });
+  });
+
+  it('manda el tipo elegido y null cuando queda sin asociar', () => {
+    expect(
+      validateRateForm(
+        { ...validForm, vehicleTypeId: 'vt-auto' },
+        { rates: [], editingId: null },
+      ).payload?.vehicleTypeId,
+    ).toBe('vt-auto');
+    expect(
+      validateRateForm(validForm, { rates: [], editingId: null }).payload
+        ?.vehicleTypeId,
+    ).toBeNull();
   });
 
   it('rechaza una media estadía mayor que la estadía', () => {
@@ -221,6 +239,7 @@ describe('diffRateUpdate', () => {
     fractionPriceArs: 300,
     mediaEstadiaPriceArs: 4000,
     autoFractionPrice: false,
+    vehicleTypeId: null,
   };
 
   it('devuelve vacío cuando no cambió nada', () => {
@@ -250,5 +269,17 @@ describe('diffRateUpdate', () => {
     expect(
       diffRateUpdate({ ...payload, autoFractionPrice: true }, current),
     ).toEqual({ autoFractionPrice: true });
+  });
+
+  it('manda el tipo de vehículo al asociarlo y null al desasociarlo', () => {
+    expect(
+      diffRateUpdate({ ...payload, vehicleTypeId: 'vt-auto' }, current),
+    ).toEqual({ vehicleTypeId: 'vt-auto' });
+    expect(
+      diffRateUpdate(
+        { ...payload, vehicleTypeId: null },
+        makeRate({ vehicleTypeId: 'vt-auto' }),
+      ),
+    ).toEqual({ vehicleTypeId: null });
   });
 });

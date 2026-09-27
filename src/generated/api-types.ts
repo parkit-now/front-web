@@ -422,6 +422,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/driver/parkings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Nearby active parking lots for drivers, ordered by distance */
+        get: operations["DriverController_findNearby"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/driver/parkings/{parkingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Public parking lot detail with opening hours */
+        get: operations["DriverController_findOne"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/driver/parkings/{parkingId}/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Quote a stay: validates the window (7 days ahead, opening hours, vehicle kind) and prices it with the lot pricing engine */
+        post: operations["DriverController_quote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -2691,6 +2742,19 @@ export interface components {
             /** @example Naranja X */
             name: string;
         };
+        CreateQuoteDto: {
+            /**
+             * Format: date-time
+             * @example 2026-09-30T10:00:00-03:00
+             */
+            entryAt: string;
+            /**
+             * Format: date-time
+             * @example 2026-09-30T13:00:00-03:00
+             */
+            exitAt: string;
+            vehicleKind: components["schemas"]["DriverVehicleKind"];
+        };
         CreateRateDto: {
             /**
              * @description Si la fracción se deriva de hora / 12 en el formulario. Preferencia de UI: el valor derivado se guarda igual en fractionPriceArs.
@@ -2730,6 +2794,11 @@ export interface components {
              * @example 8000
              */
             stayPriceArs: number;
+            /**
+             * Format: uuid
+             * @description Tipo de vehículo al que aplica la tarifa (id de /vehicle-types del mismo tenant). Sin tipo, la tarifa sirve en la operación pero no se ofrece en la app del conductor.
+             */
+            vehicleTypeId?: string | null;
         };
         CreateScheduleDto: {
             /**
@@ -2913,6 +2982,62 @@ export interface components {
              */
             url: string;
         };
+        DriverNearbyParkingDto: {
+            acceptedVehicleKinds: components["schemas"]["DriverVehicleKind"][];
+            /** @description Tiene activada la reserva anticipada. */
+            acceptsReservations: boolean;
+            address: string | null;
+            /** @description Lugares libres ahora: capacidad − vehículos adentro. null si la playa no declaró capacidad (no es lo mismo que 0). */
+            availableSpots: number | null;
+            /** @description Distancia al centro buscado. */
+            distanceMeters: number;
+            /** Format: uuid */
+            id: string;
+            latitude: number;
+            longitude: number;
+            name: string;
+            /** @description null si la playa no cargó horarios. */
+            openNow: boolean | null;
+            /** @description Un precio por tipo aceptado que tenga tarifa asociada. */
+            prices: components["schemas"]["DriverParkingPriceDto"][];
+            totalSpots: number | null;
+        };
+        DriverParkingDetailDto: {
+            acceptedVehicleKinds: components["schemas"]["DriverVehicleKind"][];
+            /** @description Tiene activada la reserva anticipada. */
+            acceptsReservations: boolean;
+            address: string | null;
+            /** @description Lugares libres ahora: capacidad − vehículos adentro. null si la playa no declaró capacidad (no es lo mismo que 0). */
+            availableSpots: number | null;
+            /** Format: uuid */
+            id: string;
+            latitude: number;
+            longitude: number;
+            name: string;
+            /** @description null si la playa no cargó horarios. */
+            openNow: boolean | null;
+            /** @description Un precio por tipo aceptado que tenga tarifa asociada. */
+            prices: components["schemas"]["DriverParkingPriceDto"][];
+            /** @description Días hacia adelante en los que se puede reservar. */
+            reservationMaxDaysAhead: number;
+            /** @description Rangos de apertura por día; vacío si no hay horarios. */
+            schedules: components["schemas"]["DriverScheduleDto"][];
+            totalSpots: number | null;
+        };
+        DriverParkingPriceDto: {
+            /** @description Precio de la hora en ARS. Si hay varias tarifas para el tipo, la más barata ("desde"). */
+            hourPriceArs: number;
+            vehicleKind: components["schemas"]["DriverVehicleKind"];
+        };
+        DriverScheduleDto: {
+            /** @description Minutos desde 00:00. */
+            closeMinute: number;
+            day: components["schemas"]["ScheduleDay"];
+            /** @description Minutos desde 00:00. */
+            openMinute: number;
+        };
+        /** @enum {string} */
+        DriverVehicleKind: "car" | "suv_pickup" | "motorcycle";
         EntityAddressDto: {
             /**
              * @description Localidad.
@@ -4114,6 +4239,29 @@ export interface components {
              */
             title: string;
         };
+        QuoteDto: {
+            durationMinutes: number;
+            /** Format: date-time */
+            entryAt: string;
+            /** Format: date-time */
+            exitAt: string;
+            /** Format: uuid */
+            parkingId: string;
+            /** @description Tarifa usada. */
+            rate: components["schemas"]["QuoteRateDto"];
+            /** @description Total en ARS con el mismo motor que cobra la playa (entries/pricing.ts). */
+            totalArs: number;
+            vehicleKind: components["schemas"]["DriverVehicleKind"];
+        };
+        QuoteRateDto: {
+            fractionPriceArs: number;
+            hourPriceArs: number;
+            /** @description Tope de 12 h (0 = sin tope). */
+            mediaEstadiaPriceArs: number;
+            name: string;
+            /** @description Tope de 24 h (0 = sin tope). */
+            stayPriceArs: number;
+        };
         RateChangesResponseDto: {
             items: components["schemas"]["RateDto"][];
             /** @description Highest sync sequence included in this page. */
@@ -4142,6 +4290,11 @@ export interface components {
             tenantId: string;
             /** Format: date-time */
             updatedAt: string;
+            /**
+             * Format: uuid
+             * @description Tipo de vehículo al que aplica. null = sin asociar.
+             */
+            vehicleTypeId: string | null;
             version: number;
         };
         RefreshDto: {
@@ -4298,6 +4451,8 @@ export interface components {
             /** @description Highest sync sequence included in this page. */
             maxSeq: number;
         };
+        /** @enum {string} */
+        ScheduleDay: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
         ScheduleDto: {
             /** @description Minutes since midnight (1..1440). */
             closeMinute: number;
@@ -4940,6 +5095,11 @@ export interface components {
              * @example 9000
              */
             stayPriceArs?: number;
+            /**
+             * Format: uuid
+             * @description Tipo de vehículo al que aplica la tarifa (id de /vehicle-types del mismo tenant). Sin tipo, la tarifa sirve en la operación pero no se ofrece en la app del conductor.
+             */
+            vehicleTypeId?: string | null;
         };
         UpdateScheduleDto: {
             /**
@@ -6373,6 +6533,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    DriverController_findNearby: {
+        parameters: {
+            query: {
+                /** @description Latitud del centro. */
+                latitude: number;
+                /** @description Longitud del centro. */
+                longitude: number;
+                /** @description Radio de búsqueda en metros. */
+                radiusMeters?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverNearbyParkingDto"][];
+                };
+            };
+        };
+    };
+    DriverController_findOne: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                parkingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverParkingDetailDto"];
+                };
+            };
+        };
+    };
+    DriverController_quote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                parkingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateQuoteDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteDto"];
                 };
             };
         };

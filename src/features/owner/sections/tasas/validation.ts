@@ -8,6 +8,8 @@ export interface RateFormState {
   fractionPriceArs: string;
   mediaEstadiaPriceArs: string;
   autoFractionPrice: boolean;
+  /** Tipo de vehículo al que aplica; '' = sin asociar. */
+  vehicleTypeId: string;
 }
 
 export type RateFormErrors = Partial<
@@ -22,6 +24,7 @@ export interface RateFormPayload {
   fractionPriceArs: number;
   mediaEstadiaPriceArs: number;
   autoFractionPrice: boolean;
+  vehicleTypeId: string | null;
 }
 
 const MONEY_PATTERN = /^\d+(?:[.,]\d{1,2})?$/;
@@ -64,6 +67,7 @@ export function emptyRateForm(): RateFormState {
     fractionPriceArs: '',
     mediaEstadiaPriceArs: '',
     autoFractionPrice: true,
+    vehicleTypeId: '',
   };
 }
 
@@ -77,6 +81,7 @@ export function rateToForm(rate: Rate): RateFormState {
     fractionPriceArs: toMoneyInputString(rate.fractionPriceArs),
     mediaEstadiaPriceArs: toMoneyInputString(rate.mediaEstadiaPriceArs),
     autoFractionPrice: rate.autoFractionPrice,
+    vehicleTypeId: rate.vehicleTypeId ?? '',
   };
 }
 
@@ -177,6 +182,7 @@ export function validateRateForm(
       fractionPriceArs: fraction.value ?? 0,
       mediaEstadiaPriceArs: mediaEstadia.value ?? 0,
       autoFractionPrice: form.autoFractionPrice,
+      vehicleTypeId: form.vehicleTypeId || null,
     },
   };
 }
@@ -208,6 +214,9 @@ export function diffRateUpdate(
   }
   if (payload.shortcutNumber !== current.shortcutNumber) {
     body.shortcutNumber = payload.shortcutNumber;
+  }
+  if (payload.vehicleTypeId !== (current.vehicleTypeId ?? null)) {
+    body.vehicleTypeId = payload.vehicleTypeId;
   }
   return body;
 }

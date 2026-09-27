@@ -3,6 +3,7 @@ import { Button } from '../../../../shared/components/ui/Button';
 import { Input } from '../../../../shared/components/ui/Input';
 import { Modal } from '../../../../shared/components/ui/Modal';
 import type { Rate } from '../../services/rates';
+import type { VehicleType } from '../../services/vehicle-types';
 import {
   canSubmitRateForm,
   emptyRateForm,
@@ -47,6 +48,8 @@ interface RateFormModalProps {
   rate: Rate | null;
   /** Todas las tasas del estacionamiento: unicidad del atajo y autonumerado. */
   rates: Rate[];
+  /** Tipos del estacionamiento, para asociar la tasa a uno. */
+  vehicleTypes: VehicleType[];
   pending: boolean;
   onSubmit: (payload: RateFormPayload) => void;
 }
@@ -56,9 +59,15 @@ export function RateFormModal({
   onClose,
   rate,
   rates,
+  vehicleTypes,
   pending,
   onSubmit,
 }: RateFormModalProps) {
+  // Se ofrecen los tipos aceptados; si la tasa ya apunta a uno no aceptado se
+  // mantiene en la lista para no perderlo al editar.
+  const typeOptions = vehicleTypes.filter(
+    (type) => type.accepted || type.id === form.vehicleTypeId,
+  );
   const isEdit = rate !== null;
   const [form, setForm] = useState<RateFormState>(emptyRateForm);
   const [errors, setErrors] = useState<RateFormErrors>({});
@@ -160,6 +169,38 @@ export function RateFormModal({
             onKeyDown={handleKeyDown}
           />
         </div>
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          marginTop: 12,
+        }}
+      >
+        <label htmlFor="rate-vehicle-type" className="pk-label">
+          Tipo de vehículo
+        </label>
+        <select
+          id="rate-vehicle-type"
+          className="pk-input"
+          value={form.vehicleTypeId}
+          onChange={(e) => set('vehicleTypeId', e.target.value)}
+        >
+          <option value="">Sin asociar</option>
+          {typeOptions.map((type) => (
+            <option key={type.id} value={type.id}>
+              {type.name}
+              {type.accepted ? '' : ' (no aceptado)'}
+            </option>
+          ))}
+        </select>
+        <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+          La app de conductores usa este tipo para mostrar el precio y cotizar
+          reservas. Sin tipo, la tasa se sigue usando en la caja pero no se
+          ofrece a conductores.
+        </span>
       </div>
 
       <div style={{ ...GRID_2, marginTop: 12 }}>

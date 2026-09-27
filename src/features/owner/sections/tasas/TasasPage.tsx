@@ -29,6 +29,7 @@ import {
   type Rate,
   type UpdateRateInput,
 } from '../../services/rates';
+import { listVehicleTypes } from '../../services/vehicle-types';
 import { RateFormModal } from './RateFormModal';
 import { diffRateUpdate, type RateFormPayload } from './validation';
 
@@ -83,6 +84,16 @@ export function TasasPage() {
     enabled: Boolean(sucursalId),
   });
   const rates = useMemo(() => listQuery.data ?? [], [listQuery.data]);
+  // Misma queryKey que Tipos de vehículo: comparten caché.
+  const vehicleTypesQuery = useQuery({
+    queryKey: ['vehicle-types', sucursalId],
+    queryFn: () => listVehicleTypes(sucursalId),
+    enabled: Boolean(sucursalId),
+  });
+  const vehicleTypes = useMemo(
+    () => vehicleTypesQuery.data ?? [],
+    [vehicleTypesQuery.data],
+  );
 
   function invalidate() {
     void queryClient.invalidateQueries({ queryKey });
@@ -221,6 +232,26 @@ export function TasasPage() {
         ),
       },
       {
+        id: 'vehicleType',
+        header: 'Vehículo',
+        size: 130,
+        cell: ({ row }) => {
+          const type = vehicleTypes.find(
+            (candidate) => candidate.id === row.original.vehicleTypeId,
+          );
+          return type ? (
+            <span style={{ fontSize: 13 }}>{type.name}</span>
+          ) : (
+            <span
+              style={{ color: 'var(--text-3)' }}
+              title="Sin asociar: no se ofrece en la app de conductores"
+            >
+              —
+            </span>
+          );
+        },
+      },
+      {
         id: 'fractionPriceArs',
         header: 'Fracción',
         accessorKey: 'fractionPriceArs',
@@ -335,7 +366,7 @@ export function TasasPage() {
         },
       },
     ];
-  }, [canManage, isBusy]);
+  }, [canManage, isBusy, vehicleTypes]);
 
   const confirmCopy = confirmAction
     ? {
@@ -418,6 +449,7 @@ export function TasasPage() {
         open={formOpen}
         rate={editing}
         rates={rates}
+        vehicleTypes={vehicleTypes}
         pending={saveMutation.isPending}
         onClose={() => {
           if (!saveMutation.isPending) closeForm();
