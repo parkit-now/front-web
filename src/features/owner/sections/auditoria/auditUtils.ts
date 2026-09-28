@@ -125,6 +125,71 @@ const DISPLAY_FIELDS: Array<keyof EntrySnapshot> = [
   'payments',
 ];
 
+const OWNER_AUDIT_VISIBLE_ACTIONS = new Set([
+  'entry.corrected',
+  'entry.undercharged',
+  'invoice.cert_expired',
+  'arca_account.certificate_expired',
+  'arca_account.renewal_prepared',
+  'mp_account.link_failed',
+  'mp_account.token_expired',
+  'payment_intent.cancel_mp_failed',
+  'payment_intent.refunded',
+]);
+
+const KNOWN_AUDIT_ACTIONS = new Set([
+  'application.created',
+  'application.updated',
+  'application.submitted',
+  'application.document_added',
+  'application.rejected',
+  'user.promoted_to_owner',
+  'entity.approved',
+  'entity.rejected',
+  'entity.profile_updated',
+  'payment_method.toggled',
+  'entry.corrected',
+  'rate.prices_propagated',
+  'entry.undercharged',
+  'lpr_event.registered',
+  'lpr_event.dismissed',
+  'lpr_event.suppressed',
+  'lpr_event.archived',
+  'lpr_event.unarchived',
+  'lpr_event.image_purged',
+  'parking.created',
+  'parking.updated',
+  'parking.deleted',
+  'user.role_updated',
+  'user.deleted',
+  'membership.created',
+  'membership.updated',
+  'membership.deleted',
+  'mp_account.linked',
+  'mp_account.unlinked',
+  'mp_account.link_failed',
+  'arca_account.linked',
+  'arca_account.unlinked',
+  'arca_account.renewal_prepared',
+  'arca_account.certificate_renewed',
+  'arca_account.certificate_expired',
+  'invoice.cert_expired',
+  'mp_account.token_refreshed',
+  'mp_account.token_expired',
+  'payment_intent.cancel_mp_failed',
+  'payment_intent.refunded',
+]);
+
+function isExcludedOwnerAuditAction(action: string): boolean {
+  return action === 'rate.prices_propagated' || action.startsWith('lpr_event.');
+}
+
+export function isOwnerAuditVisible(action: string): boolean {
+  if (isExcludedOwnerAuditAction(action)) return false;
+  if (OWNER_AUDIT_VISIBLE_ACTIONS.has(action)) return true;
+  return !KNOWN_AUDIT_ACTIONS.has(action);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -289,27 +354,56 @@ export function actionKindFor(action: string): AuditActionKind {
   return 'other';
 }
 
-/** Acciones que no tienen vista propia pero sí un nombre legible. */
+/** Acciones visibles sin vista propia, normalizadas para dueño. */
 const OTHER_ACTION_LABELS: Record<string, string> = {
-  'arca_account.linked': 'ARCA vinculada',
-  'arca_account.unlinked': 'ARCA desvinculada',
-  'arca_account.renewal_prepared': 'Renovación del certificado preparada',
-  'arca_account.certificate_renewed': 'Certificado de ARCA renovado',
+  'arca_account.renewal_prepared': 'Renovación de ARCA pendiente',
   'arca_account.certificate_expired': 'Certificado de ARCA vencido',
-  'rate.prices_propagated': 'Precios aplicados a autos adentro',
+  'mp_account.link_failed': 'Falló la vinculación de Mercado Pago',
+  'mp_account.token_expired': 'Mercado Pago desvinculado por token vencido',
+  'payment_intent.cancel_mp_failed':
+    'No se pudo cancelar una orden de Mercado Pago',
+  'payment_intent.refunded': 'Pago devuelto por Mercado Pago',
 };
 
 export function actionLabelFor(action: string): string {
   if (action === 'entry.corrected') return 'Corrección de estadía';
   if (action === 'entry.undercharged') return 'Cobro menor al sugerido';
   if (action === 'invoice.cert_expired') return 'Cobro sin factura';
-  return OTHER_ACTION_LABELS[action] ?? action;
+  return OTHER_ACTION_LABELS[action] ?? 'Evento del sistema';
 }
 
 function certExpiredSummary(metadata: Record<string, unknown>): string {
   const plate = readString(metadata, 'plate');
   const prefix = plate ? `Cobro sin factura en ${plate}` : 'Cobro sin factura';
   return `${prefix}: certificado de ARCA vencido`;
+}
+
+function actionSummaryFor(
+  action: string,
+  metadata: Record<string, unknown>,
+): string {
+  if (action === 'arca_account.certificate_expired') {
+    return 'El certificado de ARCA venció y la playa no puede facturar';
+  }
+  if (action === 'arca_account.renewal_prepared') {
+    return 'La renovación del certificado de ARCA quedó lista para completar';
+  }
+  if (action === 'mp_account.link_failed') {
+    return 'No se pudo vincular la cuenta de Mercado Pago';
+  }
+  if (action === 'mp_account.token_expired') {
+    return 'Mercado Pago requiere revinculación para seguir cobrando';
+  }
+  if (action === 'payment_intent.cancel_mp_failed') {
+    return 'Mercado Pago no aceptó cancelar una orden pendiente';
+  }
+  if (action === 'payment_intent.refunded') {
+    const amount = readNumber(metadata, 'amount');
+    return amount === null
+      ? 'Mercado Pago devolvió un cobro'
+      : `Mercado Pago devolvió ${fmtMoney0(amount)}`;
+  }
+  return actionLabelFor(action);
 }
 
 export function originLabelFor(origin: AuditOrigin): string {
@@ -497,7 +591,7 @@ export function buildAuditRow(event: AuditEvent): AuditRow {
         ? underchargeSummary(metadata)
         : event.action === 'invoice.cert_expired'
           ? certExpiredSummary(metadata)
-          : actionLabelFor(event.action);
+          : actionSummaryFor(event.action, metadata);
   const rateNames = snapshotValues(before, after, 'rateSnapshotName');
   const vehicleBrands = snapshotValues(before, after, 'vehicleBrand');
   const vehicleModels = snapshotValues(before, after, 'vehicleModel');
@@ -566,6 +660,12 @@ export function buildAuditRows(events: AuditEvent[]): AuditRow[] {
   return events.map(buildAuditRow);
 }
 
+export function buildOwnerAuditRows(events: AuditEvent[]): AuditRow[] {
+  return events
+    .filter((event) => isOwnerAuditVisible(event.action))
+    .map(buildAuditRow);
+}
+
 export function correctionComparisons(row: AuditRow): AuditComparisonRow[] {
   const before = readSnapshot(row.metadata, 'before');
   const after = readSnapshot(row.metadata, 'after');
@@ -582,14 +682,96 @@ export function correctionComparisons(row: AuditRow): AuditComparisonRow[] {
   }));
 }
 
-export function metadataEntries(
+type MetadataEntry = { key: string; value: string };
+
+function formatMetadataValue(key: string, value: unknown): string {
+  if (value === null || value === undefined || value === '') return '-';
+  if (typeof value === 'number') {
+    if (key.toLowerCase().includes('amount') || key === 'delta') {
+      return fmtMoney0(value);
+    }
+    if (key === 'confidence') return `${Math.round(value * 100)}%`;
+    return String(value);
+  }
+  if (typeof value === 'boolean') return value ? 'Sí' : 'No';
+  if (typeof value === 'string') {
+    if (/At$/.test(key) || key.toLowerCase().includes('date')) {
+      const date = new Date(value);
+      if (!Number.isNaN(date.getTime())) return fmtDateTimeAr(value);
+    }
+    return value.replaceAll('_', ' ');
+  }
+  return JSON.stringify(value, null, 2);
+}
+
+const GENERIC_METADATA_LABELS: Record<string, string> = {
+  amount: 'Importe',
+  archivedAt: 'Archivado',
+  chargedAmount: 'Cobrado',
+  confidence: 'Confianza',
+  delta: 'Diferencia',
+  invoiceId: 'Factura',
+  normalizedText: 'Patente normalizada',
+  qualityStatus: 'Calidad',
+  reason: 'Razón',
+  status: 'Estado',
+  suggestedAmount: 'Sugerido',
+  ticketNumber: 'Ticket',
+};
+
+function metadataEntry(
   metadata: Record<string, unknown>,
-): Array<{ key: string; value: string }> {
-  return Object.entries(metadata).map(([key, value]) => ({
-    key,
-    value:
-      typeof value === 'string' || typeof value === 'number'
-        ? String(value)
-        : JSON.stringify(value, null, 2),
-  }));
+  key: string,
+  label: string,
+): MetadataEntry | null {
+  if (!(key in metadata)) return null;
+  return { key: label, value: formatMetadataValue(key, metadata[key]) };
+}
+
+function compactEntries(entries: Array<MetadataEntry | null>): MetadataEntry[] {
+  return entries.filter((entry): entry is MetadataEntry => entry !== null);
+}
+
+export function metadataEntries(row: AuditRow): MetadataEntry[] {
+  const metadata = row.metadata;
+
+  if (row.action === 'arca_account.certificate_expired') {
+    return compactEntries([
+      metadataEntry(metadata, 'expiresAt', 'Vencimiento'),
+      metadataEntry(metadata, 'status', 'Estado'),
+    ]);
+  }
+
+  if (row.action === 'arca_account.renewal_prepared') {
+    return compactEntries([
+      metadataEntry(metadata, 'expiresAt', 'Vencimiento actual'),
+      metadataEntry(metadata, 'renewalDueAt', 'Renovar antes de'),
+      metadataEntry(metadata, 'status', 'Estado'),
+    ]);
+  }
+
+  if (
+    row.action === 'mp_account.link_failed' ||
+    row.action === 'mp_account.token_expired' ||
+    row.action === 'payment_intent.cancel_mp_failed' ||
+    row.action === 'payment_intent.refunded'
+  ) {
+    return compactEntries([
+      metadataEntry(metadata, 'amount', 'Importe'),
+      metadataEntry(metadata, 'status', 'Estado'),
+      metadataEntry(metadata, 'reason', 'Razón'),
+      metadataEntry(metadata, 'error', 'Error'),
+      metadataEntry(metadata, 'paymentIntentId', 'Intento de pago'),
+      metadataEntry(metadata, 'orderId', 'Orden Mercado Pago'),
+    ]);
+  }
+
+  return Object.entries(metadata)
+    .filter(
+      ([key]) => !key.endsWith('Id') && key !== 'before' && key !== 'after',
+    )
+    .map(([key, value]) => ({
+      key: GENERIC_METADATA_LABELS[key] ?? key,
+      value: formatMetadataValue(key, value),
+    }));
 }

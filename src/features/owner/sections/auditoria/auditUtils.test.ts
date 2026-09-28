@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { AuditEvent } from '../../services/audit';
 import {
   buildAuditRow,
+  buildOwnerAuditRows,
   correctionComparisons,
+  isOwnerAuditVisible,
+  metadataEntries,
   paymentListLabel,
 } from './auditUtils';
 
@@ -229,21 +232,65 @@ describe('audit utils', () => {
     expect(row.impactAmount).toBe(200);
   });
 
-  it('keeps generic events usable when metadata is missing or unexpected', () => {
+  it('keeps unknown generic events usable without exposing raw action text', () => {
     const row = buildAuditRow(
       event({
-        action: 'entity.profile_updated',
+        action: 'unknown.vendor_warning',
         actorName: null,
-        metadata: null,
-        severity: 'info',
+        metadata: {
+          status: 'needs_review',
+          confidence: 0.698,
+          internalId: 'x-1',
+        },
+        severity: 'warn',
       }),
     );
 
     expect(row.actionKind).toBe('other');
+    expect(row.actionLabel).toBe('Evento del sistema');
     expect(row.actorName).toBe('Sistema');
     expect(row.plate).toBe('-');
     expect(row.reason).toBe('-');
-    expect(row.summary).toBe('entity.profile_updated');
+    expect(row.summary).toBe('Evento del sistema');
+    expect(metadataEntries(row)).toEqual([
+      { key: 'Estado', value: 'needs review' },
+      { key: 'Confianza', value: '70%' },
+    ]);
+  });
+
+  it('filters owner audit rows to actionable events and keeps unknown generic warnings', () => {
+    const rows = buildOwnerAuditRows([
+      event({ id: 'rate', action: 'rate.prices_propagated' }),
+      event({ id: 'lpr', action: 'lpr_event.dismissed' }),
+      event({ id: 'profile', action: 'entity.profile_updated' }),
+      event({ id: 'under', action: 'entry.undercharged' }),
+      event({ id: 'mp', action: 'mp_account.token_expired' }),
+      event({ id: 'unknown', action: 'unknown.vendor_warning' }),
+    ]);
+
+    expect(rows.map((row) => row.id)).toEqual(['under', 'mp', 'unknown']);
+    expect(isOwnerAuditVisible('rate.prices_propagated')).toBe(false);
+    expect(isOwnerAuditVisible('lpr_event.dismissed')).toBe(false);
+    expect(isOwnerAuditVisible('entity.profile_updated')).toBe(false);
+    expect(isOwnerAuditVisible('unknown.vendor_warning')).toBe(true);
+  });
+
+  it('normalizes actionable integration labels and summaries', () => {
+    const row = buildAuditRow(
+      event({
+        action: 'payment_intent.refunded',
+        metadata: { amount: 2500, status: 'refunded', paymentIntentId: 'pi-1' },
+        severity: 'crit',
+      }),
+    );
+
+    expect(row.actionLabel).toBe('Pago devuelto por Mercado Pago');
+    expect(row.summary).toBe('Mercado Pago devolvió $2.500');
+    expect(metadataEntries(row)).toEqual([
+      { key: 'Importe', value: '$2.500' },
+      { key: 'Estado', value: 'refunded' },
+      { key: 'Intento de pago', value: 'pi-1' },
+    ]);
   });
 
   it('formats payment lines by method and amount', () => {

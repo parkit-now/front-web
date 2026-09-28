@@ -61,7 +61,7 @@ import {
   type LprDetectionEvent,
 } from '../../services/lpr-events';
 import {
-  buildAuditRows,
+  buildOwnerAuditRows,
   correctionComparisons,
   metadataEntries,
   type AuditRow,
@@ -563,7 +563,7 @@ function CertExpiredDetail({ row }: { row: AuditRow }) {
 }
 
 function GenericMetadataDetail({ row }: { row: AuditRow }) {
-  const entries = metadataEntries(row.metadata);
+  const entries = metadataEntries(row);
   if (entries.length === 0) {
     return (
       <section className="audit2-detail-section">
@@ -1481,7 +1481,7 @@ export function AuditoriaPage() {
   });
 
   const allRows = useMemo(
-    () => buildAuditRows(auditQuery.data ?? []),
+    () => buildOwnerAuditRows(auditQuery.data ?? []),
     [auditQuery.data],
   );
 
@@ -1856,7 +1856,7 @@ export function AuditoriaPage() {
                   label: 'Cobro menor al sugerido',
                 },
                 { value: 'invoice.cert_expired', label: 'Cobro sin factura' },
-                { value: 'other', label: 'Otros eventos' },
+                { value: 'other', label: 'Evento del sistema' },
               ],
               origin: [
                 { value: 'history', label: 'Historial' },
