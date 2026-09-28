@@ -125,6 +125,8 @@ const DISPLAY_FIELDS: Array<keyof EntrySnapshot> = [
   'payments',
 ];
 
+const NON_OWNER_AUDIT_CORRECTION_FIELDS = new Set(['color', 'notes']);
+
 const OWNER_AUDIT_VISIBLE_ACTIONS = new Set([
   'entry.corrected',
   'entry.undercharged',
@@ -188,6 +190,18 @@ export function isOwnerAuditVisible(action: string): boolean {
   if (isExcludedOwnerAuditAction(action)) return false;
   if (OWNER_AUDIT_VISIBLE_ACTIONS.has(action)) return true;
   return !KNOWN_AUDIT_ACTIONS.has(action);
+}
+
+function hasOwnerVisibleCorrectionChange(event: AuditEvent): boolean {
+  if (event.action !== 'entry.corrected') return true;
+  const changedFields = readStringArray(
+    metadataRecord(event.metadata),
+    'changedFields',
+  );
+  if (changedFields.length === 0) return true;
+  return changedFields.some(
+    (field) => !NON_OWNER_AUDIT_CORRECTION_FIELDS.has(field),
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -662,7 +676,11 @@ export function buildAuditRows(events: AuditEvent[]): AuditRow[] {
 
 export function buildOwnerAuditRows(events: AuditEvent[]): AuditRow[] {
   return events
-    .filter((event) => isOwnerAuditVisible(event.action))
+    .filter(
+      (event) =>
+        isOwnerAuditVisible(event.action) &&
+        hasOwnerVisibleCorrectionChange(event),
+    )
     .map(buildAuditRow);
 }
 

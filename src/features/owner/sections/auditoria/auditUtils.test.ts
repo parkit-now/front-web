@@ -275,6 +275,29 @@ describe('audit utils', () => {
     expect(isOwnerAuditVisible('unknown.vendor_warning')).toBe(true);
   });
 
+  it('hides owner correction rows that only changed notes or color', () => {
+    const rows = buildOwnerAuditRows([
+      event({
+        id: 'notes',
+        action: 'entry.corrected',
+        metadata: { changedFields: ['notes'] },
+      }),
+      event({
+        id: 'color',
+        action: 'entry.corrected',
+        metadata: { changedFields: ['color'] },
+      }),
+      event({
+        id: 'mixed',
+        action: 'entry.corrected',
+        metadata: { changedFields: ['plate', 'color'] },
+      }),
+    ]);
+
+    expect(rows.map((row) => row.id)).toEqual(['mixed']);
+    expect(rows[0].changedFields).toEqual(['plate', 'color']);
+  });
+
   it('normalizes actionable integration labels and summaries', () => {
     const row = buildAuditRow(
       event({
