@@ -8,11 +8,13 @@ export interface PlateBbox {
 }
 
 /**
- * El mismo margen alrededor de la patente que usa el servicio de cámara
- * (`_crop_to_plate` en `services/camera/main.py`) y el desktop.
+ * El mismo margen alrededor de la patente que usa el servicio de cámara para
+ * generar la miniatura que ve el operador: `PLATE_CROP_PAD_X` / `_PAD_Y` en
+ * `front-desktop/services/camera/main.py`.
  *
- * OJO: está escrito en tres lados. Si divergen, el dueño y el operador ven
- * encuadres distintos del mismo evento y nadie entiende por qué.
+ * Está escrito en los dos lados y no hay forma de compartirlo entre Python y
+ * TypeScript. Si divergen, el dueño y el operador ven encuadres distintos del
+ * MISMO evento. Si tocás uno, tocá el otro.
  */
 const PAD_X = 0.4;
 const PAD_Y = 0.6;
