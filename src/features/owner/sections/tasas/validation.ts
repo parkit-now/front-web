@@ -211,3 +211,58 @@ export function diffRateUpdate(
   }
   return body;
 }
+
+/**
+ * Los cuatro campos que cambian lo que se le cobra a un auto.
+ *
+ * GEMELO CONCEPTUAL de `front-desktop/src/features/rates/rateDiff.ts`. El
+ * código está duplicado porque los repos no comparten módulos, pero las reglas
+ * tienen que coincidir: si divergen, una app pregunta y la otra no sobre el
+ * mismo cambio.
+ */
+export const RATE_PRICE_FIELDS = [
+  'hourPriceArs',
+  'fractionPriceArs',
+  'mediaEstadiaPriceArs',
+  'stayPriceArs',
+] as const;
+
+/**
+ * Si esta edición toca algún precio.
+ *
+ * Es lo único que dispara la pregunta sobre los autos que están adentro.
+ * Renombrar la tarifa, cambiarle el atajo o activarla/desactivarla no cambia
+ * lo que se cobra, y preguntar ahí sería ruido que el dueño aprende a saltear
+ * sin leer — y el día que importa, tampoco lo lee.
+ *
+ * `autoFractionPrice` NO cuenta: es una preferencia del formulario y el motor
+ * de cobro ni la mira. Pero prenderla reescribe `fractionPriceArs`, y ese sí
+ * cuenta. El disparador es siempre el campo de precio, nunca el flag.
+ *
+ * Mira PRESENCIA de clave y no valores, porque el body ya es el diff — así un
+ * precio puesto en cero, que es falsy, sigue contando como cambio.
+ */
+export function hasPriceChange(body: UpdateRateInput): boolean {
+  return RATE_PRICE_FIELDS.some((field) => body[field] !== undefined);
+}
+
+/** Las filas "Hora $3.500 → $3.900" que muestra el diálogo. */
+export function priceDiffRows(
+  body: UpdateRateInput,
+  current: Rate,
+): { label: string; before: number; after: number }[] {
+  const labels: Record<(typeof RATE_PRICE_FIELDS)[number], string> = {
+    hourPriceArs: 'Hora',
+    fractionPriceArs: 'Fracción',
+    mediaEstadiaPriceArs: 'Media estadía',
+    stayPriceArs: 'Estadía',
+  };
+
+  return RATE_PRICE_FIELDS.filter((field) => body[field] !== undefined).map(
+    (field) => ({
+      label: labels[field],
+      before: current[field] ?? 0,
+      after: body[field] ?? 0,
+    }),
+  );
+}

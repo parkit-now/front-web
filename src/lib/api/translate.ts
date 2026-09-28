@@ -78,7 +78,23 @@ export type EndpointKey =
   | 'mercadoPago.authorizationUrl'
   | 'mercadoPago.oauthCallback'
   | 'mercadoPago.unlink'
-  | 'mercadoPago.resyncPos';
+  | 'mercadoPago.resyncPos'
+  | 'arca.getAccount'
+  | 'arca.createAccount'
+  | 'arca.updateAccount'
+  | 'arca.unlink'
+  | 'arca.getCsr'
+  | 'arca.uploadCertificate'
+  | 'arca.listReusableCertificates'
+  | 'arca.reuseCertificate'
+  | 'arca.setSalesPoint'
+  | 'arca.getRenewalCsr'
+  | 'arca.uploadRenewalCertificate'
+  | 'invoices.issue'
+  | 'invoices.batch'
+  | 'invoices.pdf'
+  | 'invoices.lookupTaxpayer'
+  | 'entries.setManuallyInvoiced';
 
 export type TranslateContext = {
   endpoint?: EndpointKey;
@@ -243,6 +259,50 @@ const CODE_MESSAGES: Record<string, string> = {
   PAYMENT_INTENT_NOT_CONSUMABLE:
     'Ese cobro con QR ya se aplicó o no corresponde a esta estadía. Revisá su estado y, si hace falta, generá uno nuevo.',
 
+  // Facturación electrónica (ARCA). Le hablamos al dueño que está vinculando
+  // su CUIT, no a un desarrollador: cada mensaje dice qué pasó en ARCA y qué
+  // hacer del lado de Parkit.
+  ARCA_NOT_LINKED: 'Esta sede no tiene ARCA vinculada.',
+  ARCA_UNAVAILABLE: 'ARCA no responde. Intentalo más tarde.',
+  ARCA_CERT_EXPIRED: 'El certificado de ARCA está vencido. Generá uno nuevo.',
+  ARCA_ALREADY_LINKED: 'Esta sede ya tiene ARCA vinculada.',
+  ARCA_LINK_STEP_INVALID:
+    'Ese paso ya no corresponde. Recargá la página para seguir desde donde quedaste.',
+  ARCA_CUIT_INVALID: 'El CUIT no es válido.',
+  ARCA_CERT_INVALID:
+    'El archivo no es un certificado válido de ARCA, o ARCA lo rechazó.',
+  ARCA_CERT_CUIT_MISMATCH: 'El certificado es de otro CUIT.',
+  ARCA_CERT_KEY_MISMATCH:
+    'El certificado no se generó con la solicitud (CSR) de Parkit. Generalo de nuevo con el archivo que descargaste acá.',
+  ARCA_CERT_NOT_AUTHORIZED:
+    'Falta asociar «Facturación Electrónica» y «Constancia de Inscripción» al certificado en ARCA.',
+  ARCA_PADRON_NOT_FOUND: 'ARCA no tiene los datos fiscales de este CUIT.',
+  ARCA_POS_NOT_FOUND:
+    'El punto de venta no existe en ARCA o no es de web services.',
+  ARCA_POS_DISABLED: 'El punto de venta está bloqueado o dado de baja en ARCA.',
+  ARCA_FISCAL_DATA_INCOMPLETE:
+    'Faltan Ingresos Brutos o la fecha de inicio de actividades: van impresos en la factura.',
+
+  // Facturas emitidas por ARCA a partir de un cobro (ver front-desktop, que es
+  // quien las emite). Se traducen acá también porque los errores de la cuenta
+  // vinculada (arriba) los puede ver el dueño desde el panel web.
+  INVOICE_ALREADY_ISSUED: 'Esta estadía ya tiene una factura emitida.',
+  INVOICE_IN_PROGRESS:
+    'La factura se está emitiendo en este momento. Esperá unos segundos.',
+  INVOICE_REJECTED: 'ARCA rechazó la factura.',
+  INVOICE_RECEIVER_REQUIRED:
+    'Por el monto, la factura necesita identificar al cliente (CUIT o DNI).',
+  INVOICE_NOT_INVOICEABLE:
+    'Esta estadía no se puede facturar: sigue abierta o se cobró $0.',
+  INVOICE_RECEIVER_NOT_FOUND:
+    'ARCA no tiene datos de ese CUIT. Revisalo o emití la factura a consumidor final.',
+  // Ya no lo emite el backend (desde la Etapa 5 un CUIT sin A sale B
+  // identificada); queda para las facturas viejas que lo tienen guardado.
+  INVOICE_RECEIVER_NOT_A:
+    'Ese CUIT no puede recibir Factura A (no es Responsable Inscripto ni Monotributista). Emitila de nuevo.',
+  INVOICE_NOT_ISSUED: 'La factura todavía no se emitió: no tiene PDF.',
+  INVOICE_PDF_FAILED: 'No se pudo generar el PDF. Probá de nuevo en un rato.',
+
   // Validacion (envoltorio — el detalle por campo se traduce con
   // translateValidationCode).
   VALIDATION_FAILED: 'Revisá los datos del formulario.',
@@ -295,6 +355,16 @@ const STATUS_MESSAGES: Record<number, string> = {
 function readProblemCode(error: ApiError): string | undefined {
   const code = (error.problem as { code?: unknown } | null)?.code;
   return typeof code === 'string' && code.length > 0 ? code : undefined;
+}
+
+/**
+ * Texto de un `code` que no llega como error HTTP sino dentro de un dato (p.
+ * ej. el `errorCode` de una factura). `undefined` si no hay traducción.
+ */
+export function translateErrorCode(
+  code: string | null | undefined,
+): string | undefined {
+  return code ? CODE_MESSAGES[code] : undefined;
 }
 
 export function translateApiError(

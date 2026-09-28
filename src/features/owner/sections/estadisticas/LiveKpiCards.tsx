@@ -3,11 +3,136 @@ import { Sparkline } from '../../../../shared/components/Sparkline';
 import { ProgressBar } from '../../../../shared/components/ProgressBar';
 import { Skeleton } from '../../../../shared/components/ui/Skeleton';
 import type { OwnerKpis } from '../../hooks/useKpis';
+import {
+  historicalProjectionSubtitle,
+  openEntriesProjectionSubtitle,
+} from './projectionCopy';
 
 interface KpiCardsProps {
   kpis: OwnerKpis | undefined;
   loading: boolean;
   monthLoading?: boolean;
+}
+
+function ProjectionPill({
+  label,
+  value,
+  subtitle,
+  tone = 'default',
+}: {
+  label: string;
+  value: number;
+  subtitle: string;
+  tone?: 'default' | 'brand';
+}) {
+  return (
+    <div
+      style={{
+        minWidth: 0,
+        padding: '10px 11px',
+        border: '1px solid var(--border)',
+        borderRadius: 14,
+        background:
+          tone === 'brand'
+            ? 'linear-gradient(135deg, rgba(37, 99, 235, 0.1), rgba(37, 99, 235, 0.03))'
+            : 'var(--surface)',
+      }}
+    >
+      <p
+        style={{
+          margin: 0,
+          fontSize: 11,
+          fontWeight: 700,
+          color: 'var(--text-3)',
+          textTransform: 'uppercase',
+          letterSpacing: '.03em',
+        }}
+      >
+        {label}
+      </p>
+      <p
+        style={{
+          margin: '5px 0 0',
+          fontFamily: 'var(--mono)',
+          fontSize: 18,
+          fontWeight: 800,
+          color: tone === 'brand' ? 'var(--brand)' : 'var(--text-1)',
+          overflowWrap: 'anywhere',
+        }}
+      >
+        {fmtMoney0(value)}
+      </p>
+      <p
+        style={{
+          margin: '4px 0 0',
+          fontSize: 11,
+          lineHeight: 1.35,
+          color: 'var(--text-3)',
+        }}
+      >
+        {subtitle}
+      </p>
+    </div>
+  );
+}
+
+function ProjectionGrid({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+        gap: 8,
+        marginTop: 12,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function OccupancyMiniMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
+  return (
+    <div
+      style={{
+        minWidth: 0,
+        padding: '9px 10px',
+        border: '1px solid var(--border)',
+        borderRadius: 12,
+        background: 'var(--surface)',
+      }}
+    >
+      <p
+        style={{
+          margin: 0,
+          fontSize: 11,
+          fontWeight: 700,
+          color: 'var(--text-3)',
+          textTransform: 'uppercase',
+          letterSpacing: '.03em',
+        }}
+      >
+        {label}
+      </p>
+      <p
+        style={{
+          margin: '4px 0 0',
+          fontFamily: 'var(--mono)',
+          fontSize: 18,
+          fontWeight: 800,
+          color: 'var(--text-1)',
+        }}
+      >
+        {value}
+      </p>
+    </div>
+  );
 }
 
 function KpiOcupacion({ kpis, loading }: KpiCardsProps) {
@@ -75,6 +200,23 @@ function KpiOcupacion({ kpis, loading }: KpiCardsProps) {
           >
             {kpis?.occupancy.free ?? 0} plazas libres
           </p>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+              gap: 8,
+              marginTop: 12,
+            }}
+          >
+            <OccupancyMiniMetric
+              label="Ingresos hoy"
+              value={kpis?.today.vehiclesIn ?? 0}
+            />
+            <OccupancyMiniMetric
+              label="Egresos hoy"
+              value={kpis?.today.vehiclesOut ?? 0}
+            />
+          </div>
         </>
       )}
     </div>
@@ -121,6 +263,33 @@ function KpiRecaudacionDia({ kpis, loading }: KpiCardsProps) {
               ? 'Sin datos de ayer para comparar'
               : `${delta > 0 ? '+' : ''}${Math.round(delta * 100)}% vs. ayer`}
           </p>
+          <ProjectionGrid>
+            <ProjectionPill
+              label="Proyección con autos en base"
+              value={kpis?.projections.todayWithOpenEntries.value ?? 0}
+              subtitle={openEntriesProjectionSubtitle(
+                kpis?.projections.todayWithOpenEntries ?? {
+                  value: 0,
+                  openEntries: 0,
+                  historicalDays: 0,
+                  confidence: 'low',
+                },
+              )}
+              tone="brand"
+            />
+            <ProjectionPill
+              label="Proyección por tendencia"
+              value={kpis?.projections.todayHistoricalForecast.value ?? 0}
+              subtitle={historicalProjectionSubtitle(
+                kpis?.projections.todayHistoricalForecast ?? {
+                  value: 0,
+                  openEntries: 0,
+                  historicalDays: 0,
+                  confidence: 'low',
+                },
+              )}
+            />
+          </ProjectionGrid>
         </>
       )}
     </div>
@@ -171,6 +340,33 @@ function KpiRecaudacionMes({ kpis, loading, monthLoading }: KpiCardsProps) {
           >
             Acumulado del mes en curso
           </p>
+          <ProjectionGrid>
+            <ProjectionPill
+              label="Proyección con autos en base"
+              value={kpis?.projections.monthWithOpenEntries.value ?? 0}
+              subtitle={openEntriesProjectionSubtitle(
+                kpis?.projections.monthWithOpenEntries ?? {
+                  value: 0,
+                  openEntries: 0,
+                  historicalDays: 0,
+                  confidence: 'low',
+                },
+              )}
+              tone="brand"
+            />
+            <ProjectionPill
+              label="Proyección por tendencia"
+              value={kpis?.projections.monthHistoricalForecast.value ?? 0}
+              subtitle={historicalProjectionSubtitle(
+                kpis?.projections.monthHistoricalForecast ?? {
+                  value: 0,
+                  openEntries: 0,
+                  historicalDays: 0,
+                  confidence: 'low',
+                },
+              )}
+            />
+          </ProjectionGrid>
         </>
       )}
     </div>
@@ -182,7 +378,7 @@ export function KpiCards({ kpis, loading, monthLoading }: KpiCardsProps) {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
         gap: 10,
         marginBottom: 10,
       }}

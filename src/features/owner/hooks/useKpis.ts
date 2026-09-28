@@ -33,7 +33,20 @@ export interface OwnerKpis {
     revenue: number;
     sparkline: number[];
   };
+  projections: {
+    todayWithOpenEntries: ProjectionKpi;
+    todayHistoricalForecast: ProjectionKpi;
+    monthWithOpenEntries: ProjectionKpi;
+    monthHistoricalForecast: ProjectionKpi;
+  };
   pendingLprEvents: number;
+}
+
+export interface ProjectionKpi {
+  value: number;
+  openEntries: number;
+  historicalDays: number;
+  confidence: 'low' | 'medium' | 'high';
 }
 
 /** Acumulado del mes en curso. La ventana es estable durante todo el día. */
@@ -79,6 +92,12 @@ export function useKpis() {
       month: {
         revenue: monthQuery.data?.totals.revenue ?? 0,
         sparkline: buckets.map((bucket) => bucket.revenue),
+      },
+      projections: {
+        todayWithOpenEntries: summary.projections.todayWithOpenEntries,
+        todayHistoricalForecast: summary.projections.todayHistoricalForecast,
+        monthWithOpenEntries: summary.projections.monthWithOpenEntries,
+        monthHistoricalForecast: summary.projections.monthHistoricalForecast,
       },
       pendingLprEvents: summary.alerts.pendingLprEvents,
     };

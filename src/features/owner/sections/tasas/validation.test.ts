@@ -4,7 +4,9 @@ import {
   canSubmitRateForm,
   diffRateUpdate,
   emptyRateForm,
+  hasPriceChange,
   nextFreeShortcut,
+  priceDiffRows,
   toMoneyInputString,
   validateMoney,
   validateRateForm,
@@ -250,5 +252,74 @@ describe('diffRateUpdate', () => {
     expect(
       diffRateUpdate({ ...payload, autoFractionPrice: true }, current),
     ).toEqual({ autoFractionPrice: true });
+  });
+});
+
+describe('hasPriceChange', () => {
+  it.each([
+    ['hora', { hourPriceArs: 3900 }],
+    ['fracción', { fractionPriceArs: 325 }],
+    ['media estadía', { mediaEstadiaPriceArs: 5000 }],
+    ['estadía', { stayPriceArs: 9800 }],
+  ])('un cambio de %s dispara la pregunta', (_caso, body) => {
+    expect(hasPriceChange(body)).toBe(true);
+  });
+
+  it.each([
+    ['el nombre', { name: 'OTRO' }],
+    ['el atajo', { shortcutNumber: 3 }],
+    ['activar/desactivar', { isActive: false }],
+  ])('un cambio de %s NO dispara la pregunta', (_caso, body) => {
+    // Nada de esto cambia lo que se le cobra al auto.
+    expect(hasPriceChange(body)).toBe(false);
+  });
+
+  it('el flag de fracción automática solo no cuenta', () => {
+    // Es preferencia del formulario; el motor de cobro ni la mira.
+    expect(hasPriceChange({ autoFractionPrice: true })).toBe(false);
+  });
+
+  it('pero si además reescribió la fracción, sí cuenta', () => {
+    expect(
+      hasPriceChange({ autoFractionPrice: true, fractionPriceArs: 325 }),
+    ).toBe(true);
+  });
+
+  it('un body vacío no dispara nada', () => {
+    expect(hasPriceChange({})).toBe(false);
+  });
+
+  it('un precio puesto en cero sigue siendo un cambio de precio', () => {
+    // `0` es falsy: mirar presencia de clave y no el valor es lo que lo salva.
+    expect(hasPriceChange({ mediaEstadiaPriceArs: 0 })).toBe(true);
+  });
+});
+
+describe('priceDiffRows', () => {
+  const actual = {
+    name: 'NOCHE AUTO',
+    hourPriceArs: 3500,
+    stayPriceArs: 9000,
+    fractionPriceArs: 290,
+    mediaEstadiaPriceArs: 4500,
+    autoFractionPrice: false,
+  } as Parameters<typeof priceDiffRows>[1];
+
+  it('devuelve sólo las filas que cambiaron, con antes y después', () => {
+    expect(priceDiffRows({ hourPriceArs: 3900 }, actual)).toEqual([
+      { label: 'Hora', before: 3500, after: 3900 },
+    ]);
+  });
+
+  it('respeta el orden de lectura del formulario', () => {
+    const rows = priceDiffRows(
+      { stayPriceArs: 9800, hourPriceArs: 3900 },
+      actual,
+    );
+    expect(rows.map((r) => r.label)).toEqual(['Hora', 'Estadía']);
+  });
+
+  it('sin cambios de precio no devuelve filas', () => {
+    expect(priceDiffRows({ name: 'OTRO' }, actual)).toEqual([]);
   });
 });

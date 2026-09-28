@@ -15,6 +15,7 @@ function entry(overrides: Partial<Entry>): Entry {
     plate: 'ABC123',
     enteredAt: '2026-09-21T10:00:00.000Z',
     source: 'manual',
+    manuallyInvoiced: false,
     syncSeq: 1,
     updatedAt: '2026-09-21T10:00:00.000Z',
     version: 1,
@@ -178,5 +179,36 @@ describe('operation utils', () => {
     expect(stats.summary.cashTotal).toBe(1700);
     expect(stats.withdrawnCash).toBe(1200);
     expect(stats.topRate).toEqual({ name: 'Auto', count: 2 });
+  });
+});
+
+describe('attachPaymentsToEntries — factura', () => {
+  it('une la factura de la estadía y resuelve el estado y el receptor', () => {
+    const [row] = attachPaymentsToEntries(
+      [entry({ leftAt: '2026-09-21T12:00:00.000Z' })],
+      [payment({})],
+      [
+        {
+          id: 'inv-1',
+          tenantId: 'tenant-1',
+          entryId: 'entry-1',
+          status: 'issued',
+          cbteTipo: 1,
+          ptoVta: 1,
+          cbteNro: 3,
+          receptorDocTipo: 80,
+          receptorDocNro: '30712345671',
+          receptorNombre: 'EMPRESA SA',
+          impTotal: 1000,
+          syncSeq: 1,
+          version: 1,
+          updatedAt: '2026-09-21T12:00:00.000Z',
+        },
+      ],
+    );
+
+    expect(row.invoiceState).toBe('issued');
+    expect(row.invoiceLetterValue).toBe('A');
+    expect(row.invoiceReceiver).toBe('EMPRESA SA · 30712345671');
   });
 });

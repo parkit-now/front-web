@@ -1,12 +1,28 @@
-import { useEffect, useMemo, useState } from 'react';
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef, ColumnFiltersState } from '@tanstack/react-table';
 import { endOfDay, format, startOfDay } from 'date-fns';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import {
+  CalendarDays,
+  RotateCcw,
+  Search,
+  SlidersHorizontal,
+  X,
+} from 'lucide-react';
 import { DataTable } from '../../../../features/data-table';
+import { normalizeText } from '../../../../features/data-table/utils';
 import { Pagination } from '../../../../features/data-table/components/Pagination';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
+import { useCloseOnOutsideClick } from '../../../../lib/ui/useCloseOnOutsideClick';
 import { SectionHeader } from '../../../../shared/components/SectionHeader';
 import { Badge } from '../../../../shared/components/ui/Badge';
 import { Button } from '../../../../shared/components/ui/Button';
@@ -21,10 +37,17 @@ import {
   IconCar,
   IconClock,
   IconDollar,
+  IconMaximize,
   IconRefresh,
   IconShield,
   IconTrending,
 } from '../../../../shared/components/icons';
+import { Modal } from '../../../../shared/components/ui/Modal';
+import {
+  isLegacyEvidence,
+  plateCropStyle,
+  plateOverlayStyle,
+} from './lprImage';
 import { fmtDateTimeAr, fmtMoney0 } from '../../../../shared/utils/fmt';
 import { useSucursal } from '../../context/SucursalContext';
 import {
@@ -38,7 +61,7 @@ import {
   type LprDetectionEvent,
 } from '../../services/lpr-events';
 import {
-  buildAuditRows,
+  buildOwnerAuditRows,
   correctionComparisons,
   metadataEntries,
   type AuditRow,
@@ -62,7 +85,53 @@ const AUDIT_INITIAL_COLUMN_VISIBILITY = {
 const AUDIT_INITIAL_COLUMN_FILTERS: ColumnFiltersState = [
   { id: 'severity', value: ['warn', 'crit'] },
 ];
+const LPR_ZOOM_MIN = 1;
+const LPR_ZOOM_MAX = 4;
+const LPR_ZOOM_STEP = 0.25;
 type AuditTab = 'events' | 'lpr';
+
+type LprFilterId = 'firstSeenAt' | 'severity';
+
+type LprOptionFilterId = 'severity';
+
+type LprFilterState = {
+  firstSeenAt?: DateRange;
+  severity: string[];
+};
+
+type LprFilterOption = {
+  value: string;
+  label: string;
+  count: number;
+};
+
+type LprAuditRow = {
+  event: LprDetectionEvent;
+  plate: string;
+  firstSeenAt: string;
+  severity: string[];
+  searchText: string;
+};
+
+const LPR_EMPTY_FILTERS: LprFilterState = {
+  severity: [],
+};
+
+const LPR_FILTER_LABELS: Record<LprFilterId, string> = {
+  firstSeenAt: 'Ingreso',
+  severity: 'Severidad',
+};
+
+const LPR_OPTION_FILTERS: LprOptionFilterId[] = ['severity'];
+
+const LPR_FILTER_OPTION_LABELS: Partial<Record<string, string>> = {
+  info: 'Info',
+  warn: 'Advertencia',
+};
+
+function clampLprZoom(value: number): number {
+  return Math.min(LPR_ZOOM_MAX, Math.max(LPR_ZOOM_MIN, value));
+}
 
 function severityVariant(
   severity: AuditRow['severity'],
@@ -84,6 +153,7 @@ function actionBadgeVariant(
 ): 'brand' | 'warn' | 'default' {
   if (kind === 'entry.corrected') return 'brand';
   if (kind === 'entry.undercharged') return 'warn';
+  if (kind === 'invoice.cert_expired') return 'warn';
   return 'default';
 }
 
@@ -198,6 +268,94 @@ function formatDateTime(iso: string | null | undefined): string {
 function shortId(value: string | null | undefined): string {
   if (!value) return 'Sin usuario';
   return value.slice(0, 8);
+}
+
+function lprSeverity(event: LprDetectionEvent): string {
+  return event.confidence >= SUSPICIOUS_LPR_CONFIDENCE ? 'warn' : 'info';
+}
+
+function lprEventToAuditRow(event: LprDetectionEvent): LprAuditRow {
+  const plate = lprPlate(event);
+
+  return {
+    event,
+    plate,
+    firstSeenAt: event.firstSeenAt,
+    severity: [lprSeverity(event)],
+    searchText: [plate, event.rawText, event.normalizedText, event.displayPlate]
+      .filter(Boolean)
+      .join(' '),
+  };
+}
+
+function dateInRange(
+  iso: string | null | undefined,
+  range: DateRange | undefined,
+): boolean {
+  if (!range?.from) return true;
+  if (!iso) return false;
+  const value = new Date(iso).getTime();
+  if (!Number.isFinite(value)) return false;
+  const from = startOfDay(range.from).getTime();
+  const to = endOfDay(range.to ?? range.from).getTime();
+  return value >= from && value <= to;
+}
+
+function optionLabel(value: string): string {
+  return LPR_FILTER_OPTION_LABELS[value] ?? value;
+}
+
+function buildLprFilterOptions(
+  rows: LprAuditRow[],
+): Record<LprOptionFilterId, LprFilterOption[]> {
+  return Object.fromEntries(
+    LPR_OPTION_FILTERS.map((filterId) => {
+      const counts = new Map<string, number>();
+      rows.forEach((row) => {
+        row[filterId].forEach((value) => {
+          counts.set(value, (counts.get(value) ?? 0) + 1);
+        });
+      });
+
+      const options = Array.from(counts.entries())
+        .map(([value, count]) => ({
+          value,
+          count,
+          label: optionLabel(value),
+        }))
+        .sort((left, right) => left.label.localeCompare(right.label, 'es'));
+
+      return [filterId, options];
+    }),
+  ) as Record<LprOptionFilterId, LprFilterOption[]>;
+}
+
+function filterLprRows(
+  rows: LprAuditRow[],
+  search: string,
+  filters: LprFilterState,
+): LprAuditRow[] {
+  const query = normalizeText(search);
+
+  return rows.filter((row) => {
+    if (query && !normalizeText(row.searchText).includes(query)) return false;
+    if (!dateInRange(row.firstSeenAt, filters.firstSeenAt)) return false;
+
+    return LPR_OPTION_FILTERS.every((filterId) => {
+      const selected = filters[filterId];
+      if (selected.length === 0) return true;
+      return row[filterId].some((value) => selected.includes(value));
+    });
+  });
+}
+
+function countActiveLprFilters(filters: LprFilterState): number {
+  const dateCount = filters.firstSeenAt?.from ? 1 : 0;
+  return dateCount + filters.severity.length;
+}
+
+function clearLprFilters(): LprFilterState {
+  return { ...LPR_EMPTY_FILTERS };
 }
 
 function QuickSwitch({
@@ -380,8 +538,32 @@ function UnderchargedDetail({ row }: { row: AuditRow }) {
   );
 }
 
+function CertExpiredDetail({ row }: { row: AuditRow }) {
+  const charged = metadataNumber(row.metadata, 'chargedAmount');
+  return (
+    <section className="audit2-detail-section">
+      <h3>Factura pendiente</h3>
+      <p className="audit2-muted">
+        Se cobraron {charged === null ? 'el monto' : fmtMoney0(charged)} con un
+        medio que factura, pero el certificado de ARCA estaba vencido y la
+        factura quedó pendiente. Renová el certificado desde Integraciones para
+        volver a facturar.
+      </p>
+      <div>
+        <Link
+          to="../integraciones/arca/renovar"
+          className="pk-btn pk-btn-secondary pk-btn-sm"
+          style={{ textDecoration: 'none' }}
+        >
+          Renovar certificado
+        </Link>
+      </div>
+    </section>
+  );
+}
+
 function GenericMetadataDetail({ row }: { row: AuditRow }) {
-  const entries = metadataEntries(row.metadata);
+  const entries = metadataEntries(row);
   if (entries.length === 0) {
     return (
       <section className="audit2-detail-section">
@@ -413,6 +595,60 @@ function EvidenceImage({
   tenantId: string;
   event: LprDetectionEvent;
 }) {
+  // La MISMA queryKey que usa el modal: React Query comparte el resultado, así
+  // que ampliar no dispara un segundo request ni firma una segunda URL.
+  const [zoomed, setZoomed] = useState(false);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    panX: number;
+    panY: number;
+  } | null>(null);
+  const frameRef = useRef<HTMLDivElement>(null);
+
+  function updateZoom(delta: number, point?: { x: number; y: number }) {
+    const next = clampLprZoom(zoom + delta);
+    if (next === zoom) return;
+
+    const rect = frameRef.current?.getBoundingClientRect();
+    const origin = rect
+      ? {
+          x: point ? point.x - rect.left : rect.width / 2,
+          y: point ? point.y - rect.top : rect.height / 2,
+        }
+      : null;
+
+    if (next === 1 || !origin) {
+      setPan({ x: 0, y: 0 });
+      setZoom(next);
+      return;
+    }
+
+    setPan((current) => ({
+      x: origin.x - ((origin.x - current.x) / zoom) * next,
+      y: origin.y - ((origin.y - current.y) / zoom) * next,
+    }));
+    setZoom(next);
+  }
+
+  function resetZoom() {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }
+
+  useEffect(() => {
+    if (!zoomed) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [zoomed]);
+
   const imageQuery = useQuery({
     queryKey: [
       'lpr-event-image-url',
@@ -453,12 +689,141 @@ function EvidenceImage({
     );
   }
 
+  const bbox = event.plateBbox ?? null;
+  const legacy = isLegacyEvidence(event);
+
   return (
-    <img
-      className="lpr-review-image"
-      src={imageQuery.data}
-      alt={`Patente detectada ${lprPlate(event)}`}
-    />
+    <>
+      <button
+        type="button"
+        className="lpr-review-image-button"
+        onClick={() => setZoomed(true)}
+        aria-label={`Ver la imagen completa de la detección ${lprPlate(event)}`}
+      >
+        {/* Con bbox se acerca a la patente; sin él la imagen YA es el recorte
+            (formato viejo) y recortarla de nuevo dejaría unos pocos píxeles. */}
+        <img
+          className="lpr-review-image"
+          style={bbox ? plateCropStyle(bbox) : undefined}
+          src={imageQuery.data}
+          alt={`Patente detectada ${lprPlate(event)}`}
+        />
+        <span className="lpr-review-image-expand">
+          <IconMaximize size={13} />
+          Ver vehículo
+        </span>
+      </button>
+
+      <Modal
+        open={zoomed}
+        onClose={() => {
+          setZoomed(false);
+          resetZoom();
+        }}
+        title={`Detección ${lprPlate(event)}`}
+        width={960}
+        fitContent
+        bodyScrollable={false}
+        bodyStyle={{ overflow: 'hidden' }}
+      >
+        <div className="lpr-zoom-toolbar" aria-label="Zoom de imagen">
+          <button
+            type="button"
+            className="pk-btn pk-btn-secondary"
+            onClick={() => updateZoom(-LPR_ZOOM_STEP)}
+            disabled={zoom <= LPR_ZOOM_MIN}
+            aria-label="Alejar"
+          >
+            -
+          </button>
+          <span>{Math.round(zoom * 100)}%</span>
+          <button
+            type="button"
+            className="pk-btn pk-btn-secondary"
+            onClick={() => updateZoom(LPR_ZOOM_STEP)}
+            disabled={zoom >= LPR_ZOOM_MAX}
+            aria-label="Acercar"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            className="pk-btn pk-btn-secondary"
+            onClick={resetZoom}
+            disabled={zoom === 1}
+          >
+            Restablecer
+          </button>
+        </div>
+        <div
+          ref={frameRef}
+          className={`lpr-zoom-frame${zoom > 1 ? ' is-pannable' : ''}${dragging ? ' is-dragging' : ''}`}
+          onWheel={(wheelEvent) => {
+            wheelEvent.preventDefault();
+            updateZoom(wheelEvent.deltaY < 0 ? LPR_ZOOM_STEP : -LPR_ZOOM_STEP, {
+              x: wheelEvent.clientX,
+              y: wheelEvent.clientY,
+            });
+          }}
+          onPointerDown={(pointerEvent) => {
+            if (zoom <= 1 || pointerEvent.button !== 0) return;
+            pointerEvent.currentTarget.setPointerCapture(
+              pointerEvent.pointerId,
+            );
+            dragRef.current = {
+              pointerId: pointerEvent.pointerId,
+              startX: pointerEvent.clientX,
+              startY: pointerEvent.clientY,
+              panX: pan.x,
+              panY: pan.y,
+            };
+            setDragging(true);
+          }}
+          onPointerMove={(pointerEvent) => {
+            const drag = dragRef.current;
+            if (!drag || drag.pointerId !== pointerEvent.pointerId) return;
+            setPan({
+              x: drag.panX + pointerEvent.clientX - drag.startX,
+              y: drag.panY + pointerEvent.clientY - drag.startY,
+            });
+          }}
+          onPointerUp={(pointerEvent) => {
+            if (dragRef.current?.pointerId !== pointerEvent.pointerId) return;
+            dragRef.current = null;
+            setDragging(false);
+            pointerEvent.currentTarget.releasePointerCapture(
+              pointerEvent.pointerId,
+            );
+          }}
+          onPointerCancel={() => {
+            dragRef.current = null;
+            setDragging(false);
+          }}
+        >
+          <div
+            className="lpr-zoom-stage"
+            style={{
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            }}
+          >
+            <img
+              src={imageQuery.data}
+              alt={`Detección ${lprPlate(event)}`}
+              draggable={false}
+            />
+            {bbox ? (
+              <div className="lpr-zoom-plate" style={plateOverlayStyle(bbox)} />
+            ) : null}
+          </div>
+        </div>
+        {legacy ? (
+          <p className="lpr-zoom-note">
+            Detección anterior: de este evento sólo se conservó el recorte de la
+            patente, no la foto completa del vehículo.
+          </p>
+        ) : null}
+      </Modal>
+    </>
   );
 }
 
@@ -629,36 +994,259 @@ function AuditRiskOverview({ metrics }: { metrics: AuditRiskMetrics }) {
   );
 }
 
+function LprFiltersPanel({
+  filters,
+  onChange,
+  options,
+}: {
+  filters: LprFilterState;
+  onChange: (filters: LprFilterState) => void;
+  options: Record<LprOptionFilterId, LprFilterOption[]>;
+}) {
+  const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [panelStyle, setPanelStyle] = useState<CSSProperties | undefined>();
+  const closePanel = useCallback(() => setOpen(false), []);
+  const activeCount = countActiveLprFilters(filters);
+
+  useCloseOnOutsideClick(panelRef, open, closePanel);
+
+  const updatePanelPosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+
+    const triggerRect = trigger.getBoundingClientRect();
+    const gutter = 18;
+    const width = Math.min(340, window.innerWidth - gutter * 2);
+    const maxLeft = Math.max(gutter, window.innerWidth - width - gutter);
+    const left = Math.min(Math.max(triggerRect.left, gutter), maxLeft);
+
+    setPanelStyle({
+      position: 'fixed',
+      top: triggerRect.bottom + 8,
+      left,
+      right: 'auto',
+      width,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    updatePanelPosition();
+    window.addEventListener('resize', updatePanelPosition);
+    window.addEventListener('scroll', updatePanelPosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updatePanelPosition);
+      window.removeEventListener('scroll', updatePanelPosition, true);
+    };
+  }, [open, updatePanelPosition]);
+
+  function setDateFilter(
+    filterId: 'firstSeenAt',
+    value: DateRange | undefined,
+  ) {
+    onChange({ ...filters, [filterId]: value });
+  }
+
+  function toggleValue(filterId: LprOptionFilterId, value: string): void {
+    const current = filters[filterId];
+    const next = current.includes(value)
+      ? current.filter((item) => item !== value)
+      : [...current, value];
+    onChange({ ...filters, [filterId]: next });
+  }
+
+  return (
+    <div className="dt-menu dt-filter-menu" ref={panelRef}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`dt-toolbar-button dt-filter-trigger ${open ? 'active' : ''}`}
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <SlidersHorizontal size={16} />
+        Filtros
+        {activeCount > 0 ? (
+          <span className="dt-button-count">{activeCount}</span>
+        ) : null}
+      </button>
+
+      {open ? (
+        <div
+          className="dt-menu-panel dt-filter-panel"
+          aria-label="Filtros de patentes descartadas"
+          style={panelStyle}
+        >
+          <div className="dt-menu-heading dt-filter-heading">
+            <span>
+              Filtros
+              {activeCount > 0 ? <b>{activeCount}</b> : null}
+            </span>
+            <button type="button" onClick={() => onChange(clearLprFilters())}>
+              <RotateCcw size={14} /> Limpiar
+            </button>
+          </div>
+
+          <div className="dt-filter-list">
+            <div className="dt-filter-date-row">
+              <span className="dt-filter-date-label">
+                <CalendarDays size={15} />
+                {LPR_FILTER_LABELS.firstSeenAt}
+              </span>
+              <DateRangeFilter
+                value={filters.firstSeenAt}
+                onChange={(next) => setDateFilter('firstSeenAt', next)}
+                placeholder="Elegir fecha"
+              />
+            </div>
+            <section className="dt-filter-section open">
+              <div className="dt-filter-section-header" role="presentation">
+                <SlidersHorizontal size={15} />
+                <span>{LPR_FILTER_LABELS.severity}</span>
+                {filters.severity.length > 0 ? (
+                  <b>{filters.severity.length}</b>
+                ) : null}
+              </div>
+              <div className="dt-filter-options">
+                <div className="dt-filter-options-scroll">
+                  {options.severity.map((option) => (
+                    <label className="dt-check-row" key={option.value}>
+                      <input
+                        type="checkbox"
+                        checked={filters.severity.includes(option.value)}
+                        onChange={() => toggleValue('severity', option.value)}
+                      />
+                      <span>{option.label}</span>
+                      <small>{option.count}</small>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function LprReviewToolbar({
+  filters,
+  isFetching,
+  onFiltersChange,
+  onRefresh,
+  onSearchChange,
+  options,
+  search,
+}: {
+  filters: LprFilterState;
+  isFetching: boolean;
+  onFiltersChange: (filters: LprFilterState) => void;
+  onRefresh: () => void;
+  onSearchChange: (search: string) => void;
+  options: Record<LprOptionFilterId, LprFilterOption[]>;
+  search: string;
+}) {
+  return (
+    <section className="dt-card lpr-review-toolbar-card">
+      <div className="dt-toolbar">
+        <div className="dt-search-cluster">
+          <label className="dt-search">
+            <Search size={17} />
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Buscar por patente"
+            />
+            {search ? (
+              <button
+                type="button"
+                className="dt-search-clear"
+                onClick={() => onSearchChange('')}
+                title="Limpiar búsqueda"
+              >
+                <X size={15} />
+              </button>
+            ) : null}
+          </label>
+          <button
+            type="button"
+            className="dt-search-side-button"
+            onClick={onRefresh}
+            disabled={isFetching}
+            title="Recargar datos"
+          >
+            <IconRefresh size={17} />
+          </button>
+        </div>
+        <div className="dt-toolbar-actions">
+          <LprFiltersPanel
+            filters={filters}
+            onChange={onFiltersChange}
+            options={options}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function LprReviewTab({
   events,
+  filters,
   isError,
   isLoading,
   isFetching,
+  onFiltersChange,
   onRefresh,
+  onSearchChange,
   pageIndex,
   pageSize,
+  search,
   setPageIndex,
   setPageSize,
   tenantId,
-  total,
 }: {
   events: LprDetectionEvent[];
+  filters: LprFilterState;
   isError: boolean;
   isLoading: boolean;
   isFetching: boolean;
+  onFiltersChange: (filters: LprFilterState) => void;
   onRefresh: () => void;
+  onSearchChange: (search: string) => void;
   pageIndex: number;
   pageSize: number;
+  search: string;
   setPageIndex: (pageIndex: number) => void;
   setPageSize: (pageSize: number) => void;
   tenantId: string;
-  total: number;
 }) {
-  const pageCount = Math.max(1, Math.ceil(total / pageSize));
-  const pageEvents = events.slice(
+  const rows = useMemo(
+    () => events.map((event) => lprEventToAuditRow(event)),
+    [events],
+  );
+  const filterOptions = useMemo(() => buildLprFilterOptions(rows), [rows]);
+  const filteredRows = useMemo(
+    () => filterLprRows(rows, search, filters),
+    [filters, rows, search],
+  );
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const pageRows = filteredRows.slice(
     pageIndex * pageSize,
     (pageIndex + 1) * pageSize,
   );
+
+  useEffect(() => {
+    if (pageIndex > pageCount - 1) {
+      setPageIndex(Math.max(0, pageCount - 1));
+    }
+  }, [pageCount, pageIndex, setPageIndex]);
 
   if (isLoading) {
     return (
@@ -692,31 +1280,51 @@ function LprReviewTab({
     );
   }
 
-  if (events.length === 0) {
-    return (
-      <div className="pk-card">
-        <EmptyState
-          icon={<IconCar size={32} />}
-          title="Sin descartes LPR"
-          description="No hay patentes descartadas por el operario en el rango seleccionado."
-        />
-      </div>
-    );
-  }
-
   return (
     <>
-      <div className="lpr-review-grid">
-        {pageEvents.map((event) => (
-          <LprEvidenceCard key={event.id} tenantId={tenantId} event={event} />
-        ))}
-      </div>
+      <LprReviewToolbar
+        filters={filters}
+        isFetching={isFetching}
+        onFiltersChange={onFiltersChange}
+        onRefresh={onRefresh}
+        onSearchChange={onSearchChange}
+        options={filterOptions}
+        search={search}
+      />
+
+      {events.length === 0 ? (
+        <div className="pk-card">
+          <EmptyState
+            icon={<IconCar size={32} />}
+            title="Sin descartes LPR"
+            description="No hay patentes descartadas por el operario en el rango seleccionado."
+          />
+        </div>
+      ) : filteredRows.length === 0 ? (
+        <div className="pk-card">
+          <EmptyState
+            icon={<IconCar size={32} />}
+            title="Sin resultados"
+            description="No hay patentes descartadas que coincidan con los filtros aplicados."
+          />
+        </div>
+      ) : (
+        <div className="lpr-review-grid">
+          {pageRows.map((row) => (
+            <LprEvidenceCard
+              key={row.event.id}
+              tenantId={tenantId}
+              event={row.event}
+            />
+          ))}
+        </div>
+      )}
 
       <Pagination
         pageIndex={pageIndex}
         pageSize={pageSize}
         pageCount={pageCount}
-        totalRows={total}
+        totalRows={filteredRows.length}
         pageSizeOptions={LPR_PAGE_SIZE_OPTIONS}
         canPreviousPage={pageIndex > 0}
         canNextPage={pageIndex < pageCount - 1}
@@ -785,6 +1393,9 @@ function AuditDetailDrawer({
           {row.actionKind === 'entry.undercharged' ? (
             <UnderchargedDetail row={row} />
           ) : null}
+          {row.actionKind === 'invoice.cert_expired' ? (
+            <CertExpiredDetail row={row} />
+          ) : null}
           {row.actionKind === 'other' ? (
             <GenericMetadataDetail row={row} />
           ) : null}
@@ -801,6 +1412,10 @@ export function AuditoriaPage() {
   const [selected, setSelected] = useState<AuditRow | null>(null);
   const [onlyCurrentCashSession, setOnlyCurrentCashSession] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  const [lprSearch, setLprSearch] = useState('');
+  const [lprFilters, setLprFilters] = useState<LprFilterState>(() =>
+    clearLprFilters(),
+  );
   const [lprPageIndex, setLprPageIndex] = useState(0);
   const [lprPageSize, setLprPageSize] = useState(LPR_DEFAULT_PAGE_SIZE);
   const activeTab: AuditTab =
@@ -818,6 +1433,16 @@ export function AuditoriaPage() {
 
   function handleDateRangeChange(next: DateRange | undefined) {
     setDateRange(next);
+    setLprPageIndex(0);
+  }
+
+  function handleLprSearchChange(next: string) {
+    setLprSearch(next);
+    setLprPageIndex(0);
+  }
+
+  function handleLprFiltersChange(next: LprFilterState) {
+    setLprFilters(next);
     setLprPageIndex(0);
   }
 
@@ -856,7 +1481,7 @@ export function AuditoriaPage() {
   });
 
   const allRows = useMemo(
-    () => buildAuditRows(auditQuery.data ?? []),
+    () => buildOwnerAuditRows(auditQuery.data ?? []),
     [auditQuery.data],
   );
 
@@ -888,7 +1513,14 @@ export function AuditoriaPage() {
   }, [activeCashSession, onlyCurrentCashSession, periodRows]);
 
   const lprEvents = lprQuery.data?.items ?? [];
-  const lprTotal = lprEvents.length;
+  const lprRowsForCount = useMemo(
+    () => lprEvents.map((event) => lprEventToAuditRow(event)),
+    [lprEvents],
+  );
+  const filteredLprTotal = useMemo(
+    () => filterLprRows(lprRowsForCount, lprSearch, lprFilters).length,
+    [lprFilters, lprRowsForCount, lprSearch],
+  );
   const suspiciousDismissals = lprEvents.filter(
     (event) => event.confidence >= SUSPICIOUS_LPR_CONFIDENCE,
   ).length;
@@ -1164,7 +1796,7 @@ export function AuditoriaPage() {
           aria-selected={activeTab === 'lpr'}
         >
           Patentes descartadas
-          <span>{lprTotal}</span>
+          <span>{filteredLprTotal}</span>
         </button>
       </div>
 
@@ -1195,7 +1827,7 @@ export function AuditoriaPage() {
             columns={columns}
             isLoading={auditQuery.isLoading}
             emptyMessage="No hay eventos de auditoría para mostrar."
-            searchPlaceholder="Buscar por actor, patente, ticket, razón o campos"
+            searchPlaceholder="Buscar por patente, actor, nro de ticket, razón o campo modificado"
             searchableKeys={['searchText']}
             filterableColumns={[
               'enteredAtLocalDate',
@@ -1223,7 +1855,8 @@ export function AuditoriaPage() {
                   value: 'entry.undercharged',
                   label: 'Cobro menor al sugerido',
                 },
-                { value: 'other', label: 'Otros eventos' },
+                { value: 'invoice.cert_expired', label: 'Cobro sin factura' },
+                { value: 'other', label: 'Evento del sistema' },
               ],
               origin: [
                 { value: 'history', label: 'Historial' },
@@ -1263,16 +1896,19 @@ export function AuditoriaPage() {
       ) : (
         <LprReviewTab
           events={lprEvents}
+          filters={lprFilters}
           isError={lprQuery.isError}
           isLoading={lprQuery.isLoading}
           isFetching={lprQuery.isFetching}
+          onFiltersChange={handleLprFiltersChange}
           onRefresh={() => void lprQuery.refetch()}
+          onSearchChange={handleLprSearchChange}
           pageIndex={lprPageIndex}
           pageSize={lprPageSize}
+          search={lprSearch}
           setPageIndex={setLprPageIndex}
           setPageSize={setLprPageSize}
           tenantId={sucursalId}
-          total={lprTotal}
         />
       )}
 

@@ -92,3 +92,33 @@ export async function apiRequest<TResponse>(
 
   return (await response.json()) as TResponse;
 }
+
+/**
+ * Como `apiRequest`, pero para un archivo (p. ej. el PDF de una factura): no
+ * lo parsea como JSON y devuelve también el nombre que manda el backend en
+ * `Content-Disposition`. Los errores llegan igual, como `ApiError`.
+ */
+export async function apiRequestFile(
+  options: Omit<RequestOptions, 'body'>,
+): Promise<{ blob: Blob; fileName: string | null }> {
+  const headers: Record<string, string> = {};
+  if (options.bearer) {
+    headers.Authorization = `Bearer ${options.bearer}`;
+  }
+
+  const response = await fetch(`${readBaseUrl()}${options.path}`, {
+    method: options.method,
+    headers,
+  });
+
+  if (!response.ok) {
+    const problem = await parseProblem(response);
+    const message =
+      problem?.detail ?? `Request failed with status ${response.status}`;
+    throw new ApiError(response.status, message, problem);
+  }
+
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  const match = /filename="?([^";]+)"?/i.exec(disposition);
+  return { blob: await response.blob(), fileName: match?.[1] ?? null };
+}

@@ -4,6 +4,7 @@ import {
   type EntityAddress,
 } from '../../../../shared/components/AddressPicker/addressUtils';
 import type { MpAccount } from '../../services/mercado-pago';
+import type { ArcaAccount } from '../../services/arca';
 
 /**
  * Lógica pura de la tarjeta de Mercado Pago: de la cuenta cruda del backend al
@@ -120,4 +121,127 @@ export function resolveMpCardState(input: {
   }
 
   return { kind: 'linked' };
+}
+
+// ── ARCA (facturación electrónica) ──────────────────────────────────────────
+
+/** Estado visual de la tarjeta de ARCA en Integraciones. */
+export type ArcaCardState =
+  | { kind: 'unlinked' }
+  | { kind: 'in_progress' }
+  | { kind: 'linked' }
+  | { kind: 'expiring'; daysLeft: number }
+  | { kind: 'broken' };
+
+/** A partir de acá avisamos que el certificado está por vencer. */
+export const ARCA_CERT_EXPIRING_THRESHOLD_DAYS = 30;
+
+/**
+ * Resuelve qué mostrar en la tarjeta de ARCA, a partir de la cuenta cruda del
+ * backend.
+ *
+ * Precedencia:
+ *  1. Sin cuenta → `unlinked`. `null` es el camino feliz de una playa que
+ *     nunca vinculó (o se desvinculó): el backend responde 404
+ *     `ARCA_NOT_LINKED` y quien consulta lo traduce a `null` (ver
+ *     `useArcaAccount`).
+ *  2. `pending_certificate` / `pending_sales_point` → `in_progress`: el wizard
+ *     se arrancó pero no terminó.
+ *  3. `cert_expired`, o `linked` con `certExpiresAt` YA pasado → `broken`: no
+ *     se puede emitir hasta renovar el certificado.
+ *  4. `linked` con `certExpiresAt` a 30 días o menos → `expiring`.
+ *  5. Resto → `linked`.
+ */
+export function resolveArcaCardState(
+  account: ArcaAccount | null,
+  now: Date = new Date(),
+): ArcaCardState {
+  if (account === null) return { kind: 'unlinked' };
+
+  if (
+    account.status === 'pending_certificate' ||
+    account.status === 'pending_sales_point'
+  ) {
+    return { kind: 'in_progress' };
+  }
+
+  if (account.status === 'cert_expired') {
+    return { kind: 'broken' };
+  }
+
+  if (account.certExpiresAt) {
+    const expiresAt = new Date(account.certExpiresAt).getTime();
+    if (!Number.isNaN(expiresAt)) {
+      if (expiresAt <= now.getTime()) return { kind: 'broken' };
+
+      const daysLeft = daysUntil(account.certExpiresAt, now) ?? 0;
+      if (daysLeft <= ARCA_CERT_EXPIRING_THRESHOLD_DAYS) {
+        return { kind: 'expiring', daysLeft };
+      }
+    }
+  }
+
+  return { kind: 'linked' };
+}
+
+const AR_DATE = new Intl.DateTimeFormat('es-AR', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  timeZone: 'America/Argentina/Buenos_Aires',
+});
+
+/** `dd/mm/aaaa` en hora argentina, para «Tu certificado vence el ...». */
+export function formatArcaCertDate(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '' : AR_DATE.format(date);
+}
+
+/**
+ * Faltan datos que van impresos en la factura (RG 1415, Anexo II): Ingresos
+ * Brutos y fecha de inicio de actividades. Una cuenta vinculada antes de que
+ * fueran obligatorios puede no tenerlos.
+ */
+export function isArcaInvoiceDataMissing(
+  account: Pick<ArcaAccount, 'iibb' | 'inicioActividad'>,
+): boolean {
+  return !account.iibb?.trim() || !account.inicioActividad;
+}
+
+/**
+ * Lo que se imprime en la factura cuando no hay número de Ingresos Brutos.
+ * Es la alternativa que da la RG 1415 («número de inscripción ... o condición
+ * de no contribuyente»). NO es lo mismo que «Exento»: un exento está dentro
+ * del impuesto y en general tiene número; un no contribuyente no está
+ * alcanzado y no tiene inscripción.
+ */
+export const IIBB_NO_CONTRIBUYENTE = 'No contribuyente';
+
+/** El IIBB a guardar: lo tipeado, o «No contribuyente» si quedó vacío. */
+export function resolveArcaIibb(raw: string): string {
+  return raw.trim() || IIBB_NO_CONTRIBUYENTE;
+}
+
+/** Mensaje del campo inicio de actividades (AAAA-MM-DD), o `null`. */
+export function validateArcaInicioActividad(raw: string): string | null {
+  if (!raw) return 'Ingresá la fecha de inicio de actividades';
+  return /^\d{4}-\d{2}-\d{2}$/.test(raw) ? null : 'La fecha no es válida';
+}
+
+/** Condición frente al IVA, en castellano, para mostrar en la tarjeta y el wizard. */
+export const ARCA_TAX_CONDITION_LABELS: Record<
+  NonNullable<ArcaAccount['condicionIva']>,
+  string
+> = {
+  responsable_inscripto: 'Responsable Inscripto',
+  monotributo: 'Monotributo',
+  exento: 'Exento',
+};
+
+/** CUIT de 11 dígitos formateado `20-12345678-3`, para mostrar (no para mandar). */
+export function formatCuit(cuit: string): string {
+  const digits = cuit.replace(/\D/g, '');
+  if (digits.length !== 11) return cuit;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 10)}-${digits.slice(10)}`;
 }
