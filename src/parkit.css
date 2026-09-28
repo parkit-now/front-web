@@ -460,6 +460,8 @@ a {
 }
 
 .lpr-review-card {
+  width: 100%;
+  max-width: 504px;
   overflow: hidden;
 }
 
