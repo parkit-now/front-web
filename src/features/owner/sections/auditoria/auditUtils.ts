@@ -296,6 +296,7 @@ const OTHER_ACTION_LABELS: Record<string, string> = {
   'arca_account.renewal_prepared': 'Renovación del certificado preparada',
   'arca_account.certificate_renewed': 'Certificado de ARCA renovado',
   'arca_account.certificate_expired': 'Certificado de ARCA vencido',
+  'rate.prices_propagated': 'Precios aplicados a autos adentro',
 };
 
 export function actionLabelFor(action: string): string {

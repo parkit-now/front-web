@@ -24,13 +24,20 @@ import { useSucursal } from '../../context/SucursalContext';
 import {
   createRate,
   deleteRate,
+  listOpenEntriesByRate,
   listRates,
   updateRate,
   type Rate,
   type UpdateRateInput,
 } from '../../services/rates';
 import { RateFormModal } from './RateFormModal';
-import { diffRateUpdate, type RateFormPayload } from './validation';
+import {
+  diffRateUpdate,
+  hasPriceChange,
+  priceDiffRows,
+  type RateFormPayload,
+} from './validation';
+import { RatePropagationDialog } from './RatePropagationDialog';
 
 /**
  * El optimistic locking del backend devuelve 409 cuando la `version` que
@@ -61,6 +68,13 @@ export function TasasPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Rate | null>(null);
+  /** La pregunta pendiente sobre los autos que están adentro. */
+  const [propagation, setPropagation] = useState<{
+    rate: Rate;
+    body: UpdateRateInput;
+    openEntries: number;
+    rows: { label: string; before: number; after: number }[];
+  } | null>(null);
   const [confirmAction, setConfirmAction] = useState<RateConfirmAction | null>(
     null,
   );
@@ -84,8 +98,26 @@ export function TasasPage() {
   });
   const rates = useMemo(() => listQuery.data ?? [], [listQuery.data]);
 
+  /**
+   * Cuántos autos hay adentro con cada tarifa.
+   *
+   * Va EN PARALELO al listado y no al abrir el formulario, así editar una
+   * tarifa no espera un request más. Con 30 s de `staleTime` alcanza: el dato
+   * sólo decide si se muestra la pregunta, y el servidor es igual la autoridad
+   * sobre a qué estadías alcanza.
+   */
+  const openEntriesQuery = useQuery({
+    queryKey: ['rates', 'open-entries', sucursalId],
+    queryFn: () => listOpenEntriesByRate(sucursalId),
+    enabled: Boolean(sucursalId),
+    staleTime: 30_000,
+  });
+
   function invalidate() {
     void queryClient.invalidateQueries({ queryKey });
+    void queryClient.invalidateQueries({
+      queryKey: ['rates', 'open-entries', sucursalId],
+    });
   }
 
   function closeForm() {
@@ -180,7 +212,42 @@ export function TasasPage() {
       showToast({ message: 'No hay cambios para guardar.', kind: 'info' });
       return;
     }
+
+    // ¿Hay autos adentro a los que esto les cambiaría el precio?
+    //
+    // El conteo puede estar hasta 30 s desactualizado, y está bien: si decía 0
+    // y ahora hay uno, no se pregunta y el flag queda en false, o sea que el
+    // auto conserva el precio de entrada — el comportamiento de siempre. Falla
+    // del lado seguro, y el servidor es igual la autoridad sobre a quiénes
+    // alcanza.
+    const openEntries = hasPriceChange(body)
+      ? (openEntriesQuery.data?.counts.find((c) => c.rateId === editing.id)
+          ?.openEntries ?? 0)
+      : 0;
+
+    if (openEntries > 0) {
+      setPropagation({
+        rate: editing,
+        body,
+        openEntries,
+        rows: priceDiffRows(body, editing),
+      });
+      return;
+    }
+
     saveMutation.mutate({ kind: 'update', rate: editing, body });
+  }
+
+  function answerPropagation(apply: boolean) {
+    if (!propagation) return;
+    saveMutation.mutate({
+      kind: 'update',
+      rate: propagation.rate,
+      body: apply
+        ? { ...propagation.body, applyToOpenEntries: true }
+        : propagation.body,
+    });
+    setPropagation(null);
   }
 
   function handleConfirm() {
@@ -424,6 +491,21 @@ export function TasasPage() {
         }}
         onSubmit={handleFormSubmit}
       />
+
+      {propagation ? (
+        <RatePropagationDialog
+          open
+          rateName={propagation.rate.name}
+          openEntries={propagation.openEntries}
+          rows={propagation.rows}
+          isPending={saveMutation.isPending}
+          // Cancelar NO guarda nada: el formulario queda abierto con los
+          // cambios sin aplicar, para que el dueño pueda revisarlos.
+          onCancel={() => setPropagation(null)}
+          onKeepSnapshot={() => answerPropagation(false)}
+          onApply={() => answerPropagation(true)}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={confirmCopy !== null}

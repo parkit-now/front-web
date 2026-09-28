@@ -48,6 +48,26 @@ export async function createRate(
   });
 }
 
+export type OpenEntriesByRate = components['schemas']['OpenEntriesByRateDto'];
+
+/**
+ * GET /tenants/:tenantId/rates/open-entries — cuántos autos hay adentro con
+ * cada tarifa.
+ *
+ * Sirve para saber si tiene sentido preguntarle al dueño, al guardar un cambio
+ * de precios, si esos autos pasan al precio nuevo. Si no hay ninguno con esa
+ * tarifa, no se lo molesta.
+ */
+export async function listOpenEntriesByRate(
+  tenantId: string,
+): Promise<OpenEntriesByRate> {
+  return apiRequest<OpenEntriesByRate>({
+    method: 'GET',
+    path: `/tenants/${tenantId}/rates/open-entries`,
+    bearer: await bearer(),
+  });
+}
+
 /** PATCH /tenants/:tenantId/rates/:id — solo owner, optimistic locking. */
 export async function updateRate(
   tenantId: string,
