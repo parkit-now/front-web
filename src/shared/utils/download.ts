@@ -1,5 +1,5 @@
 /**
- * Descarga un archivo ya bajado (el PDF de una factura, un CSR).
+ * Descarga un archivo ya bajado (p. ej. el CSR de ARCA).
  *
  * La URL `blob:` se revoca DESPUÉS, no en el mismo tick del `click()`: Chrome
  * arranca la descarga de forma asíncrona y, si la URL ya no existe, ignora el
