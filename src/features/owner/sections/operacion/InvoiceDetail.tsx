@@ -1,3 +1,4 @@
+import QRCode from 'qrcode';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -10,13 +11,16 @@ import { Button } from '../../../../shared/components/ui/Button';
 import { Switch } from '../../../../shared/components/ui/Switch';
 import type { ArcaTaxCondition } from '../../services/arca';
 import {
+  getInvoiceDocument,
   issueInvoice,
   setEntryManuallyInvoiced,
 } from '../../services/invoices';
+import { renderInvoiceHtml } from './invoiceDocument';
 import { InvoiceReceiverChooser } from './InvoiceReceiverChooser';
 import {
   canIssueInvoice,
   expectedLetter,
+  formatVoucherNumber,
   formatIsoDay,
   INVOICE_STATE_LABEL,
   INVOICE_STATE_VARIANT,
@@ -24,6 +28,7 @@ import {
   voucherLabel,
 } from './invoiceUtils';
 import type { EntryHistoryRow } from './operationUtils';
+import { printInvoice } from './printInvoice';
 import { useInvoiceReceiver } from './useInvoiceReceiver';
 
 /** Cómo factura la sede: con ARCA (vinculada o con el certificado vencido) o no. */
@@ -46,7 +51,7 @@ function Item({
 
 /**
  * Bloque «Factura» del detalle de un cobro en el Historial: el comprobante y
- * lo que se puede hacer según el estado (emitir, reintentar o,
+ * lo que se puede hacer según el estado (emitir, reintentar, bajar el PDF o,
  * sin ARCA, marcarla facturada a mano).
  */
 export function InvoiceDetail({
@@ -64,7 +69,7 @@ export function InvoiceDetail({
   onChanged: () => void;
 }) {
   const { showToast } = useToast();
-  const [busy, setBusy] = useState<'issue' | 'manual' | null>(null);
+  const [busy, setBusy] = useState<'issue' | 'pdf' | 'manual' | null>(null);
   // «Emitir factura» abre primero el receptor (consumidor final o CUIT).
   const [issueOpen, setIssueOpen] = useState(false);
   const receiver = useInvoiceReceiver(tenantId);
@@ -106,6 +111,39 @@ export function InvoiceDetail({
     } finally {
       setBusy(null);
       onChanged();
+    }
+  }
+
+  async function downloadPdf() {
+    if (!invoice) return;
+    setBusy('pdf');
+    try {
+      const doc = await getInvoiceDocument(tenantId, invoice.id);
+      // Los datos llegaron: si algo falla de acá en adelante es del navegador.
+      try {
+        const qr = await QRCode.toDataURL(doc.qrUrl, {
+          width: 200,
+          margin: 0,
+          errorCorrectionLevel: 'M',
+        });
+        const number = formatVoucherNumber(invoice.ptoVta, invoice.cbteNro);
+        await printInvoice(
+          renderInvoiceHtml(doc, qr),
+          [row.plate, invoice.cae, number].filter(Boolean).join('-'),
+        );
+      } catch {
+        showToast({
+          message: 'No se pudo abrir la impresión. Probá de nuevo.',
+          kind: 'error',
+        });
+      }
+    } catch (error) {
+      showToast({
+        message: translateApiError(error, { endpoint: 'invoices.document' }),
+        kind: 'error',
+      });
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -214,9 +252,20 @@ export function InvoiceDetail({
 
       <div className="operation-invoice-actions">
         {invoiceState === 'issued' ? (
-          <span className="operation-muted">
-            El PDF se descarga desde la app de escritorio.
-          </span>
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={busy === 'pdf'}
+              disabled={busy !== null}
+              onClick={() => void downloadPdf()}
+            >
+              Descargar PDF
+            </Button>
+            <span className="operation-muted">
+              Se abre la impresión: elegí «Guardar como PDF».
+            </span>
+          </>
         ) : null}
         {showIssue && !issueOpen ? (
           <Button

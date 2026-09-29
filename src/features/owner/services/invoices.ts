@@ -8,6 +8,7 @@ export type InvoiceStatus = components['schemas']['InvoiceStatus'];
 export type InvoiceBatchResult = components['schemas']['InvoiceBatchItemDto'];
 export type Taxpayer = components['schemas']['TaxpayerDto'];
 export type InvoiceReceiver = components['schemas']['InvoiceReceiverDto'];
+export type InvoiceDocument = components['schemas']['InvoiceDocumentDto'];
 type InvoiceChangesResponse =
   components['schemas']['InvoiceChangesResponseDto'];
 type InvoiceBatchResponse = components['schemas']['InvoiceBatchResponseDto'];
@@ -123,6 +124,22 @@ export async function issueInvoiceBatch(
     results.push(...page.results);
   }
   return results;
+}
+
+/**
+ * GET /tenants/:tenantId/invoices/:invoiceId/document — los datos del
+ * comprobante para imprimirlo (`invoiceDocument.ts`). 409 `INVOICE_NOT_ISSUED`
+ * si todavía no tiene CAE.
+ */
+export async function getInvoiceDocument(
+  tenantId: string,
+  invoiceId: string,
+): Promise<InvoiceDocument> {
+  return apiRequest<InvoiceDocument>({
+    method: 'GET',
+    path: `/tenants/${encodeURIComponent(tenantId)}/invoices/${encodeURIComponent(invoiceId)}/document`,
+    bearer: await bearer(),
+  });
 }
 
 /**
