@@ -92,6 +92,7 @@ export type EndpointKey =
   | 'arca.uploadRenewalCertificate'
   | 'invoices.issue'
   | 'invoices.batch'
+  | 'invoices.document'
   | 'invoices.lookupTaxpayer'
   | 'entries.setManuallyInvoiced';
 
