@@ -178,12 +178,6 @@ export function receiverDescription(
     : `CUIT ${cuit}`;
 }
 
-/** Siempre termina en `.pdf`, venga como venga el nombre. */
-export function pdfFileName(name: string | null, fallback: string): string {
-  const base = (name ?? '').trim() || fallback;
-  return /\.pdf$/i.test(base) ? base : `${base}.pdf`;
-}
-
 // ── Receptor: consumidor final o con CUIT ──────────────────────────────────
 // Gemelo del cobro del desktop (`front-desktop/src/features/entries/
 // invoiceUtils.ts`): si cambia acá, cambiar allá.

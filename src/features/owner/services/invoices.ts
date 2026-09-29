@@ -1,7 +1,6 @@
 import type { components } from '../../../generated/api-types';
-import { apiRequest, apiRequestFile } from '../../../lib/api/client';
+import { apiRequest } from '../../../lib/api/client';
 import { getSession } from '../../../lib/supabase/session';
-import { pdfFileName } from '../sections/operacion/invoiceUtils';
 
 export type Invoice = components['schemas']['InvoiceDto'];
 export type InvoiceSummary = components['schemas']['InvoiceSummaryDto'];
@@ -124,29 +123,6 @@ export async function issueInvoiceBatch(
     results.push(...page.results);
   }
   return results;
-}
-
-/**
- * GET /tenants/:tenantId/invoices/:invoiceId/pdf — sólo facturas emitidas.
- * El nombre (`PATENTE-CAE-0001-00000006.pdf`) lo arma el backend; `fallback`
- * es por si el header no llega.
- */
-export async function downloadInvoicePdf(
-  tenantId: string,
-  invoiceId: string,
-  fallback: string,
-): Promise<{ blob: Blob; fileName: string }> {
-  const { blob, fileName } = await apiRequestFile({
-    method: 'GET',
-    path: `/tenants/${encodeURIComponent(tenantId)}/invoices/${encodeURIComponent(invoiceId)}/pdf`,
-    bearer: await bearer(),
-  });
-  return {
-    // Con el tipo explícito el navegador lo guarda y lo abre como PDF aunque
-    // la respuesta llegue sin `Content-Type`.
-    blob: new Blob([blob], { type: 'application/pdf' }),
-    fileName: pdfFileName(fileName, fallback),
-  };
 }
 
 /**
