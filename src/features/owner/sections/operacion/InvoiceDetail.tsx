@@ -1,3 +1,4 @@
+import QRCode from 'qrcode';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -8,25 +9,26 @@ import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { Badge } from '../../../../shared/components/ui/Badge';
 import { Button } from '../../../../shared/components/ui/Button';
 import { Switch } from '../../../../shared/components/ui/Switch';
-import { saveBlob } from '../../../../shared/utils/download';
 import type { ArcaTaxCondition } from '../../services/arca';
 import {
-  downloadInvoicePdf,
+  getInvoiceDocument,
   issueInvoice,
   setEntryManuallyInvoiced,
 } from '../../services/invoices';
+import { renderInvoiceHtml } from './invoiceDocument';
 import { InvoiceReceiverChooser } from './InvoiceReceiverChooser';
 import {
   canIssueInvoice,
   expectedLetter,
-  formatIsoDay,
   formatVoucherNumber,
+  formatIsoDay,
   INVOICE_STATE_LABEL,
   INVOICE_STATE_VARIANT,
   receiverDescription,
   voucherLabel,
 } from './invoiceUtils';
 import type { EntryHistoryRow } from './operationUtils';
+import { printInvoice } from './printInvoice';
 import { useInvoiceReceiver } from './useInvoiceReceiver';
 
 /** Cómo factura la sede: con ARCA (vinculada o con el certificado vencido) o no. */
@@ -116,16 +118,28 @@ export function InvoiceDetail({
     if (!invoice) return;
     setBusy('pdf');
     try {
-      const number = formatVoucherNumber(invoice.ptoVta, invoice.cbteNro);
-      const { blob, fileName } = await downloadInvoicePdf(
-        tenantId,
-        invoice.id,
-        [row.plate, invoice.cae, number].filter(Boolean).join('-'),
-      );
-      saveBlob(blob, fileName);
+      const doc = await getInvoiceDocument(tenantId, invoice.id);
+      // Los datos llegaron: si algo falla de acá en adelante es del navegador.
+      try {
+        const qr = await QRCode.toDataURL(doc.qrUrl, {
+          width: 200,
+          margin: 0,
+          errorCorrectionLevel: 'M',
+        });
+        const number = formatVoucherNumber(invoice.ptoVta, invoice.cbteNro);
+        await printInvoice(
+          renderInvoiceHtml(doc, qr),
+          [row.plate, invoice.cae, number].filter(Boolean).join('-'),
+        );
+      } catch {
+        showToast({
+          message: 'No se pudo abrir la impresión. Probá de nuevo.',
+          kind: 'error',
+        });
+      }
     } catch (error) {
       showToast({
-        message: translateApiError(error, { endpoint: 'invoices.pdf' }),
+        message: translateApiError(error, { endpoint: 'invoices.document' }),
         kind: 'error',
       });
     } finally {
@@ -238,15 +252,20 @@ export function InvoiceDetail({
 
       <div className="operation-invoice-actions">
         {invoiceState === 'issued' ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            loading={busy === 'pdf'}
-            disabled={busy !== null}
-            onClick={() => void downloadPdf()}
-          >
-            Descargar PDF
-          </Button>
+          <>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={busy === 'pdf'}
+              disabled={busy !== null}
+              onClick={() => void downloadPdf()}
+            >
+              Descargar PDF
+            </Button>
+            <span className="operation-muted">
+              Se abre la impresión: elegí «Guardar como PDF».
+            </span>
+          </>
         ) : null}
         {showIssue && !issueOpen ? (
           <Button

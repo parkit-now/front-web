@@ -92,7 +92,7 @@ export type EndpointKey =
   | 'arca.uploadRenewalCertificate'
   | 'invoices.issue'
   | 'invoices.batch'
-  | 'invoices.pdf'
+  | 'invoices.document'
   | 'invoices.lookupTaxpayer'
   | 'entries.setManuallyInvoiced';
 
@@ -301,7 +301,6 @@ const CODE_MESSAGES: Record<string, string> = {
   INVOICE_RECEIVER_NOT_A:
     'Ese CUIT no puede recibir Factura A (no es Responsable Inscripto ni Monotributista). Emitila de nuevo.',
   INVOICE_NOT_ISSUED: 'La factura todavía no se emitió: no tiene PDF.',
-  INVOICE_PDF_FAILED: 'No se pudo generar el PDF. Probá de nuevo en un rato.',
 
   // Validacion (envoltorio — el detalle por campo se traduce con
   // translateValidationCode).
