@@ -207,10 +207,11 @@ export function CertificateTextarea({
 }
 
 /**
- * Capturas de los manuales oficiales de ARCA (WSASS y "Cómo adherirse"), con
- * CUIT y nombres tapados. Sólo hay para homologación por ahora. Clickeable
- * para verla en grande (se abre en una pestaña nueva: no hace falta un
- * visor propio).
+ * Capturas de ARCA con CUIT y nombres tapados: las de homologación salen de
+ * los manuales oficiales (WSASS y "Cómo adherirse"); las de producción, del
+ * tutorial de arcasdk (ver `public/arca-guide/produccion/CREDITOS.md`).
+ * Clickeable para verla en grande (se abre en una pestaña nueva: no hace
+ * falta un visor propio). Diferida: varias viven dentro de un `Disclosure`.
  */
 export function GuideImage({ src, alt }: { src: string; alt: string }) {
   return (
@@ -223,6 +224,8 @@ export function GuideImage({ src, alt }: { src: string; alt: string }) {
       <img
         src={src}
         alt={alt}
+        loading="lazy"
+        decoding="async"
         style={{
           display: 'block',
           width: '100%',
