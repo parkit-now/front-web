@@ -1491,22 +1491,59 @@ function Step2Upload({
             buscá <strong>Administración de Certificados Digitales</strong> y
             abrilo.
           </p>
+          <p style={HINT}>
+            Si ARCA te pregunta para qué contribuyente vas a operar, elegí el
+            CUIT {formatCuit(account.cuit)}.
+          </p>
+          <GuideImage
+            src="/arca-guide/produccion/05-elegir-contribuyente.png"
+            alt="ARCA pide elegir el contribuyente para el que vas a operar"
+          />
           <Disclosure summary="¿No te aparece? Adherilo (se hace una sola vez)">
-            <ol style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 8 }}>
+            <ol
+              style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 14 }}
+            >
               <li style={HINT}>
-                Entrá a{' '}
+                En el inicio de ARCA, entrá a{' '}
                 <ArcaInlineLink href={ARCA_ADMIN_RELACIONES_URL}>
                   Administrador de relaciones
-                </ArcaInlineLink>
-                .
+                </ArcaInlineLink>{' '}
+                (también lo encontrás con el buscador).
+                <div style={{ marginTop: 6 }}>
+                  <GuideImage
+                    src="/arca-guide/produccion/01-buscar-administrador-relaciones.png"
+                    alt="Administrador de relaciones en el inicio de ARCA"
+                  />
+                </div>
               </li>
               <li style={HINT}>
                 Apretá <strong>Adherir servicio</strong>.
+                <div style={{ marginTop: 6 }}>
+                  <GuideImage
+                    src="/arca-guide/produccion/02-adherir-servicio.png"
+                    alt="Botón Adherir servicio"
+                  />
+                </div>
               </li>
               <li style={HINT}>
                 Elegí <strong>ARCA</strong> →{' '}
-                <strong>Administración de Certificados Digitales</strong> y
-                confirmá con <strong>Continuar</strong>.
+                <strong>Servicios interactivos</strong> →{' '}
+                <strong>Administración de Certificados Digitales</strong>.
+                <div style={{ marginTop: 6 }}>
+                  <GuideImage
+                    src="/arca-guide/produccion/03-servicio-certificados-digitales.png"
+                    alt="Administración de Certificados Digitales en Servicios interactivos"
+                  />
+                </div>
+              </li>
+              <li style={HINT}>
+                Apretá <strong>Confirmar</strong>. Pide clave fiscal nivel 3.
+                <div style={{ marginTop: 6 }}>
+                  <GuideImage
+                    src="/arca-guide/produccion/04-confirmar-adhesion.png"
+                    alt="Confirmar la adhesión al servicio"
+                  />
+                </div>
               </li>
               <li style={HINT}>
                 <strong>Cerrá la sesión y volvé a entrar</strong>: el servicio
@@ -1531,15 +1568,21 @@ function Step2Upload({
       body: (
         <>
           <p style={HINT}>
-            Elegí <strong>Agregar alias</strong> y poné este nombre:
+            Apretá <strong>Agregar alias</strong>.
           </p>
+          <GuideImage
+            src="/arca-guide/produccion/06-agregar-alias.png"
+            alt="Botón Agregar alias en Administración de Certificados Digitales"
+          />
+          <p style={HINT}>En el campo Alias poné este nombre:</p>
           <CopyRow
             label="Alias"
             displayValue={account.certAlias}
             copyValue={account.certAlias}
           />
           <p style={HINT}>
-            Subí la solicitud de certificado (CSR): ARCA pide el archivo.
+            Descargá la solicitud de certificado (CSR), subila con{' '}
+            <strong>Examinar</strong> y apretá <strong>Agregar alias</strong>.
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
             <Button
@@ -1552,6 +1595,21 @@ function Step2Upload({
             </Button>
             <CopyCsrButton csr={csr} loading={csrLoading} />
           </div>
+          <GuideImage
+            src="/arca-guide/produccion/07-alias-y-csr.png"
+            alt="Formulario con el alias y el archivo de la solicitud"
+          />
+          <Disclosure summary="¿ARCA dice que ese alias ya existe?">
+            <p style={HINT}>
+              Pasa si ya vinculaste antes. En la lista de alias apretá{' '}
+              <strong>Ver</strong> en ese nombre, después{' '}
+              <strong>Agregar certificado</strong>, y subí la solicitud.
+            </p>
+            <GuideImage
+              src="/arca-guide/produccion/16-agregar-certificado.png"
+              alt="Detalle del alias con el botón Agregar certificado"
+            />
+          </Disclosure>
         </>
       ),
       primaryAction: {
@@ -1565,8 +1623,22 @@ function Step2Upload({
       body: (
         <>
           <p style={HINT}>
-            Descargá el certificado que genera ARCA, abrilo con el Bloc de notas
-            y pegá todo el contenido acá:
+            En la lista de alias, apretá <strong>Ver</strong> en{' '}
+            <strong>{account.certAlias}</strong>.
+          </p>
+          <GuideImage
+            src="/arca-guide/produccion/08-ver-alias.png"
+            alt="Lista de alias con el link Ver"
+          />
+          <p style={HINT}>
+            Descargá el certificado con el botón de <strong>Descargar</strong>.
+          </p>
+          <GuideImage
+            src="/arca-guide/produccion/09-descargar-certificado.png"
+            alt="Detalle del alias con el botón para descargar el certificado"
+          />
+          <p style={HINT}>
+            Abrí el archivo con el Bloc de notas y pegá todo el contenido acá:
           </p>
           <CertificateTextarea
             value={certText}
@@ -1588,15 +1660,79 @@ function Step2Upload({
       body: (
         <>
           <p style={HINT}>
-            Entrá a{' '}
-            <ArcaInlineLink href={ARCA_ADMIN_RELACIONES_URL}>
-              Administrador de relaciones
-            </ArcaInlineLink>{' '}
-            → <strong>Nueva relación</strong> y asociá a ese certificado{' '}
+            Asociá dos servicios al certificado:{' '}
             <strong>Facturación Electrónica</strong> y{' '}
-            <strong>Constancia de Inscripción</strong>.
+            <strong>Constancia de Inscripción</strong>. Hacé estos pasos una vez
+            para cada uno.
           </p>
-          <ArcaLoginLink />
+          <ol style={{ margin: 0, paddingLeft: 20, display: 'grid', gap: 14 }}>
+            <li style={HINT}>
+              Entrá a{' '}
+              <ArcaInlineLink href={ARCA_ADMIN_RELACIONES_URL}>
+                Administrador de relaciones
+              </ArcaInlineLink>{' '}
+              y apretá <strong>Nueva relación</strong>.
+              <div style={{ marginTop: 6 }}>
+                <GuideImage
+                  src="/arca-guide/produccion/10-nueva-relacion.png"
+                  alt="Botón Nueva relación"
+                />
+              </div>
+            </li>
+            <li style={HINT}>
+              En <strong>Servicio</strong>, apretá <strong>Buscar</strong>.
+              <div style={{ marginTop: 6 }}>
+                <GuideImage
+                  src="/arca-guide/produccion/11-buscar-servicio.png"
+                  alt="Botón Buscar del servicio"
+                />
+              </div>
+            </li>
+            <li style={HINT}>
+              Abrí <strong>ARCA</strong> → <strong>WebServices</strong> y elegí{' '}
+              <strong>Facturación Electrónica</strong> (la segunda vez,{' '}
+              <strong>Constancia de Inscripción</strong>).
+              <div style={{ marginTop: 6 }}>
+                <GuideImage
+                  src="/arca-guide/produccion/12-web-services.png"
+                  alt="Lista de WebServices de ARCA"
+                />
+              </div>
+            </li>
+            <li style={HINT}>
+              En <strong>Representante</strong>, apretá <strong>Buscar</strong>.
+              <div style={{ marginTop: 6 }}>
+                <GuideImage
+                  src="/arca-guide/produccion/13-buscar-representante.png"
+                  alt="Botón Buscar del representante"
+                />
+              </div>
+            </li>
+            <li style={HINT}>
+              En <strong>Computador fiscal</strong> elegí{' '}
+              <strong>{account.certAlias}</strong> y apretá{' '}
+              <strong>Confirmar</strong>.
+              <div style={{ marginTop: 6 }}>
+                <GuideImage
+                  src="/arca-guide/produccion/14-elegir-computador-fiscal.png"
+                  alt="Elegir el certificado en Computador fiscal"
+                />
+              </div>
+            </li>
+            <li style={HINT}>
+              Revisá los datos y apretá <strong>Confirmar</strong> otra vez.
+              <div style={{ marginTop: 6 }}>
+                <GuideImage
+                  src="/arca-guide/produccion/15-confirmar-relacion.png"
+                  alt="Confirmar la nueva relación"
+                />
+              </div>
+            </li>
+          </ol>
+          <p style={{ ...HINT, color: 'var(--text-3)' }}>
+            En las capturas figura otro servicio de ejemplo: vos elegí los dos
+            de arriba.
+          </p>
         </>
       ),
       primaryAction: {
