@@ -4,6 +4,7 @@ export type FieldErrors = Partial<Record<AuthField, string>>;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const NAME_REQUIRED_MESSAGE = 'Este campo es obligatorio.';
+export const PASSWORD_MISMATCH_MESSAGE = 'Las contraseñas no coinciden';
 export const NAME_INCOMPLETE_MESSAGE = 'Ingresá tu nombre y apellido';
 
 /** Nombre y apellido: no vacío y al menos dos palabras. */
@@ -43,10 +44,10 @@ export function validatePasswordConfirmation(
   confirmation: string,
 ): string | null {
   if (!confirmation) {
-    return 'Repetí la contraseña';
+    return NAME_REQUIRED_MESSAGE;
   }
   if (password !== confirmation) {
-    return 'Las contraseñas no coinciden';
+    return PASSWORD_MISMATCH_MESSAGE;
   }
   return null;
 }
