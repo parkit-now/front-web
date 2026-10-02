@@ -129,10 +129,6 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
           void handleSubmit(event);
         }}
       >
-        <p className="auth-legend">
-          Los campos marcados con <RequiredMark /> son obligatorios
-        </p>
-
         <div className="form-field">
           <label htmlFor="register-name" className="auth-label">
             Nombre y apellido

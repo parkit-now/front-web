@@ -1,6 +1,5 @@
 import { AddressPicker } from '../../../shared/components/AddressPicker/AddressPicker';
 import type { AddressFormValue } from '../../../shared/components/AddressPicker/addressUtils';
-import { RequiredMark } from '../../../shared/components/ui/RequiredMark';
 import type { SucursalFieldErrors, SucursalFormValues } from '../validation';
 
 type Props = {
@@ -25,9 +24,6 @@ export function SucursalStep({
   return (
     <div className="onboarding-section">
       <h3>Ubicación</h3>
-      <p className="section-hint">
-        Los campos marcados con <RequiredMark /> son obligatorios.
-      </p>
       <div className="onboarding-grid">
         {/* El `AddressPicker` usa los primitivos `pk-*`, pero acá va adentro de
             un `.onboarding-field`: las reglas `.onboarding-field input` y

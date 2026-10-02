@@ -1,6 +1,5 @@
 import { PhoneInput } from '../../../shared/components/PhoneInput';
 import { Input } from '../../../shared/components/ui/Input';
-import { RequiredMark } from '../../../shared/components/ui/RequiredMark';
 import type { ParkingFieldErrors, ParkingFormValues } from '../validation';
 
 type Props = {
@@ -29,10 +28,6 @@ export function ParkingStep({
   return (
     <div className="onboarding-section">
       <h3>Tu estacionamiento</h3>
-      <p className="section-hint">
-        Los campos marcados con <RequiredMark /> son obligatorios.
-      </p>
-
       <Input
         id="parking-name"
         label="Nombre del estacionamiento"
