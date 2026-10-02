@@ -192,12 +192,24 @@ export function DraftWizard({
     setCurrentStep(3);
   }
 
-  // ── Guardar sin avanzar (sólo con solicitud creada) ────────────────────────
-  function handleSaveOnly() {
-    if (!application) return;
-    if (currentStep === 1 && !validateStep1()) return;
-    if (currentStep === 2 && !validateStep2()) return;
-    onSave(application.id, buildPayload());
+  // ── Volver a un paso anterior ──────────────────────────────────────────────
+  // "Siguiente" ya persiste (PATCH) al avanzar, así que no hay botón de
+  // "Guardar cambios". Lo que quedaba sin cubrir era volver atrás con cambios
+  // hechos en el paso actual: se guardan acá, y SOLO si el paso es válido (un
+  // borrador con un email a medio escribir lo rechazaría el backend). Si no es
+  // válido el estado local del wizard conserva lo tipeado igual.
+  function goToStep(target: 1 | 2 | 3) {
+    // El paso 3 no tiene nada que guardar acá: sus datos viajan al enviar.
+    if (application && target < currentStep && currentStep !== 3) {
+      const errors =
+        currentStep === 1
+          ? validateParkingForm(parking)
+          : validateSucursalForm(sucursal);
+      if (Object.keys(errors).length === 0) {
+        onSave(application.id, buildPayload());
+      }
+    }
+    setCurrentStep(target);
   }
 
   // ── Paso 3: enviar con o sin información operativa ─────────────────────────
@@ -247,18 +259,6 @@ export function DraftWizard({
     { step: 3 as const, label: 'Información operativa' },
   ];
 
-  const saveButton =
-    application !== null && currentStep !== 3 ? (
-      <button
-        type="button"
-        className="secondary-button"
-        onClick={handleSaveOnly}
-        disabled={busy}
-      >
-        {saving ? 'Guardando...' : 'Guardar cambios'}
-      </button>
-    ) : null;
-
   const managerName = account?.name?.trim() || account?.email || 'Tu cuenta';
 
   return (
@@ -298,7 +298,7 @@ export function DraftWizard({
               ]
                 .filter(Boolean)
                 .join(' ')}
-              onClick={() => canGoBack && setCurrentStep(step)}
+              onClick={() => canGoBack && goToStep(step)}
               disabled={!canGoBack && !isActive}
               aria-current={isActive ? 'step' : undefined}
             >
@@ -322,7 +322,7 @@ export function DraftWizard({
           />
           <div className="onboarding-actions">
             <div className="action-left" />
-            <div className="action-center">{saveButton}</div>
+            <div className="action-center" />
             <div className="action-right">
               <button
                 type="button"
@@ -351,13 +351,13 @@ export function DraftWizard({
               <button
                 type="button"
                 className="nav-button"
-                onClick={() => setCurrentStep(1)}
+                onClick={() => goToStep(1)}
                 disabled={busy}
               >
                 ← Anterior
               </button>
             </div>
-            <div className="action-center">{saveButton}</div>
+            <div className="action-center" />
             <div className="action-right">
               <button
                 type="button"
@@ -393,7 +393,7 @@ export function DraftWizard({
               <button
                 type="button"
                 className="nav-button"
-                onClick={() => setCurrentStep(2)}
+                onClick={() => goToStep(2)}
                 disabled={busy}
               >
                 ← Anterior
