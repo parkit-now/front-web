@@ -12,6 +12,7 @@ import {
   hasCoordinates,
   isAddressEmpty,
   isGeorefNormalized,
+  markAddressManual,
   missingAddressFields,
   moveAddressPin,
   setAddressDetailField,
@@ -380,10 +381,54 @@ describe('setAddressDetailField', () => {
       const next = setAddressDetailField(value, field, 'PB', NOW);
       expect(next.formatted).toBe(value.formatted);
       expect(next.formatted).toContain('Comuna 1');
-      // Sigue marcando el origen como manual: el dato ya no es el de Georef.
-      expect(next.geocodingSource).toBe('manual');
+      // Piso y CP los completa la persona: Georef no los geocodificó, así que
+      // el origen sigue siendo Georef.
+      expect(next.geocodingSource).toBe('georef');
     },
   );
+
+  it('elegir la localidad del catálogo NO pasa una dirección de Georef a manual', () => {
+    // El hallazgo: en CABA la persona tiene que elegir el barrio del catálogo
+    // de MP, y eso rotulaba "Cargada manualmente" a una dirección de Georef.
+    const value = applyCatalogToGeocoded(filled());
+    const next = setAddressDetailField(value, 'cityName', 'Balvanera', NOW);
+    expect(next.geocodingSource).toBe('georef');
+    expect(next.geocodedAt).toBe(value.geocodedAt);
+    expect(missingAddressFields(next)).toEqual([]);
+  });
+
+  it('editar calle o altura SÍ pasa a manual: es lo que Georef geocodificó', () => {
+    for (const field of ['streetName', 'streetNumber'] as const) {
+      const next = setAddressDetailField(filled(), field, 'X', NOW);
+      expect(next.geocodingSource).toBe('manual');
+      expect(next.geocodedAt).toBe(NOW.toISOString());
+    }
+  });
+
+  it('en una carga desde cero (sin origen) cualquier edición es manual', () => {
+    const next = setAddressDetailField(
+      emptyAddress(),
+      'cityName',
+      'Palermo',
+      NOW,
+    );
+    expect(next.geocodingSource).toBe('manual');
+  });
+});
+
+describe('markAddressManual', () => {
+  it('declarar la corrección a mano pasa una dirección de Georef a manual', () => {
+    const next = markAddressManual(filled(), NOW);
+    expect(next.geocodingSource).toBe('manual');
+    expect(next.geocodedAt).toBe(NOW.toISOString());
+  });
+
+  it('es idempotente y no toca una dirección vacía', () => {
+    const manual = markAddressManual(filled(), NOW);
+    expect(markAddressManual(manual, NOW)).toBe(manual);
+    const empty = emptyAddress();
+    expect(markAddressManual(empty, NOW)).toBe(empty);
+  });
 });
 
 describe('isGeorefNormalized', () => {
@@ -544,10 +589,18 @@ describe('setAddressProvince', () => {
     );
   });
 
-  it('marca el origen como manual', () => {
+  it('sin origen previo (carga desde cero) marca el origen como manual', () => {
     const next = setAddressProvince(laPlata, 'Córdoba', NOW);
     expect(next.geocodingSource).toBe('manual');
     expect(next.geocodedAt).toBe(NOW.toISOString());
+  });
+
+  it('sobre una dirección de Georef conserva el origen georef', () => {
+    const georef = { ...filled(), stateName: '', cityName: '' };
+    const next = setAddressProvince(georef, 'Buenos Aires', NOW);
+    expect(next.stateName).toBe('Buenos Aires');
+    expect(next.geocodingSource).toBe('georef');
+    expect(next.geocodedAt).toBe(georef.geocodedAt);
   });
 
   it('elegir la opción vacía limpia las dos cosas', () => {

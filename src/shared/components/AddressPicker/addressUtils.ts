@@ -200,12 +200,48 @@ export function applyCatalogToGeocoded(
 }
 
 /**
- * Edición manual de un campo de texto.
+ * Campos que Georef GEOCODIFICÓ: lo que la persona edita acá está corrigiendo
+ * a Georef, y las coordenadas y la `nomenclatura` dejan de respaldar el texto.
  *
- * Si el valor cambia de verdad, el origen pasa a `manual`: la dirección ya no
- * es la que devolvió Georef y re-normalizarla automáticamente pisaría trabajo
- * humano. Un `onChange` que llega con el mismo texto (re-render, foco) NO
- * ensucia el origen.
+ * El resto (provincia, localidad, piso, código postal) NO es dato de Georef
+ * sino de catálogo o de la persona: Georef habla el vocabulario del INDEC y
+ * Mercado Pago el de MercadoLibre, así que elegir la localidad del catálogo es
+ * COMPLETAR el resultado (en CABA, por ejemplo, Georef no conoce el barrio),
+ * no contradecirlo. Marcar eso como `manual` le mentía al revisor de Ops.
+ */
+const GEOREF_GEOCODED_FIELDS: readonly AddressTextField[] = [
+  'formatted',
+  'streetName',
+  'streetNumber',
+];
+
+/**
+ * Origen que corresponde después de editar `field`.
+ *
+ *  - Ya `manual`: se queda `manual`.
+ *  - `georef` y se tocó un campo de catálogo/complemento: se queda `georef`.
+ *  - `georef` y se tocó calle/altura: pasa a `manual`.
+ *  - Sin origen (carga desde cero): pasa a `manual`, porque Georef nunca vio
+ *    esa dirección.
+ */
+function sourceAfterEdit(
+  current: GeocodingSource | null,
+  field: AddressTextField,
+): GeocodingSource {
+  if (current === 'georef' && !GEOREF_GEOCODED_FIELDS.includes(field)) {
+    return 'georef';
+  }
+  return 'manual';
+}
+
+/**
+ * Edición de un campo de texto.
+ *
+ * El origen pasa a `manual` SÓLO si lo editado es lo que Georef geocodificó
+ * (calle, altura) o si la dirección no venía de Georef: ahí re-normalizarla
+ * automáticamente pisaría trabajo humano. Un `onChange` que llega con el mismo
+ * texto (re-render, foco) NO ensucia el origen, y completar provincia,
+ * localidad, piso o código postal sobre una dirección de Georef tampoco.
  */
 export function setAddressField(
   value: AddressFormValue,
@@ -214,9 +250,30 @@ export function setAddressField(
   now: Date = new Date(),
 ): AddressFormValue {
   if (value[field] === text) return value;
+  const geocodingSource = sourceAfterEdit(value.geocodingSource, field);
   return {
     ...value,
     [field]: text,
+    geocodingSource,
+    geocodedAt:
+      geocodingSource === value.geocodingSource
+        ? value.geocodedAt
+        : now.toISOString(),
+  };
+}
+
+/**
+ * La persona declara explícitamente que Georef erró ("No es esta: corregirla a
+ * mano" / "Cargar a mano"): el origen pasa a `manual` aunque todavía no haya
+ * tocado ningún campo. Sin dirección cargada no hay nada que declarar.
+ */
+export function markAddressManual(
+  value: AddressFormValue,
+  now: Date = new Date(),
+): AddressFormValue {
+  if (isAddressEmpty(value) || value.geocodingSource === 'manual') return value;
+  return {
+    ...value,
     geocodingSource: 'manual',
     geocodedAt: now.toISOString(),
   };
@@ -326,8 +383,8 @@ const FORMATTED_FIELDS: readonly AddressTextField[] = [
  * Edición manual de un campo del DETALLE (calle, altura, piso, localidad,
  * provincia, CP).
  *
- * Hace lo mismo que `setAddressField` —marcar el origen como `manual`— y
- * además RECOMPONE `formatted`. Sin esto, corregir la localidad a mano dejaría
+ * Hace lo mismo que `setAddressField` —el origen pasa a `manual` sólo al
+ * editar calle/altura— y además RECOMPONE `formatted`. Sin esto, corregir la localidad a mano dejaría
  * la línea de display con el texto viejo de Georef: la pantalla mostraría una
  * dirección y la base guardaría otra.
  *
@@ -377,12 +434,18 @@ export function setAddressProvince(
     : '';
   if (value.stateName === province && value.cityName === cityName) return value;
 
+  // Elegir del catálogo NO cambia el origen de una dirección de Georef (ver
+  // `GEOREF_GEOCODED_FIELDS`); sí lo hace en una carga desde cero.
+  const geocodingSource = sourceAfterEdit(value.geocodingSource, 'stateName');
   const next: AddressFormValue = {
     ...value,
     stateName: province,
     cityName,
-    geocodingSource: 'manual',
-    geocodedAt: now.toISOString(),
+    geocodingSource,
+    geocodedAt:
+      geocodingSource === value.geocodingSource
+        ? value.geocodedAt
+        : now.toISOString(),
   };
   // `stateName` y `cityName` están los dos en `FORMATTED_FIELDS`: la línea de
   // display tiene que seguir al cambio o la pantalla diría una cosa y la base

@@ -56,6 +56,8 @@ const PROVINCE_ALIASES: Readonly<Record<string, string>> = {
   [normalizeLocationName('Ciudad Autónoma de Buenos Aires')]: 'Capital Federal',
   [normalizeLocationName('Ciudad de Buenos Aires')]: 'Capital Federal',
   [normalizeLocationName('CABA')]: 'Capital Federal',
+  [normalizeLocationName('C.A.B.A.')]: 'Capital Federal',
+  [normalizeLocationName('Provincia de Buenos Aires')]: 'Buenos Aires',
   [normalizeLocationName(
     'Tierra del Fuego, Antártida e Islas del Atlántico Sur',
   )]: 'Tierra del Fuego',

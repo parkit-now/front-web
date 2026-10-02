@@ -20,6 +20,7 @@ import {
   hasCoordinates,
   isAddressEmpty,
   isGeorefNormalized,
+  markAddressManual,
   missingAddressFields,
   moveAddressPin,
   REQUIRED_ADDRESS_FIELDS,
@@ -654,7 +655,12 @@ export function AddressPicker({
                   type="button"
                   data-testid="address-detail-edit"
                   disabled={disabled}
-                  onClick={() => setDetailEditable(true)}
+                  onClick={() => {
+                    // Declarar que Georef erró es pasar a carga manual, aunque
+                    // todavía no se haya tocado ningún campo.
+                    onChange(markAddressManual(value));
+                    setDetailEditable(true);
+                  }}
                   style={linkActionStyle}
                 >
                   ✎ No es esta: corregirla a mano
