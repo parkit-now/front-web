@@ -17,6 +17,7 @@ import {
   type AddressFormValue,
   type AddressTextField,
 } from '../../../../shared/components/AddressPicker/addressUtils';
+import { formatPhoneForDisplay } from '../../../../shared/components/PhoneInput';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
 import {
@@ -29,6 +30,7 @@ import {
   type ApplicationDocument,
 } from '../../services/applications';
 import { DocumentPreviewModal } from './DocumentPreviewModal';
+import { summarizeSchedules } from './scheduleSummary';
 
 function formatDate(value: string | null): string {
   if (!value) return '—';
@@ -268,6 +270,7 @@ export function SolicitudesPage() {
   }, [items, selectedId]);
 
   const detail = detailQuery.data ?? null;
+  const schedulesSummary = summarizeSchedules(detail?.schedules);
   const processing = approveMutation.isPending || rejectMutation.isPending;
 
   function handleApprove() {
@@ -442,7 +445,8 @@ export function SolicitudesPage() {
                   <p
                     style={{ margin: 0, fontSize: 11, color: 'var(--text-3)' }}
                   >
-                    {formatDate(item.submittedAt)} · {item.docsCount} docs
+                    {formatDate(item.submittedAt)}
+                    {item.docsCount > 0 ? ` · ${item.docsCount} docs` : ''}
                   </p>
                 </button>
               );
@@ -554,10 +558,21 @@ export function SolicitudesPage() {
                 >
                   {[
                     ['Solicitante', detail.applicantEmail],
-                    ['Razón social', detail.legalName],
+                    // Razón social y CUIT ya no se piden en el alta: llegan
+                    // `null` y el dueño los completa después en Configuración.
+                    ['Razón social', detail.legalName ?? '—'],
                     ['Email de contacto', detail.email],
-                    ['CUIT', detail.cuit],
-                    ['Teléfono', detail.phone ?? '—'],
+                    ['CUIT', detail.cuit ?? '—'],
+                    [
+                      'Teléfono',
+                      detail.phone ? formatPhoneForDisplay(detail.phone) : '—',
+                    ],
+                    [
+                      'Capacidad declarada',
+                      detail.totalSpots === null
+                        ? 'Sin declarar'
+                        : `${detail.totalSpots} vehículos`,
+                    ],
                     // "Plazas declaradas" YA NO va. Las plazas salieron del
                     // wizard (el dueño no puede saber la capacidad antes de
                     // que la playa exista; la carga después en `/app/config`),
@@ -567,7 +582,14 @@ export function SolicitudesPage() {
                     // (`declared_entity.totalSpots` para borradores viejos, y
                     // `approve()` lo lee con `?? 0`): lo que se saca es la
                     // fila, no el campo.
-                    ['Documentos adjuntos', `${detail.docsCount} archivos`],
+                    ...(detail.docsCount > 0
+                      ? [
+                          [
+                            'Documentos adjuntos',
+                            `${detail.docsCount} archivos`,
+                          ],
+                        ]
+                      : []),
                   ].map(([label, value]) => (
                     <div key={label}>
                       <p style={labelStyle}>{label}</p>
@@ -587,92 +609,129 @@ export function SolicitudesPage() {
 
               <div className="pk-divider" />
 
-              {/* Documentos */}
-              <section>
-                <p
-                  style={{
-                    margin: '0 0 12px',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                    color: 'var(--text-3)',
-                  }}
-                >
-                  Documentación adjunta
-                </p>
-                {detail.documents.length === 0 ? (
-                  <p
-                    style={{ margin: 0, fontSize: 13, color: 'var(--text-2)' }}
-                  >
-                    El solicitante no adjuntó documentos.
-                  </p>
+              <section data-testid="solicitud-horarios">
+                <p style={sectionTitleStyle}>Horarios declarados</p>
+                {schedulesSummary.length === 0 ? (
+                  <p style={valueStyle}>Sin declarar</p>
                 ) : (
-                  <div
-                    style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+                  <ul
+                    style={{
+                      margin: 0,
+                      padding: 0,
+                      listStyle: 'none',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 4,
+                    }}
                   >
-                    {detail.documents.map((doc) => (
-                      <div
-                        key={doc.id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 10,
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: '50%',
-                            background: 'var(--ok-bg)',
-                            color: 'var(--ok-text)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0,
-                          }}
-                        >
-                          <IconCheck size={12} />
-                        </span>
-                        <span
-                          style={{
-                            flex: 1,
-                            minWidth: 0,
-                            fontSize: 13,
-                            color: 'var(--text-2)',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {doc.name}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="pk-btn-icon"
-                          icon={<IconEye size={15} />}
-                          aria-label={`Previsualizar ${doc.name}`}
-                          title="Previsualizar"
-                          onClick={() => setPreviewDoc(doc)}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="pk-btn-icon"
-                          icon={<IconDownload size={15} />}
-                          aria-label={`Descargar ${doc.name}`}
-                          title="Descargar"
-                          loading={downloadingId === doc.id}
-                          disabled={downloadingId !== null}
-                          onClick={() => void handleDownload(doc)}
-                        />
-                      </div>
+                    {schedulesSummary.map((line) => (
+                      <li key={line} style={valueStyle}>
+                        {line}
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 )}
               </section>
+
+              {/* Documentos: sólo las solicitudes viejas los tienen. */}
+              {detail.docsCount > 0 || detail.documents.length > 0 ? (
+                <>
+                  <div className="pk-divider" />
+                  <section>
+                    <p
+                      style={{
+                        margin: '0 0 12px',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                        color: 'var(--text-3)',
+                      }}
+                    >
+                      Documentación adjunta
+                    </p>
+                    {detail.documents.length === 0 ? (
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: 13,
+                          color: 'var(--text-2)',
+                        }}
+                      >
+                        El solicitante no adjuntó documentos.
+                      </p>
+                    ) : (
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                        }}
+                      >
+                        {detail.documents.map((doc) => (
+                          <div
+                            key={doc.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 20,
+                                height: 20,
+                                borderRadius: '50%',
+                                background: 'var(--ok-bg)',
+                                color: 'var(--ok-text)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}
+                            >
+                              <IconCheck size={12} />
+                            </span>
+                            <span
+                              style={{
+                                flex: 1,
+                                minWidth: 0,
+                                fontSize: 13,
+                                color: 'var(--text-2)',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {doc.name}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="pk-btn-icon"
+                              icon={<IconEye size={15} />}
+                              aria-label={`Previsualizar ${doc.name}`}
+                              title="Previsualizar"
+                              onClick={() => setPreviewDoc(doc)}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="pk-btn-icon"
+                              icon={<IconDownload size={15} />}
+                              aria-label={`Descargar ${doc.name}`}
+                              title="Descargar"
+                              loading={downloadingId === doc.id}
+                              disabled={downloadingId !== null}
+                              onClick={() => void handleDownload(doc)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                </>
+              ) : null}
             </div>
 
             <div
@@ -772,7 +831,7 @@ export function SolicitudesPage() {
           value={rejectReason}
           onChange={(e) => setRejectReason(e.target.value)}
           rows={4}
-          placeholder="Ej.: el CUIT no coincide con la razón social declarada."
+          placeholder="Ej.: la dirección declarada no existe."
           style={{
             width: '100%',
             resize: 'vertical',
