@@ -49,7 +49,7 @@ function useFlags(): FlagMap | null {
   const [flags, setFlags] = useState<FlagMap | null>(null);
   useEffect(() => {
     let alive = true;
-    loadFlags().then((m) => {
+    void loadFlags().then((m) => {
       if (alive) setFlags(m);
     });
     return () => {
