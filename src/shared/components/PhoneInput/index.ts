@@ -6,3 +6,4 @@ export {
   formatPhoneForDisplay,
   validatePhone,
 } from './phoneUtils';
+export { phoneFieldError } from './phoneErrors';
