@@ -10,6 +10,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { listMyEntities, type MembershipRole } from '../services/entities';
 import { listParkings } from '../../admin/services/parkings';
+import { getSession } from '../../../lib/supabase/session';
+import {
+  readStoredActiveTenant,
+  resolveActiveTenantId,
+  writeStoredActiveTenant,
+} from '../../../lib/tenant/activeTenant';
 
 /**
  * View model of a parking lot (entity/tenant) the caller can switch between.
@@ -47,8 +53,6 @@ interface SucursalContextValue {
 
 const SucursalContext = createContext<SucursalContextValue | null>(null);
 
-const ACTIVE_KEY = 'parkit.activeTenantId';
-
 /** Owner sections reachable under both `/app/*` and `/ops/estacionamientos/:id/*`. */
 const SECTIONS = [
   'historial',
@@ -75,11 +79,25 @@ export function SucursalProvider({
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Who is signed in: the persisted active lot and the entities cache are
+  // scoped per user. `undefined` = still resolving, `null` = no session.
+  const [userId, setUserId] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (mode !== 'owner') return;
+    let alive = true;
+    getSession()
+      .then((s) => alive && setUserId(s?.user.id ?? null))
+      .catch(() => alive && setUserId(null));
+    return () => {
+      alive = false;
+    };
+  }, [mode]);
+
   // Only lots the caller owns: the owner panel manages lots, it does not operate them.
   const ownerQuery = useQuery({
-    queryKey: ['my-entities', 'owner'],
+    queryKey: ['my-entities', 'owner', userId],
     queryFn: () => listMyEntities('owner'),
-    enabled: mode === 'owner',
+    enabled: mode === 'owner' && typeof userId === 'string',
     staleTime: 60_000,
   });
 
@@ -112,27 +130,38 @@ export function SucursalProvider({
   }, [mode, ownerQuery.data, adminQuery.data]);
 
   const isLoading =
-    mode === 'admin' ? adminQuery.isLoading : ownerQuery.isLoading;
-  const isError = mode === 'admin' ? adminQuery.isError : ownerQuery.isError;
+    mode === 'admin'
+      ? adminQuery.isLoading
+      : userId === undefined || ownerQuery.isLoading;
+  const isError =
+    mode === 'admin'
+      ? adminQuery.isError
+      : userId === null || ownerQuery.isError;
 
-  // Owner mode: the active lot is persisted across sessions.
-  const [ownerSucursalId, setOwnerSucursalIdState] = useState<string>(
-    () =>
-      (typeof window !== 'undefined'
-        ? window.localStorage.getItem(ACTIVE_KEY)
-        : null) ?? '',
-  );
+  // Owner mode: the active lot is persisted per user, but a stored id is only a
+  // CANDIDATE. It is never exposed as `sucursalId` until it is validated against
+  // the caller's real lots (`GET /tenants?role=owner`); until then `sucursalId`
+  // is '' and every tenant-scoped query (`enabled: Boolean(sucursalId)`) waits.
+  const [chosenId, setChosenId] = useState<string | null>(null);
+  const ownerIds = useMemo(() => sucursales.map((s) => s.id), [sucursales]);
+  const ownerSucursalId = useMemo(() => {
+    if (mode !== 'owner' || typeof userId !== 'string') return '';
+    return resolveActiveTenantId(
+      chosenId ?? readStoredActiveTenant(userId),
+      ownerIds,
+    );
+  }, [mode, userId, chosenId, ownerIds]);
 
-  // Keep the owner's active id valid: default to the first lot once loaded, and
-  // reset if the stored id is no longer among the caller's lots.
+  // Persist the validated (possibly corrected) id so a stale value does not
+  // come back on the next reload.
   useEffect(() => {
-    if (mode !== 'owner') return;
-    if (sucursales.length === 0) return;
-    const exists = sucursales.some((s) => s.id === ownerSucursalId);
-    if (!exists) {
-      setOwnerSucursalIdState(sucursales[0].id);
+    if (mode !== 'owner' || typeof userId !== 'string' || !ownerSucursalId) {
+      return;
     }
-  }, [mode, sucursales, ownerSucursalId]);
+    if (readStoredActiveTenant(userId) !== ownerSucursalId) {
+      writeStoredActiveTenant(userId, ownerSucursalId);
+    }
+  }, [mode, userId, ownerSucursalId]);
 
   // Admin mode: the active lot lives in the URL, so it is deep-linkable and the
   // browser back button works. We never touch the owner's localStorage here.
@@ -148,10 +177,8 @@ export function SucursalProvider({
       void navigate(`/ops/estacionamientos/${id}/${section}`);
       return;
     }
-    setOwnerSucursalIdState(id);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(ACTIVE_KEY, id);
-    }
+    setChosenId(id);
+    if (typeof userId === 'string') writeStoredActiveTenant(userId, id);
   }
 
   const sucursal = sucursales.find((s) => s.id === sucursalId);
