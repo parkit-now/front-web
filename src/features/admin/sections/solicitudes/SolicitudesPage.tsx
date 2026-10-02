@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../../../../shared/components/ui/Button';
+import { ConfirmDialog } from '../../../../shared/components/ui/ConfirmDialog';
 import { Modal } from '../../../../shared/components/ui/Modal';
 import {
   IconCheck,
@@ -218,6 +219,7 @@ export function SolicitudesPage() {
   const detailQuery = useApplicationDetail(selectedId);
   const { approveMutation, rejectMutation } = useApplicationActions();
 
+  const [approveOpen, setApproveOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
@@ -273,13 +275,19 @@ export function SolicitudesPage() {
   const schedulesSummary = summarizeSchedules(detail?.schedules);
   const processing = approveMutation.isPending || rejectMutation.isPending;
 
+  // La aprobación crea el estacionamiento y habilita al solicitante: pide
+  // confirmación, y mientras la mutación está en curso nada se puede repetir.
   function handleApprove() {
     if (!selectedId || processing) return;
-    approveMutation.mutate(selectedId);
+    approveMutation.mutate(selectedId, {
+      // Éxito o error, el diálogo se cierra: el toast del hook explica qué pasó
+      // y un reintento es un nuevo clic en "Aprobar alta".
+      onSettled: () => setApproveOpen(false),
+    });
   }
 
   function handleConfirmReject() {
-    if (!selectedId || rejectReason.trim().length === 0) return;
+    if (!selectedId || processing || rejectReason.trim().length === 0) return;
     rejectMutation.mutate(
       { id: selectedId, reason: rejectReason.trim() },
       {
@@ -756,7 +764,7 @@ export function SolicitudesPage() {
                 icon={<IconCheck size={15} />}
                 loading={approveMutation.isPending}
                 disabled={processing}
-                onClick={handleApprove}
+                onClick={() => setApproveOpen(true)}
               >
                 Aprobar alta
               </Button>
@@ -793,20 +801,48 @@ export function SolicitudesPage() {
         />
       )}
 
+      <ConfirmDialog
+        open={approveOpen}
+        title="Aprobar alta"
+        message={
+          detail ? (
+            <>
+              Se va a crear el estacionamiento «{detail.name}» y{' '}
+              <strong>{detail.applicantEmail}</strong> va a poder ingresar al
+              panel.
+            </>
+          ) : (
+            'Se va a crear el estacionamiento y el solicitante va a poder ingresar al panel.'
+          )
+        }
+        confirmLabel="Aprobar alta"
+        loading={approveMutation.isPending}
+        onConfirm={handleApprove}
+        onClose={() => {
+          if (!approveMutation.isPending) setApproveOpen(false);
+        }}
+      />
+
       {/* Reject reason modal */}
       <Modal
         open={rejectOpen}
-        onClose={() => setRejectOpen(false)}
+        onClose={() => {
+          if (!rejectMutation.isPending) setRejectOpen(false);
+        }}
         title="Rechazar solicitud"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setRejectOpen(false)}>
+            <Button
+              variant="secondary"
+              disabled={rejectMutation.isPending}
+              onClick={() => setRejectOpen(false)}
+            >
               Cancelar
             </Button>
             <Button
               variant="danger"
               loading={rejectMutation.isPending}
-              disabled={rejectReason.trim().length === 0}
+              disabled={processing || rejectReason.trim().length === 0}
               onClick={handleConfirmReject}
             >
               Rechazar
