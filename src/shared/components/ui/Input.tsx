@@ -1,22 +1,29 @@
 import type { InputHTMLAttributes } from 'react';
+import { IconAlert } from '../icons';
 import { RequiredMark } from './RequiredMark';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  /** Texto de ayuda bajo el campo; se reemplaza por el error cuando lo hay. */
+  hint?: string;
   icon?: React.ReactNode;
 }
 
 export function Input({
   label,
   error,
+  hint,
   icon,
   className = '',
   id,
   required,
   ...rest
 }: InputProps) {
+  const hasError = Boolean(error);
   const inputId = id ?? label?.toLowerCase().replace(/\s/g, '-');
+  const errorId = inputId ? `${inputId}-error` : undefined;
+  const hintId = inputId ? `${inputId}-hint` : undefined;
   return (
     <div
       style={{
@@ -55,7 +62,13 @@ export function Input({
         <input
           id={inputId}
           className={`pk-input ${icon ? 'has-icon' : ''} ${className}`}
-          style={icon ? { paddingLeft: 34 } : undefined}
+          style={{
+            paddingLeft: icon ? 34 : undefined,
+            paddingRight: hasError ? 34 : undefined,
+            borderColor: hasError ? 'var(--err-text, #b42318)' : undefined,
+          }}
+          aria-invalid={hasError ? true : undefined}
+          aria-describedby={hasError ? errorId : hint ? hintId : undefined}
           // El asterisco no puede ser el único indicador: `required` viaja al
           // DOM y `aria-required` lo deja explícito para los lectores que no
           // infieren el estado del atributo nativo.
@@ -63,10 +76,36 @@ export function Input({
           aria-required={required ? true : undefined}
           {...rest}
         />
+        {hasError ? (
+          <span
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              right: 10,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              display: 'flex',
+              color: 'var(--err-text, #b42318)',
+            }}
+          >
+            <IconAlert size={16} />
+          </span>
+        ) : null}
       </div>
       {error && (
-        <span style={{ fontSize: 12, color: 'var(--err-text)' }}>{error}</span>
+        <span
+          id={errorId}
+          role="alert"
+          style={{ fontSize: 12, color: 'var(--err-text, #b42318)' }}
+        >
+          {error}
+        </span>
       )}
+      {!hasError && hint ? (
+        <span id={hintId} style={{ fontSize: 12, color: 'var(--text-3)' }}>
+          {hint}
+        </span>
+      ) : null}
     </div>
   );
 }

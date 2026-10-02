@@ -4,6 +4,11 @@ import {
   toDeclaredLocation,
   type AddressFormValue,
 } from '../../../shared/components/AddressPicker/addressUtils';
+import {
+  findScheduleIssues,
+  type ScheduleRange,
+} from '../../../shared/components/WeeklyScheduleEditor';
+import { parseCapacityTotal } from '../../owner/sections/config/capacity';
 import type {
   Application,
   CreateApplicationInput,
@@ -11,63 +16,70 @@ import type {
 } from '../services/onboarding';
 import { readDeclaredEntity } from '../services/onboarding';
 import {
-  normalizeCuit,
-  validateContactForm,
+  validateParkingForm,
   validateSucursalForm,
-  type ContactFieldErrors,
-  type ContactFormValues,
+  type ParkingFieldErrors,
+  type ParkingFormValues,
   type SucursalFieldErrors,
   type SucursalFormValues,
-  type SucursalTextField,
 } from '../validation';
-import { RequiredMark } from '../../../shared/components/ui/RequiredMark';
-import { DocumentsStep } from './DocumentsStep';
+import { OperationalStep } from './OperationalStep';
+import { ParkingStep } from './ParkingStep';
 import { SucursalStep } from './SucursalStep';
 
 type Props = {
   application: Application | null;
   rejected: boolean;
-  pendingReview: boolean;
   creating: boolean;
   saving: boolean;
-  uploadingDocument: boolean;
   submitting: boolean;
-  uploadedNames: string[];
+  /** Datos de la cuenta (`/auth/me`) para la "Persona encargada". */
+  account: { name: string | null; email: string } | null;
   onCreate: (input: CreateApplicationInput) => void;
   onSave: (applicationId: string, input: UpdateApplicationInput) => void;
-  onUploadDocument: (file: File) => void;
-  onSubmit: () => void;
+  /**
+   * Envía la solicitud a revisión. Con `input` primero guarda esos datos
+   * (capacidad y horarios); sin `input` envía tal cual, sin tocarlos.
+   */
+  onSubmit: (input?: UpdateApplicationInput) => void;
 };
 
 /**
- * Three-step wizard to register a single parking lot:
- *   1. Sucursal (nombre y domicilio)
- *   2. Contacto (legal name, CUIT, email, phone)
- *   3. Documentación (optional uploads)
+ * Wizard de tres pasos para dar de alta un estacionamiento:
+ *   1. Tu estacionamiento (nombre + persona encargada: email y teléfono)
+ *   2. Ubicación (domicilio)
+ *   3. Información operativa (capacidad y horarios, opcional)
  *
- * The application is created (POST) once steps 1 and 2 are complete, since the
- * backend requires every contact field; later edits use PATCH.
+ * La solicitud se crea (POST) al pasar el paso 1; los pasos siguientes usan
+ * PATCH y el paso 3 envía a revisión. Capacidad y horarios sólo viajan desde el
+ * paso 3 ("Enviar solicitud"): el PATCH de `schedules` REEMPLAZA la lista
+ * entera, así que no se manda en los pasos anteriores.
  */
 export function DraftWizard({
   application,
   rejected,
-  pendingReview,
   creating,
   saving,
-  uploadingDocument,
   submitting,
-  uploadedNames,
+  account,
   onCreate,
   onSave,
-  onUploadDocument,
   onSubmit,
 }: Props) {
   const declared = readDeclaredEntity(application);
 
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
 
-  const [sucursal, setSucursal] = useState<SucursalFormValues>(() => ({
+  const [parking, setParking] = useState<ParkingFormValues>(() => ({
     name: declared.name ?? '',
+    email: declared.email ?? account?.email ?? '',
+    // Un borrador viejo puede traer un teléfono que no es E.164: el
+    // `PhoneInput` lo muestra crudo y `validatePhone` pide corregirlo.
+    phone: declared.phone ?? '',
+  }));
+  const [parkingErrors, setParkingErrors] = useState<ParkingFieldErrors>({});
+
+  const [sucursal, setSucursal] = useState<SucursalFormValues>(() => ({
     // Un borrador viejo sólo tiene `address` como string plano: entra como la
     // línea de display y el resto de los campos quedan vacíos, en vez de
     // perderse.
@@ -75,161 +87,196 @@ export function DraftWizard({
   }));
   const [sucursalErrors, setSucursalErrors] = useState<SucursalFieldErrors>({});
 
-  const [contact, setContact] = useState<ContactFormValues>(() => ({
-    legalName: declared.legalName ?? '',
-    cuit: declared.cuit ?? '',
-    email: declared.email ?? '',
-    phone: declared.phone ?? '',
-  }));
-  const [contactErrors, setContactErrors] = useState<ContactFieldErrors>({});
+  const [totalSpots, setTotalSpots] = useState(() =>
+    declared.totalSpots && declared.totalSpots > 0
+      ? String(declared.totalSpots)
+      : '',
+  );
+  const [totalSpotsError, setTotalSpotsError] = useState<string>();
+  const [schedules, setSchedules] = useState<ScheduleRange[]>(
+    () => declared.schedules ?? [],
+  );
+  const [schedulesError, setSchedulesError] = useState<string>();
 
-  // When the application is created (POST), jump to the documents step.
+  // Al crearse la solicitud (POST), se pasa al paso de ubicación.
   const [hadApplication, setHadApplication] = useState(!!application);
   useEffect(() => {
     if (application && !hadApplication) {
       setHadApplication(true);
-      setCurrentStep(3);
+      setCurrentStep(2);
     }
   }, [application, hadApplication]);
 
   const busy = creating || saving || submitting;
-  const canSubmit = !!application && !busy && !uploadingDocument;
 
-  function updateSucursal(field: SucursalTextField, value: string) {
-    setSucursal((prev) => ({ ...prev, [field]: value }));
-    if (field in sucursalErrors) {
-      setSucursalErrors((prev) => ({ ...prev, [field]: undefined }));
+  function updateParking(field: 'name' | 'email', value: string) {
+    setParking((prev) => ({ ...prev, [field]: value }));
+    if (parkingErrors[field]) {
+      setParkingErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
+  }
+
+  function updatePhone(e164: string) {
+    setParking((prev) => ({ ...prev, phone: e164 }));
+    if (parkingErrors.phone) {
+      setParkingErrors((prev) => ({ ...prev, phone: undefined }));
     }
   }
 
   /**
-   * Igual que `updateSucursal` y `updateContact`: tocar el campo LIMPIA su
-   * error.
-   *
-   * No es cosmético. El error del domicilio se dispara al apretar "Siguiente"
-   * y nombra lo que falta ("falta la calle, la altura…"); sin limpiarlo, la
-   * persona busca la dirección, Georef la resuelve, aparece el pin… y el
-   * cartel rojo sigue ahí hasta el próximo submit. El formulario le dice que
-   * está mal algo que ya está bien.
+   * Tocar el domicilio LIMPIA su error: se dispara al apretar "Siguiente" y
+   * nombra lo que falta; sin limpiarlo, la persona resuelve la dirección y el
+   * cartel rojo sigue ahí hasta el próximo submit.
    */
   function updateAddress(address: AddressFormValue) {
-    setSucursal((prev) => ({ ...prev, address }));
+    setSucursal({ address });
     if (sucursalErrors.address) {
-      setSucursalErrors((prev) => ({ ...prev, address: undefined }));
+      setSucursalErrors({});
     }
   }
 
-  function updateContact(field: keyof ContactFormValues, value: string) {
-    setContact((prev) => ({ ...prev, [field]: value }));
-    if (contactErrors[field]) {
-      setContactErrors((prev) => ({ ...prev, [field]: undefined }));
-    }
+  function updateTotalSpots(value: string) {
+    setTotalSpots(value);
+    setTotalSpotsError(undefined);
   }
 
-  /** Full declared-entity payload, used for both POST (create) and PATCH (save). */
+  function updateSchedules(next: ScheduleRange[]) {
+    setSchedules(next);
+    setSchedulesError(undefined);
+  }
+
+  /** Datos de los pasos 1 y 2, para POST (crear) y PATCH (guardar). */
   function buildPayload(): CreateApplicationInput {
     // `location` se omite cuando no se cargó NADA: el DTO la tiene como
     // opcional y mandar un objeto con todo en `null` sólo ensucia el JSON
-    // declarado. Ya no se manda el `address` plano — `location.formatted`
-    // le gana en el backend y es el mismo valor.
+    // declarado. `legalName` y `cuit` ya no se piden (se completan después en
+    // Configuración → Perfil); un borrador viejo no los pierde porque el PATCH
+    // hace MERGE contra el `declaredEntity` guardado.
     const location = toDeclaredLocation(sucursal.address);
     return {
-      name: sucursal.name.trim(),
-      legalName: contact.legalName.trim(),
-      cuit: normalizeCuit(contact.cuit),
-      email: contact.email.trim(),
-      phone: contact.phone.trim(),
+      name: parking.name.trim(),
+      email: parking.email.trim(),
+      phone: parking.phone.trim(),
       ...(location ? { location } : {}),
-      // `totalSpots` NO se manda más: las plazas salieron del alta y se
-      // configuran en `/app/config`. El backend lo sigue tolerando
-      // (`entity.totalSpots ?? 0` en `approve()`) y el PATCH hace MERGE contra
-      // el `declaredEntity` guardado, así que un borrador viejo que ya lo
-      // tenía NO lo pierde al editarlo con el wizard nuevo.
     };
   }
 
-  // ── Step 1 → 2 ───────────────────────────────────────────────────────────
-  function handleNextFromStep1() {
-    const errors = validateSucursalForm(sucursal);
-    if (Object.keys(errors).length > 0) {
-      setSucursalErrors(errors);
-      return;
-    }
-    setSucursalErrors({});
-    setCurrentStep(2);
+  function validateStep1(): boolean {
+    const errors = validateParkingForm(parking);
+    setParkingErrors(errors);
+    return Object.keys(errors).length === 0;
   }
 
-  // ── Step 2 → 3 ───────────────────────────────────────────────────────────
-  function handleNextFromStep2() {
-    const errors = validateContactForm(contact);
-    if (Object.keys(errors).length > 0) {
-      setContactErrors(errors);
-      return;
-    }
-    setContactErrors({});
+  function validateStep2(): boolean {
+    const errors = validateSucursalForm(sucursal);
+    setSucursalErrors(errors);
+    return Object.keys(errors).length === 0;
+  }
+
+  // ── Paso 1 → 2 ───────────────────────────────────────────────────────────
+  function handleNextFromStep1() {
+    if (!validateStep1()) return;
     if (!application) {
-      // POST — the effect above advances to step 3 once the application appears.
+      // POST — el efecto de arriba avanza al paso 2 cuando aparece la solicitud.
       onCreate(buildPayload());
     } else {
       onSave(application.id, buildPayload());
-      setCurrentStep(3);
+      setCurrentStep(2);
     }
   }
 
-  // ── Save without advancing (only when an application exists) ───────────────
-  function handleSaveOnly() {
-    if (!application) return;
-    if (currentStep === 1) {
-      const errors = validateSucursalForm(sucursal);
-      if (Object.keys(errors).length > 0) {
-        setSucursalErrors(errors);
-        return;
-      }
-      setSucursalErrors({});
-    }
-    if (currentStep === 2) {
-      const errors = validateContactForm(contact);
-      if (Object.keys(errors).length > 0) {
-        setContactErrors(errors);
-        return;
-      }
-      setContactErrors({});
-    }
+  // ── Paso 2 → 3 ───────────────────────────────────────────────────────────
+  function handleNextFromStep2() {
+    if (!validateStep2() || !application) return;
     onSave(application.id, buildPayload());
+    setCurrentStep(3);
+  }
+
+  // ── Volver a un paso anterior ──────────────────────────────────────────────
+  // "Siguiente" ya persiste (PATCH) al avanzar, así que no hay botón de
+  // "Guardar cambios". Lo que quedaba sin cubrir era volver atrás con cambios
+  // hechos en el paso actual: se guardan acá, y SOLO si el paso es válido (un
+  // borrador con un email a medio escribir lo rechazaría el backend). Si no es
+  // válido el estado local del wizard conserva lo tipeado igual.
+  function goToStep(target: 1 | 2 | 3) {
+    // El paso 3 no tiene nada que guardar acá: sus datos viajan al enviar.
+    if (application && target < currentStep && currentStep !== 3) {
+      const errors =
+        currentStep === 1
+          ? validateParkingForm(parking)
+          : validateSucursalForm(sucursal);
+      if (Object.keys(errors).length === 0) {
+        onSave(application.id, buildPayload());
+      }
+    }
+    setCurrentStep(target);
+  }
+
+  // ── Paso 3: enviar con o sin información operativa ─────────────────────────
+  function handleSubmitWithData() {
+    if (!application) return;
+    let hasError = false;
+
+    const rawSpots = totalSpots.trim();
+    let spots: number | undefined;
+    if (rawSpots) {
+      const parsed = parseCapacityTotal(rawSpots);
+      if ('error' in parsed) {
+        setTotalSpotsError(parsed.error);
+        hasError = true;
+      } else {
+        spots = parsed.total;
+      }
+    }
+
+    if (findScheduleIssues(schedules).length > 0) {
+      setSchedulesError('Corregí las franjas marcadas antes de enviar.');
+      hasError = true;
+    }
+    if (hasError) return;
+
+    onSubmit({
+      ...buildPayload(),
+      ...(spots !== undefined ? { totalSpots: spots } : {}),
+      // El PATCH reemplaza la lista: mandar [] borra horarios que hubiera
+      // guardado un intento anterior.
+      schedules: schedules.map(({ day, openMinute, closeMinute }) => ({
+        day,
+        openMinute,
+        closeMinute,
+      })),
+    });
+  }
+
+  function handleSubmitLater() {
+    if (!application) return;
+    onSubmit();
   }
 
   const steps = [
-    { step: 1 as const, label: 'Sucursal' },
-    { step: 2 as const, label: 'Contacto' },
-    { step: 3 as const, label: 'Documentación' },
+    { step: 1 as const, label: 'Tu estacionamiento' },
+    { step: 2 as const, label: 'Ubicación' },
+    { step: 3 as const, label: 'Información operativa' },
   ];
 
-  const saveButton =
-    application !== null ? (
-      <button
-        type="button"
-        className="secondary-button"
-        onClick={handleSaveOnly}
-        disabled={busy}
-      >
-        {saving ? 'Guardando...' : 'Guardar cambios'}
-      </button>
-    ) : null;
+  const managerName = account?.name?.trim() || account?.email || 'Tu cuenta';
 
   return (
     <div className="onboarding-card">
       {rejected ? (
-        <div className="onboarding-banner banner-warning">
+        <div className="onboarding-banner banner-warning" role="alert">
           <strong>Tu solicitud fue rechazada</strong>
-          Revisá y corregí los datos, y volvé a enviarla para una nueva
-          revisión.
-        </div>
-      ) : null}
-      {pendingReview ? (
-        <div className="onboarding-banner banner-info">
-          <strong>Tu solicitud está en revisión</strong>
-          Podés actualizar tus datos y documentación en cualquier momento
-          mientras esperás la respuesta.
+          {application?.rejectionReason ? (
+            <>
+              <span style={{ display: 'block', marginTop: 4 }}>
+                Motivo: {application.rejectionReason}
+              </span>
+            </>
+          ) : null}
+          <span style={{ display: 'block', marginTop: 4 }}>
+            Revisá y corregí los datos, y volvé a enviarla para una nueva
+            revisión.
+          </span>
         </div>
       ) : null}
 
@@ -251,7 +298,7 @@ export function DraftWizard({
               ]
                 .filter(Boolean)
                 .join(' ')}
-              onClick={() => canGoBack && setCurrentStep(step)}
+              onClick={() => canGoBack && goToStep(step)}
               disabled={!canGoBack && !isActive}
               aria-current={isActive ? 'step' : undefined}
             >
@@ -262,24 +309,60 @@ export function DraftWizard({
         })}
       </div>
 
-      {/* ── Paso 1: Sucursal ── */}
+      {/* ── Paso 1: Tu estacionamiento ── */}
       {currentStep === 1 && (
         <>
-          <SucursalStep
-            values={sucursal}
-            errors={sucursalErrors}
+          <ParkingStep
+            values={parking}
+            errors={parkingErrors}
             disabled={busy}
-            onChange={updateSucursal}
-            onAddressChange={updateAddress}
+            managerName={managerName}
+            onChange={updateParking}
+            onPhoneChange={updatePhone}
           />
           <div className="onboarding-actions">
             <div className="action-left" />
-            <div className="action-center">{saveButton}</div>
+            <div className="action-center" />
             <div className="action-right">
               <button
                 type="button"
                 className="nav-button nav-button--primary"
                 onClick={handleNextFromStep1}
+                disabled={busy}
+              >
+                {creating ? 'Creando...' : 'Siguiente →'}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Paso 2: Ubicación ── */}
+      {currentStep === 2 && (
+        <>
+          <SucursalStep
+            values={sucursal}
+            errors={sucursalErrors}
+            disabled={busy}
+            onAddressChange={updateAddress}
+          />
+          <div className="onboarding-actions">
+            <div className="action-left">
+              <button
+                type="button"
+                className="nav-button"
+                onClick={() => goToStep(1)}
+                disabled={busy}
+              >
+                ← Anterior
+              </button>
+            </div>
+            <div className="action-center" />
+            <div className="action-right">
+              <button
+                type="button"
+                className="nav-button nav-button--primary"
+                onClick={handleNextFromStep2}
                 disabled={busy}
               >
                 Siguiente →
@@ -289,165 +372,51 @@ export function DraftWizard({
         </>
       )}
 
-      {/* ── Paso 2: Contacto ── */}
-      {currentStep === 2 && (
-        <div className="onboarding-section">
-          <h3>Datos de contacto</h3>
-          <p className="section-hint">
-            Datos legales y de contacto del titular del estacionamiento. Los
-            campos con <RequiredMark /> son obligatorios.
-          </p>
-          <div className="onboarding-grid">
-            <div className="onboarding-field full-width">
-              <label htmlFor="contact-legalName">
-                Razón social
-                <RequiredMark />
-              </label>
-              <input
-                id="contact-legalName"
-                type="text"
-                value={contact.legalName}
-                onChange={(e) => updateContact('legalName', e.target.value)}
-                placeholder="Estacionamientos del Centro S.A."
-                disabled={busy}
-                required
-                aria-required
-                className={contactErrors.legalName ? 'input-error' : undefined}
-                aria-invalid={contactErrors.legalName ? true : undefined}
-              />
-              {contactErrors.legalName ? (
-                <p className="field-error">{contactErrors.legalName}</p>
-              ) : null}
-            </div>
-
-            <div className="onboarding-field">
-              <label htmlFor="contact-cuit">
-                CUIT
-                <RequiredMark />
-              </label>
-              <input
-                id="contact-cuit"
-                type="text"
-                inputMode="numeric"
-                value={contact.cuit}
-                onChange={(e) => updateContact('cuit', e.target.value)}
-                placeholder="30123456789"
-                disabled={busy}
-                required
-                aria-required
-                className={contactErrors.cuit ? 'input-error' : undefined}
-                aria-invalid={contactErrors.cuit ? true : undefined}
-              />
-              {contactErrors.cuit ? (
-                <p className="field-error">{contactErrors.cuit}</p>
-              ) : null}
-            </div>
-
-            <div className="onboarding-field">
-              <label htmlFor="contact-email">
-                Email de contacto
-                <RequiredMark />
-              </label>
-              <input
-                id="contact-email"
-                type="email"
-                value={contact.email}
-                onChange={(e) => updateContact('email', e.target.value)}
-                placeholder="contacto@estacionamiento.com"
-                disabled={busy}
-                required
-                aria-required
-                className={contactErrors.email ? 'input-error' : undefined}
-                aria-invalid={contactErrors.email ? true : undefined}
-              />
-              {contactErrors.email ? (
-                <p className="field-error">{contactErrors.email}</p>
-              ) : null}
-            </div>
-
-            <div className="onboarding-field">
-              <label htmlFor="contact-phone">
-                Teléfono
-                <RequiredMark />
-              </label>
-              <input
-                id="contact-phone"
-                type="tel"
-                value={contact.phone}
-                onChange={(e) => updateContact('phone', e.target.value)}
-                placeholder="+54 11 4567 8900"
-                disabled={busy}
-                required
-                aria-required
-                className={contactErrors.phone ? 'input-error' : undefined}
-                aria-invalid={contactErrors.phone ? true : undefined}
-              />
-              {contactErrors.phone ? (
-                <p className="field-error">{contactErrors.phone}</p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="onboarding-actions">
-            <div className="action-left">
-              <button
-                type="button"
-                className="nav-button"
-                onClick={() => setCurrentStep(1)}
-                disabled={busy}
-              >
-                ← Anterior
-              </button>
-            </div>
-            <div className="action-center">{saveButton}</div>
-            <div className="action-right">
-              <button
-                type="button"
-                className="nav-button nav-button--primary"
-                onClick={handleNextFromStep2}
-                disabled={busy}
-              >
-                {creating ? 'Creando...' : 'Siguiente →'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Paso 3: Documentación ── */}
+      {/* ── Paso 3: Información operativa ── */}
       {currentStep === 3 && (
         <>
-          <DocumentsStep
-            docsCount={application?.docsCount ?? 0}
-            uploadedNames={uploadedNames}
-            uploading={uploadingDocument}
+          <OperationalStep
+            totalSpots={totalSpots}
+            totalSpotsError={totalSpotsError}
+            schedules={schedules}
             disabled={busy}
-            onUpload={onUploadDocument}
+            onTotalSpotsChange={updateTotalSpots}
+            onSchedulesChange={updateSchedules}
           />
+          {schedulesError ? (
+            <p className="field-error" role="alert">
+              {schedulesError}
+            </p>
+          ) : null}
           <div className="onboarding-actions">
             <div className="action-left">
               <button
                 type="button"
                 className="nav-button"
-                onClick={() => setCurrentStep(2)}
+                onClick={() => goToStep(2)}
                 disabled={busy}
               >
                 ← Anterior
               </button>
             </div>
-            <div className="action-center">{saveButton}</div>
+            <div className="action-center">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={handleSubmitLater}
+                disabled={busy || !application}
+              >
+                Completar después
+              </button>
+            </div>
             <div className="action-right">
               <button
                 type="button"
                 className="nav-button nav-button--primary"
-                onClick={onSubmit}
-                disabled={!canSubmit}
+                onClick={handleSubmitWithData}
+                disabled={busy || !application}
               >
-                {submitting
-                  ? 'Enviando...'
-                  : pendingReview
-                    ? 'Actualizar solicitud'
-                    : 'Enviar para revisión'}
+                {submitting ? 'Enviando...' : 'Enviar solicitud'}
               </button>
             </div>
           </div>

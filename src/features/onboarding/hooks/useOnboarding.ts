@@ -5,7 +5,6 @@ import {
   type UseMutationResult,
 } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import { translateApiError } from '../../../lib/api/translate';
 import { mapSubmitError } from '../errors';
 import { useToast } from '../../../lib/notifications/ToastProvider';
 import {
@@ -13,23 +12,19 @@ import {
   getLatestApplication,
   submitApplication,
   updateApplication,
-  uploadAndRegisterDocument,
   type Application,
-  type ApplicationDocument,
   type CreateApplicationInput,
   type UpdateApplicationInput,
 } from '../services/onboarding';
+
+/** Cada cuánto se consulta si Ops ya resolvió una solicitud en revisión. */
+export const REVIEW_POLL_MS = 30_000;
 
 const ONBOARDING_QUERY_KEY = ['onboarding', 'applications'] as const;
 
 type UpdateApplicationArgs = {
   applicationId: string;
   input: UpdateApplicationInput;
-};
-
-type UploadDocumentArgs = {
-  applicationId: string;
-  file: File;
 };
 
 export type UseOnboardingResult = {
@@ -47,11 +42,6 @@ export type UseOnboardingResult = {
     Application,
     unknown,
     UpdateApplicationArgs
-  >;
-  uploadDocumentMutation: UseMutationResult<
-    ApplicationDocument,
-    unknown,
-    UploadDocumentArgs
   >;
   submitApplicationMutation: UseMutationResult<Application, unknown, string>;
 };
@@ -72,6 +62,10 @@ export function useOnboarding(): UseOnboardingResult {
   const query = useQuery({
     queryKey: ONBOARDING_QUERY_KEY,
     queryFn: getLatestApplication,
+    // En revisión no hay nada que editar: se vuelve a preguntar cada tanto para
+    // enterarse de la decisión de Ops (aprobada o rechazada) sin recargar.
+    refetchInterval: (q) =>
+      q.state.data?.status === 'pending_review' ? REVIEW_POLL_MS : false,
   });
 
   const createApplicationMutation = useMutation({
@@ -81,9 +75,7 @@ export function useOnboarding(): UseOnboardingResult {
     },
     onError: (error) => {
       showToast({
-        message: translateApiError(error, {
-          endpoint: 'onboarding.createApplication',
-        }),
+        message: mapSubmitError(error, 'onboarding.createApplication'),
         kind: 'error',
       });
     },
@@ -97,25 +89,7 @@ export function useOnboarding(): UseOnboardingResult {
     },
     onError: (error) => {
       showToast({
-        message: translateApiError(error, {
-          endpoint: 'onboarding.updateApplication',
-        }),
-        kind: 'error',
-      });
-    },
-  });
-
-  const uploadDocumentMutation = useMutation({
-    mutationFn: ({ applicationId, file }: UploadDocumentArgs) =>
-      uploadAndRegisterDocument(applicationId, file),
-    onSuccess: () => {
-      invalidate();
-    },
-    onError: (error) => {
-      showToast({
-        message: translateApiError(error, {
-          endpoint: 'onboarding.addDocument',
-        }),
+        message: mapSubmitError(error, 'onboarding.updateApplication'),
         kind: 'error',
       });
     },
@@ -145,7 +119,6 @@ export function useOnboarding(): UseOnboardingResult {
     },
     createApplicationMutation,
     updateApplicationMutation,
-    uploadDocumentMutation,
     submitApplicationMutation,
   };
 }

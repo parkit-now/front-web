@@ -511,3 +511,33 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+.onboarding-manager {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: #fbfdff;
+}
+
+.onboarding-manager legend {
+  padding: 0 6px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.onboarding-manager-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 15px;
+}
+
+.onboarding-manager-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-muted);
+}

@@ -5,7 +5,9 @@ import {
 } from '../../shared/components/AddressPicker/addressUtils';
 import {
   validateAddress,
+  validateEmail,
   validateName,
+  validateParkingForm,
   validateSucursalForm,
 } from './validation';
 
@@ -161,9 +163,7 @@ describe('validateAddress', () => {
   it('Georef normalizando BIEN sigue pasando sin tocar nada', () => {
     // La regresión que hay que no cometer arreglando lo de arriba.
     expect(validateAddress(georefAddress())).toBeNull();
-    expect(
-      validateSucursalForm({ name: 'Centro', address: georefAddress() }),
-    ).toEqual({});
+    expect(validateSucursalForm({ address: georefAddress() })).toEqual({});
   });
 });
 
@@ -211,8 +211,8 @@ describe('validateAddress con el catálogo de Mercado Pago', () => {
 
 describe('validateName', () => {
   it('exige el nombre', () => {
-    expect(validateName('')).toBeTruthy();
-    expect(validateName('   ')).toBeTruthy();
+    expect(validateName('')).toBe('Este campo es obligatorio.');
+    expect(validateName('   ')).toBe('Este campo es obligatorio.');
   });
 
   it('acepta un nombre cargado', () => {
@@ -220,29 +220,56 @@ describe('validateName', () => {
   });
 });
 
-describe('validateSucursalForm', () => {
-  const base = { name: 'Playa', address: georefAddress() };
+describe('validateEmail', () => {
+  it('exige el email y su formato', () => {
+    expect(validateEmail('')).toBe('Este campo es obligatorio.');
+    expect(validateEmail('no-es-mail')).toBe('Email inválido');
+    expect(validateEmail(' a@b.com ')).toBeNull();
+  });
+});
 
-  it('acepta el formulario mínimo: nombre + domicilio', () => {
-    expect(validateSucursalForm(base)).toEqual({});
+describe('validateParkingForm', () => {
+  const base = {
+    name: 'Playa',
+    email: 'dueno@playa.com',
+    phone: '+5491123456789',
+  };
+
+  it('acepta el paso 1 completo', () => {
+    expect(validateParkingForm(base)).toEqual({});
   });
 
-  it('exige el nombre', () => {
-    const errors = validateSucursalForm({ ...base, name: '' });
-    expect(errors.name).toBeTruthy();
+  it('marca como obligatorios los tres campos vacíos', () => {
+    expect(validateParkingForm({ name: '', email: '', phone: '' })).toEqual({
+      name: 'Este campo es obligatorio.',
+      email: 'Este campo es obligatorio.',
+      phone: 'Este campo es obligatorio.',
+    });
+  });
+
+  it('rechaza un teléfono inválido', () => {
+    expect(validateParkingForm({ ...base, phone: '+54911' }).phone).toBe(
+      'Ingresá un teléfono válido',
+    );
+  });
+
+  it('rechaza un teléfono viejo que no es E.164', () => {
+    expect(validateParkingForm({ ...base, phone: '4567-8900' }).phone).toBe(
+      'Ingresá un teléfono válido',
+    );
+  });
+});
+
+describe('validateSucursalForm', () => {
+  it('acepta el domicilio completo', () => {
+    expect(validateSucursalForm({ address: georefAddress() })).toEqual({});
   });
 
   // Antes el domicilio era opcional (era opcional en el contrato). El usuario
   // pidió que el alta no avance sin dirección: la obligatoriedad es del
   // FORMULARIO, las columnas de `tenants` siguen siendo nullable.
   it('exige el domicilio', () => {
-    const errors = validateSucursalForm({ ...base, address: emptyAddress() });
-    expect(errors.address).toBeTruthy();
-  });
-
-  it('reporta los dos errores juntos', () => {
-    const errors = validateSucursalForm({ name: '', address: emptyAddress() });
-    expect(errors.name).toBeTruthy();
+    const errors = validateSucursalForm({ address: emptyAddress() });
     expect(errors.address).toBeTruthy();
   });
 });

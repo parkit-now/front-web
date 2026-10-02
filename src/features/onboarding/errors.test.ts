@@ -97,3 +97,77 @@ describe('mapSubmitError', () => {
     );
   });
 });
+
+describe('mapSubmitError con horarios', () => {
+  function scheduleError(code: string, field = 'declaredEntity.schedules.1') {
+    return new ApiError(422, 'Unprocessable Entity', {
+      title: 'Unprocessable Entity',
+      status: 422,
+      detail: 'invalid schedules',
+      instance: '/onboarding/applications/x/submit',
+      code: 'ONBOARDING_NOT_SUBMITTABLE',
+      validationsErrors: [{ field, reason: 'invalid schedule', code }],
+    });
+  }
+
+  it('traduce el rango inválido', () => {
+    expect(mapSubmitError(scheduleError('SCHEDULE_INVALID_RANGE'))).toBe(
+      'Revisá los horarios: la hora de cierre tiene que ser posterior a la de apertura.',
+    );
+  });
+
+  it('traduce el solape', () => {
+    expect(mapSubmitError(scheduleError('SCHEDULE_OVERLAP'))).toBe(
+      'Revisá los horarios: hay franjas que se superponen en un mismo día.',
+    );
+  });
+
+  it('un código de horarios desconocido cae al mensaje genérico de horarios', () => {
+    expect(mapSubmitError(scheduleError('SCHEDULE_NUEVO'))).toBe(
+      'Revisá los horarios de atención.',
+    );
+  });
+
+  it('prioriza el rango inválido si vienen ambos', () => {
+    const error = new ApiError(422, 'x', {
+      title: 'x',
+      status: 422,
+      detail: 'x',
+      instance: '/x',
+      code: 'ONBOARDING_NOT_SUBMITTABLE',
+      validationsErrors: [
+        {
+          field: 'declaredEntity.schedules.0',
+          reason: 'x',
+          code: 'SCHEDULE_OVERLAP',
+        },
+        {
+          field: 'declaredEntity.schedules.1',
+          reason: 'x',
+          code: 'SCHEDULE_INVALID_RANGE',
+        },
+      ],
+    });
+    expect(mapSubmitError(error)).toContain('posterior');
+  });
+
+  it('el teléfono inválido (400) se explica en español', () => {
+    const error = new ApiError(400, 'Bad Request', {
+      title: 'Bad Request',
+      status: 400,
+      detail: 'x',
+      instance: '/x',
+      code: 'VALIDATION_FAILED',
+      validationsErrors: [
+        {
+          field: 'phone',
+          reason: 'phone must be a valid phone number',
+          code: 'isPhoneNumber',
+        },
+      ],
+    });
+    expect(mapSubmitError(error, 'onboarding.createApplication')).toBe(
+      'Ingresá un teléfono válido',
+    );
+  });
+});

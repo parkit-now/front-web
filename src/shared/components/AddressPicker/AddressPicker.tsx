@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { RequiredMark } from '../ui/RequiredMark';
 import type {
   GeocodedAddress,
   GeocodingProvider,
@@ -16,10 +15,10 @@ import {
   addressPrimaryLine,
   addressSummaryDetail,
   applyCatalogToGeocoded,
-  describeGeocodingSource,
   hasCoordinates,
   isAddressEmpty,
   isGeorefNormalized,
+  markAddressManual,
   missingAddressFields,
   moveAddressPin,
   REQUIRED_ADDRESS_FIELDS,
@@ -29,6 +28,12 @@ import {
   type AddressFormValue,
   type AddressTextField,
 } from './addressUtils';
+import {
+  SUGGEST_DEBOUNCE_MS,
+  createDebouncer,
+  shouldSuggest,
+  type Debouncer,
+} from './suggest';
 
 interface Props {
   value: AddressFormValue;
@@ -63,6 +68,11 @@ type SearchState =
       kind: 'done';
       status: Exclude<GeocodingStatus, 'aborted'>;
       results: GeocodedAddress[];
+      /**
+       * Vino de la búsqueda mientras se tipea (no de Enter / "Buscar"). Estas
+       * sugerencias nunca se aplican solas ni muestran errores.
+       */
+      suggested?: boolean;
     };
 
 interface TextFieldSpec {
@@ -197,29 +207,100 @@ export function AddressPicker({
     string | null
   >(null);
 
-  // Corta la request en vuelo si el componente se desmonta (cambiar de
-  // pestaña, cerrar el wizard): sin esto quedaría un setState sobre un
-  // componente muerto.
-  useEffect(() => () => abortRef.current?.abort(), []);
+  /**
+   * Búsqueda con debounce mientras se tipea. Vive en un ref y se programa
+   * desde el `onChange` del input —NO desde un efecto sobre `query`—: así
+   * setear valores por código (elegir un candidato, cargar un valor guardado)
+   * jamás dispara una búsqueda.
+   */
+  const suggestRef = useRef<Debouncer | null>(null);
+  const queryRef = useRef(query);
+  queryRef.current = query;
+  const providerRef = useRef(provider);
+  providerRef.current = provider;
 
-  async function runSearch() {
-    const trimmed = query.trim();
+  // Corta la request en vuelo y el debounce pendiente si el componente se
+  // desmonta (cambiar de pestaña, cerrar el wizard): sin esto quedaría un
+  // setState sobre un componente muerto.
+  useEffect(
+    () => () => {
+      suggestRef.current?.cancel();
+      abortRef.current?.abort();
+    },
+    [],
+  );
+
+  function cancelPendingSuggestion() {
+    suggestRef.current?.cancel();
+  }
+
+  function handleQueryChange(next: string) {
+    setQuery(next);
+    queryRef.current = next;
+    cancelPendingSuggestion();
+    // La búsqueda en vuelo era sobre un texto que ya no está: se corta.
+    abortRef.current?.abort();
+
+    if (!shouldSuggest(next)) {
+      setSearch((prev) =>
+        prev.kind === 'searching' || (prev.kind === 'done' && prev.suggested)
+          ? { kind: 'idle' }
+          : prev,
+      );
+      return;
+    }
+    suggestRef.current ??= createDebouncer(
+      () => void runSearch({ explicit: false }),
+      SUGGEST_DEBOUNCE_MS,
+    );
+    suggestRef.current.schedule();
+  }
+
+  async function runSearch({ explicit }: { explicit: boolean }) {
+    const trimmed = (explicit ? query : queryRef.current).trim();
     if (!trimmed) return;
 
+    cancelPendingSuggestion();
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
-    setSearch({ kind: 'searching' });
-    // El aviso es sobre la búsqueda ANTERIOR: arrastrarlo a la nueva sería
-    // explicar un campo vacío con un motivo que ya no aplica.
-    setCityDroppedByCatalog(null);
-    const result = await provider.search(trimmed, {
+    if (explicit) {
+      setSearch({ kind: 'searching' });
+      // El aviso es sobre la búsqueda ANTERIOR: arrastrarlo a la nueva sería
+      // explicar un campo vacío con un motivo que ya no aplica.
+      setCityDroppedByCatalog(null);
+    }
+    const result = await providerRef.current.search(trimmed, {
       signal: controller.signal,
     });
 
-    // Llegó una búsqueda más nueva: esta respuesta ya no le importa a nadie.
-    if (result.status === 'aborted' || controller.signal.aborted) return;
+    if (result.status === 'aborted' || controller.signal.aborted) {
+      // Si nadie la reemplazó con otra búsqueda, la cortó el tipeo: no dejar
+      // el spinner del botón colgado.
+      if (abortRef.current === controller && explicit) {
+        setSearch({ kind: 'idle' });
+      }
+      return;
+    }
+
+    if (!explicit) {
+      // Mientras se tipea, "sin resultados" o "Georef caído" NO son errores:
+      // la dirección está a medio escribir. Sólo se limpia la lista vieja.
+      if (result.status === 'ok' && result.results.length > 0) {
+        setSearch({
+          kind: 'done',
+          status: 'ok',
+          results: result.results,
+          suggested: true,
+        });
+      } else {
+        setSearch((prev) =>
+          prev.kind === 'done' && prev.suggested ? { kind: 'idle' } : prev,
+        );
+      }
+      return;
+    }
 
     setSearch({ kind: 'done', status: result.status, results: result.results });
 
@@ -263,6 +344,8 @@ export function AddressPicker({
   }
 
   function pickCandidate(candidate: GeocodedAddress) {
+    cancelPendingSuggestion();
+    abortRef.current?.abort();
     applyCandidate(candidate);
     setSearch({ kind: 'idle' });
   }
@@ -321,11 +404,11 @@ export function AddressPicker({
   const showCandidates =
     search.kind === 'done' &&
     search.status === 'ok' &&
-    search.results.length > 1;
+    (search.results.length > 1 ||
+      (search.suggested === true && search.results.length > 0));
 
   const primaryLine = addressPrimaryLine(value);
   const summaryDetail = addressSummaryDetail(value);
-  const sourceLabel = describeGeocodingSource(value.geocodingSource);
 
   /**
    * Las localidades de la provincia elegida. Vacío si no hay provincia o si la
@@ -403,13 +486,13 @@ export function AddressPicker({
             autoComplete="off"
             disabled={disabled}
             required={required}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => handleQueryChange(e.target.value)}
             onKeyDown={(e) => {
               // Enter busca. `preventDefault` porque adentro de un <form> el
               // Enter dispararía el submit del formulario entero.
               if (e.key !== 'Enter') return;
               e.preventDefault();
-              void runSearch();
+              void runSearch({ explicit: true });
             }}
           />
         </div>
@@ -418,7 +501,7 @@ export function AddressPicker({
           data-testid="address-search"
           loading={search.kind === 'searching'}
           disabled={disabled || query.trim().length === 0}
-          onClick={() => void runSearch()}
+          onClick={() => void runSearch({ explicit: true })}
         >
           Buscar
         </Button>
@@ -445,7 +528,9 @@ export function AddressPicker({
       {showCandidates ? (
         <div data-testid="address-candidates" style={candidatesStyle}>
           <p style={{ ...hintStyle, margin: '2px 6px 4px' }}>
-            Encontramos {search.results.length} direcciones. Elegí la correcta:
+            {search.results.length === 1
+              ? 'Encontramos esta dirección. Tocala para usarla:'
+              : `Encontramos ${search.results.length} direcciones. Elegí la correcta:`}
           </p>
           {search.results.map((candidate, index) => (
             <button
@@ -517,11 +602,6 @@ export function AddressPicker({
               </span>
             ) : null}
           </div>
-          {sourceLabel ? (
-            <span data-testid="address-source" style={badgeStyle}>
-              {sourceLabel}
-            </span>
-          ) : null}
         </div>
       ) : null}
 
@@ -567,7 +647,12 @@ export function AddressPicker({
                   type="button"
                   data-testid="address-detail-edit"
                   disabled={disabled}
-                  onClick={() => setDetailEditable(true)}
+                  onClick={() => {
+                    // Declarar que Georef erró es pasar a carga manual, aunque
+                    // todavía no se haya tocado ningún campo.
+                    onChange(markAddressManual(value));
+                    setDetailEditable(true);
+                  }}
                   style={linkActionStyle}
                 >
                   ✎ No es esta: corregirla a mano
@@ -628,13 +713,6 @@ export function AddressPicker({
 
           {EXTRA_FIELDS.map(renderTextField)}
         </div>
-      ) : null}
-
-      {manualMode && required ? (
-        <p style={hintStyle}>
-          Los campos con <RequiredMark /> son obligatorios. Podés enviar la
-          solicitud aunque el servicio de direcciones no esté disponible.
-        </p>
       ) : null}
     </div>
   );
@@ -715,15 +793,4 @@ const coordsStyle: React.CSSProperties = {
   background: 'var(--surface-2, #f2f5fa)',
   borderRadius: 6,
   padding: '2px 6px',
-};
-
-const badgeStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: 'uppercase',
-  letterSpacing: '0.04em',
-  color: 'var(--brand, #0e5fd8)',
-  background: 'rgba(14, 95, 216, 0.1)',
-  borderRadius: 999,
-  padding: '3px 8px',
 };

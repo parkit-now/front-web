@@ -10,6 +10,7 @@ import {
 } from '../api/auth';
 import { isSessionRejected } from '../api/session-errors';
 import { supabase } from './client';
+import { clearStoredActiveTenant } from '../tenant/activeTenant';
 
 function resolveRedirectUrl(): string | undefined {
   const customRedirectRaw: unknown = import.meta.env
@@ -235,10 +236,15 @@ export async function signInWithEmail(
 }
 
 export async function registerWithEmail(
+  name: string,
   email: string,
   password: string,
 ): Promise<Session> {
-  const result = await registerWithPassword({ email, password });
+  const result = await registerWithPassword({
+    name: name.trim(),
+    email,
+    password,
+  });
   return applyBackendSession(result.session);
 }
 
@@ -256,6 +262,9 @@ export async function refreshCurrentSession(): Promise<Session | null> {
 export async function signOut(): Promise<void> {
   const current = await getSession();
   const accessToken = current?.access_token;
+
+  // El lote activo es por usuario: no debe sobrevivir al cierre de sesión.
+  clearStoredActiveTenant(current?.user.id);
 
   if (accessToken) {
     try {

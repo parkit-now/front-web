@@ -47,6 +47,24 @@ const GEOREF_PROVINCES = [
   'Tucumán',
 ];
 
+describe('findProvince con alias de CABA y PBA', () => {
+  it.each([
+    'Ciudad Autónoma de Buenos Aires',
+    'ciudad autonoma de buenos aires',
+    'CIUDAD DE BUENOS AIRES',
+    'Capital Federal',
+    'CABA',
+    'C.A.B.A.',
+  ])('"%s" resuelve a Capital Federal', (name) => {
+    expect(findProvince(name)).toBe('Capital Federal');
+  });
+
+  it('"Provincia de Buenos Aires" resuelve a Buenos Aires, no a la Ciudad', () => {
+    expect(findProvince('Provincia de Buenos Aires')).toBe('Buenos Aires');
+    expect(findProvince('Buenos Aires')).toBe('Buenos Aires');
+  });
+});
+
 describe('normalizeLocationName', () => {
   it('saca las tildes y pasa a minúsculas', () => {
     expect(normalizeLocationName('Martínez')).toBe('martinez');

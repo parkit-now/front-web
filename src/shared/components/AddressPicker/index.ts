@@ -4,7 +4,6 @@ export {
   ADDRESS_TEXT_FIELDS,
   addressFromGeocoded,
   addressFromLocation,
-  describeGeocodingSource,
   emptyAddress,
   hasCoordinates,
   isAddressEmpty,

@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../../../../shared/components/ui/Button';
 import { Input } from '../../../../shared/components/ui/Input';
+import {
+  PhoneInput,
+  validatePhone,
+} from '../../../../shared/components/PhoneInput';
 import { Modal } from '../../../../shared/components/ui/Modal';
 import { AddressPicker } from '../../../../shared/components/AddressPicker/AddressPicker';
 import {
@@ -118,12 +122,14 @@ export function ParkingFormModal({
   const { createMutation, updateMutation } = useParkingActions();
   const [form, setForm] = useState<FormState>(EMPTY);
   const [nameError, setNameError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
 
   // Reset the form whenever the modal opens for a different target.
   useEffect(() => {
     if (open) {
       setForm(parking ? fromParking(parking) : EMPTY);
       setNameError(null);
+      setPhoneError(null);
     }
   }, [open, parking]);
 
@@ -137,6 +143,16 @@ export function ParkingFormModal({
     if (form.name.trim().length === 0) {
       setNameError('Ingresá el nombre del estacionamiento.');
       return;
+    }
+    // Opcional: sólo se valida si hay algo cargado y, al editar, si cambió
+    // (el backend acepta el valor viejo mientras no se toque).
+    const phoneChanged = form.phone !== (parking?.phone ?? '');
+    if (form.phone.trim() && (!isEdit || phoneChanged)) {
+      const phoneMessage = validatePhone(form.phone);
+      if (phoneMessage) {
+        setPhoneError(phoneMessage);
+        return;
+      }
     }
     if (isEdit && parking) {
       updateMutation.mutate(
@@ -218,10 +234,14 @@ export function ParkingFormModal({
               value={form.email}
               onChange={(e) => set('email', e.target.value)}
             />
-            <Input
+            <PhoneInput
               label="Teléfono"
               value={form.phone}
-              onChange={(e) => set('phone', e.target.value)}
+              onChange={(e164) => {
+                set('phone', e164);
+                if (phoneError) setPhoneError(null);
+              }}
+              error={phoneError}
             />
           </div>
           <div

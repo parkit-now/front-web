@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../../../../shared/components/ui/Button';
+import { ConfirmDialog } from '../../../../shared/components/ui/ConfirmDialog';
 import { Modal } from '../../../../shared/components/ui/Modal';
 import {
   IconCheck,
@@ -11,12 +12,12 @@ import {
 import { AddressMap } from '../../../../shared/components/AddressPicker/AddressMap';
 import {
   addressFromLocation,
-  describeGeocodingSource,
   missingAddressFields,
   REQUIRED_ADDRESS_FIELDS,
   type AddressFormValue,
   type AddressTextField,
 } from '../../../../shared/components/AddressPicker/addressUtils';
+import { formatPhoneForDisplay } from '../../../../shared/components/PhoneInput';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
 import {
@@ -29,6 +30,7 @@ import {
   type ApplicationDocument,
 } from '../../services/applications';
 import { DocumentPreviewModal } from './DocumentPreviewModal';
+import { summarizeSchedules } from './scheduleSummary';
 
 function formatDate(value: string | null): string {
   if (!value) return '—';
@@ -82,22 +84,19 @@ const ADDRESS_ROWS: { field: AddressTextField; label: string }[] = [
  * `state_name`/`city_name` y las coordenadas, y ninguno de los dos se puede
  * verificar leyendo "Av. Cabildo 2000, CABA".
  *
- * Tres decisiones de qué mostrar (y qué NO):
+ * Dos decisiones de qué mostrar (y qué NO):
  *
  *  1. Los CUATRO campos que Mercado Pago necesita se muestran SIEMPRE, con "—"
  *     en rojo cuando faltan. Un campo ausente es exactamente el dato que el
  *     revisor tiene que ver antes de aprobar; ocultarlo por "estar vacío"
  *     esconde el único problema que esta sección existe para mostrar. El piso
  *     y el CP, que MP no usa, aparecen sólo si están.
- *  2. El ORIGEN va como badge. "Normalizada con Georef" y "Cargada a mano" no
- *     merecen la misma confianza: la segunda es texto libre que nadie validó.
- *  3. El MAPA va, pero sólo si hay coordenadas. Un par "-34.56, -58.45" es
+ *  2. El MAPA va, pero sólo si hay coordenadas. Un par "-34.56, -58.45" es
  *     ilegible para un humano — y es el dato que decide dónde cae el `Store`.
  *     Es read-only (`disabled`): el revisor verifica, no corrige.
  */
 function DomicilioSection({ address }: { address: AddressFormValue }) {
   const missing = new Set<AddressTextField>(missingAddressFields(address));
-  const sourceLabel = describeGeocodingSource(address.geocodingSource);
   const hasPin = address.latitude !== null && address.longitude !== null;
   const primary = address.formatted.trim();
 
@@ -126,23 +125,6 @@ function DomicilioSection({ address }: { address: AddressFormValue }) {
         >
           {primary || 'Sin domicilio declarado'}
         </p>
-        <span
-          data-testid="solicitud-domicilio-origen"
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.04em',
-            borderRadius: 999,
-            padding: '3px 8px',
-            color: sourceLabel ? 'var(--brand)' : 'var(--warn-text, #b54708)',
-            background: sourceLabel
-              ? 'rgba(14, 95, 216, 0.1)'
-              : 'var(--warn-bg, #fef0c7)',
-          }}
-        >
-          {sourceLabel ?? 'Sin normalizar'}
-        </span>
       </div>
 
       <div
@@ -216,6 +198,7 @@ export function SolicitudesPage() {
   const detailQuery = useApplicationDetail(selectedId);
   const { approveMutation, rejectMutation } = useApplicationActions();
 
+  const [approveOpen, setApproveOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
@@ -268,15 +251,22 @@ export function SolicitudesPage() {
   }, [items, selectedId]);
 
   const detail = detailQuery.data ?? null;
+  const schedulesSummary = summarizeSchedules(detail?.schedules);
   const processing = approveMutation.isPending || rejectMutation.isPending;
 
+  // La aprobación crea el estacionamiento y habilita al solicitante: pide
+  // confirmación, y mientras la mutación está en curso nada se puede repetir.
   function handleApprove() {
     if (!selectedId || processing) return;
-    approveMutation.mutate(selectedId);
+    approveMutation.mutate(selectedId, {
+      // Éxito o error, el diálogo se cierra: el toast del hook explica qué pasó
+      // y un reintento es un nuevo clic en "Aprobar alta".
+      onSettled: () => setApproveOpen(false),
+    });
   }
 
   function handleConfirmReject() {
-    if (!selectedId || rejectReason.trim().length === 0) return;
+    if (!selectedId || processing || rejectReason.trim().length === 0) return;
     rejectMutation.mutate(
       { id: selectedId, reason: rejectReason.trim() },
       {
@@ -442,7 +432,8 @@ export function SolicitudesPage() {
                   <p
                     style={{ margin: 0, fontSize: 11, color: 'var(--text-3)' }}
                   >
-                    {formatDate(item.submittedAt)} · {item.docsCount} docs
+                    {formatDate(item.submittedAt)}
+                    {item.docsCount > 0 ? ` · ${item.docsCount} docs` : ''}
                   </p>
                 </button>
               );
@@ -554,10 +545,21 @@ export function SolicitudesPage() {
                 >
                   {[
                     ['Solicitante', detail.applicantEmail],
-                    ['Razón social', detail.legalName],
+                    // Razón social y CUIT ya no se piden en el alta: llegan
+                    // `null` y el dueño los completa después en Configuración.
+                    ['Razón social', detail.legalName ?? '—'],
                     ['Email de contacto', detail.email],
-                    ['CUIT', detail.cuit],
-                    ['Teléfono', detail.phone ?? '—'],
+                    ['CUIT', detail.cuit ?? '—'],
+                    [
+                      'Teléfono',
+                      detail.phone ? formatPhoneForDisplay(detail.phone) : '—',
+                    ],
+                    [
+                      'Capacidad declarada',
+                      detail.totalSpots === null
+                        ? 'Sin declarar'
+                        : `${detail.totalSpots} vehículos`,
+                    ],
                     // "Plazas declaradas" YA NO va. Las plazas salieron del
                     // wizard (el dueño no puede saber la capacidad antes de
                     // que la playa exista; la carga después en `/app/config`),
@@ -567,7 +569,14 @@ export function SolicitudesPage() {
                     // (`declared_entity.totalSpots` para borradores viejos, y
                     // `approve()` lo lee con `?? 0`): lo que se saca es la
                     // fila, no el campo.
-                    ['Documentos adjuntos', `${detail.docsCount} archivos`],
+                    ...(detail.docsCount > 0
+                      ? [
+                          [
+                            'Documentos adjuntos',
+                            `${detail.docsCount} archivos`,
+                          ],
+                        ]
+                      : []),
                   ].map(([label, value]) => (
                     <div key={label}>
                       <p style={labelStyle}>{label}</p>
@@ -587,92 +596,129 @@ export function SolicitudesPage() {
 
               <div className="pk-divider" />
 
-              {/* Documentos */}
-              <section>
-                <p
-                  style={{
-                    margin: '0 0 12px',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.06em',
-                    color: 'var(--text-3)',
-                  }}
-                >
-                  Documentación adjunta
-                </p>
-                {detail.documents.length === 0 ? (
-                  <p
-                    style={{ margin: 0, fontSize: 13, color: 'var(--text-2)' }}
-                  >
-                    El solicitante no adjuntó documentos.
-                  </p>
+              <section data-testid="solicitud-horarios">
+                <p style={sectionTitleStyle}>Horarios declarados</p>
+                {schedulesSummary.length === 0 ? (
+                  <p style={valueStyle}>Sin declarar</p>
                 ) : (
-                  <div
-                    style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+                  <ul
+                    style={{
+                      margin: 0,
+                      padding: 0,
+                      listStyle: 'none',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 4,
+                    }}
                   >
-                    {detail.documents.map((doc) => (
-                      <div
-                        key={doc.id}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 10,
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: '50%',
-                            background: 'var(--ok-bg)',
-                            color: 'var(--ok-text)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0,
-                          }}
-                        >
-                          <IconCheck size={12} />
-                        </span>
-                        <span
-                          style={{
-                            flex: 1,
-                            minWidth: 0,
-                            fontSize: 13,
-                            color: 'var(--text-2)',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {doc.name}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="pk-btn-icon"
-                          icon={<IconEye size={15} />}
-                          aria-label={`Previsualizar ${doc.name}`}
-                          title="Previsualizar"
-                          onClick={() => setPreviewDoc(doc)}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="pk-btn-icon"
-                          icon={<IconDownload size={15} />}
-                          aria-label={`Descargar ${doc.name}`}
-                          title="Descargar"
-                          loading={downloadingId === doc.id}
-                          disabled={downloadingId !== null}
-                          onClick={() => void handleDownload(doc)}
-                        />
-                      </div>
+                    {schedulesSummary.map((line) => (
+                      <li key={line} style={valueStyle}>
+                        {line}
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 )}
               </section>
+
+              {/* Documentos: sólo las solicitudes viejas los tienen. */}
+              {detail.docsCount > 0 || detail.documents.length > 0 ? (
+                <>
+                  <div className="pk-divider" />
+                  <section>
+                    <p
+                      style={{
+                        margin: '0 0 12px',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                        color: 'var(--text-3)',
+                      }}
+                    >
+                      Documentación adjunta
+                    </p>
+                    {detail.documents.length === 0 ? (
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: 13,
+                          color: 'var(--text-2)',
+                        }}
+                      >
+                        El solicitante no adjuntó documentos.
+                      </p>
+                    ) : (
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                        }}
+                      >
+                        {detail.documents.map((doc) => (
+                          <div
+                            key={doc.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                            }}
+                          >
+                            <span
+                              style={{
+                                width: 20,
+                                height: 20,
+                                borderRadius: '50%',
+                                background: 'var(--ok-bg)',
+                                color: 'var(--ok-text)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}
+                            >
+                              <IconCheck size={12} />
+                            </span>
+                            <span
+                              style={{
+                                flex: 1,
+                                minWidth: 0,
+                                fontSize: 13,
+                                color: 'var(--text-2)',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {doc.name}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="pk-btn-icon"
+                              icon={<IconEye size={15} />}
+                              aria-label={`Previsualizar ${doc.name}`}
+                              title="Previsualizar"
+                              onClick={() => setPreviewDoc(doc)}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="pk-btn-icon"
+                              icon={<IconDownload size={15} />}
+                              aria-label={`Descargar ${doc.name}`}
+                              title="Descargar"
+                              loading={downloadingId === doc.id}
+                              disabled={downloadingId !== null}
+                              onClick={() => void handleDownload(doc)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                </>
+              ) : null}
             </div>
 
             <div
@@ -697,7 +743,7 @@ export function SolicitudesPage() {
                 icon={<IconCheck size={15} />}
                 loading={approveMutation.isPending}
                 disabled={processing}
-                onClick={handleApprove}
+                onClick={() => setApproveOpen(true)}
               >
                 Aprobar alta
               </Button>
@@ -734,20 +780,48 @@ export function SolicitudesPage() {
         />
       )}
 
+      <ConfirmDialog
+        open={approveOpen}
+        title="Aprobar alta"
+        message={
+          detail ? (
+            <>
+              Se va a crear el estacionamiento «{detail.name}» y{' '}
+              <strong>{detail.applicantEmail}</strong> va a poder ingresar al
+              panel.
+            </>
+          ) : (
+            'Se va a crear el estacionamiento y el solicitante va a poder ingresar al panel.'
+          )
+        }
+        confirmLabel="Aprobar alta"
+        loading={approveMutation.isPending}
+        onConfirm={handleApprove}
+        onClose={() => {
+          if (!approveMutation.isPending) setApproveOpen(false);
+        }}
+      />
+
       {/* Reject reason modal */}
       <Modal
         open={rejectOpen}
-        onClose={() => setRejectOpen(false)}
+        onClose={() => {
+          if (!rejectMutation.isPending) setRejectOpen(false);
+        }}
         title="Rechazar solicitud"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setRejectOpen(false)}>
+            <Button
+              variant="secondary"
+              disabled={rejectMutation.isPending}
+              onClick={() => setRejectOpen(false)}
+            >
               Cancelar
             </Button>
             <Button
               variant="danger"
               loading={rejectMutation.isPending}
-              disabled={rejectReason.trim().length === 0}
+              disabled={processing || rejectReason.trim().length === 0}
               onClick={handleConfirmReject}
             >
               Rechazar
@@ -772,7 +846,7 @@ export function SolicitudesPage() {
           value={rejectReason}
           onChange={(e) => setRejectReason(e.target.value)}
           rows={4}
-          placeholder="Ej.: el CUIT no coincide con la razón social declarada."
+          placeholder="Ej.: la dirección declarada no existe."
           style={{
             width: '100%',
             resize: 'vertical',

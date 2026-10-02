@@ -1,16 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../../lib/notifications/ToastProvider';
-import { signOut } from '../../../lib/supabase/session';
+import { homePathForMe, signOut } from '../../../lib/supabase/session';
 import { getErrorMessage } from '../../auth/errors';
 import { useOnboarding } from '../hooks/useOnboarding';
+import { useOnboardingAccount } from '../hooks/useOnboardingAccount';
 import type {
   CreateApplicationInput,
   UpdateApplicationInput,
 } from '../services/onboarding';
 import { ApprovedView } from './ApprovedView';
 import { DraftWizard } from './DraftWizard';
-import { WelcomeScreen } from './WelcomeScreen';
 import '../Onboarding.css';
 
 function PageShell({ children }: { children: React.ReactNode }) {
@@ -57,6 +57,20 @@ function PageShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** Solicitud enviada: nada para editar, sólo esperar la decisión de Ops. */
+function PendingReviewView() {
+  return (
+    <div className="onboarding-card">
+      <div className="onboarding-banner banner-info" role="status">
+        <strong>Tu solicitud está en revisión</strong>
+        Nuestro equipo la está revisando. Cuando la aprobemos vas a entrar al
+        panel automáticamente; si necesita algún cambio, te lo vamos a avisar
+        acá. No hace falta que hagas nada más.
+      </div>
+    </div>
+  );
+}
+
 export function OnboardingPage() {
   const {
     application,
@@ -65,26 +79,26 @@ export function OnboardingPage() {
     refetch,
     createApplicationMutation,
     updateApplicationMutation,
-    uploadDocumentMutation,
     submitApplicationMutation,
   } = useOnboarding();
 
+  const pendingReview = application?.status === 'pending_review';
+  const account = useOnboardingAccount({ poll: pendingReview });
+  const navigate = useNavigate();
   const { showToast } = useToast();
 
-  // Show the welcome screen before the wizard for first-time applicants.
-  const [showWizard, setShowWizard] = useState(false);
-  // Names of documents uploaded during this session (immediate UI feedback).
-  const [uploadedNames, setUploadedNames] = useState<string[]>([]);
+  // Aprobada mientras esperaba: `/auth/me` ya trae memberships y el home
+  // deja de ser `/onboarding`. Se navega en vez de depender del loader del
+  // router, que sólo corre al entrar a la ruta.
+  const me = account.data;
+  useEffect(() => {
+    if (!me) return;
+    const home = homePathForMe(me);
+    if (home !== '/onboarding') void navigate(home, { replace: true });
+  }, [me, navigate]);
 
   function handleCreate(input: CreateApplicationInput) {
-    createApplicationMutation.mutate(input, {
-      onSuccess: () => {
-        showToast({
-          message: 'Solicitud creada. Ya podés sumar documentación.',
-          kind: 'success',
-        });
-      },
-    });
+    createApplicationMutation.mutate(input);
   }
 
   function handleSave(applicationId: string, input: UpdateApplicationInput) {
@@ -101,30 +115,26 @@ export function OnboardingPage() {
     );
   }
 
-  function handleUploadDocument(applicationId: string, file: File) {
-    uploadDocumentMutation.mutate(
-      { applicationId, file },
-      {
-        onSuccess: () => {
-          setUploadedNames((prev) => [...prev, file.name]);
-          showToast({ message: 'Documento subido.', kind: 'success' });
-        },
-      },
-    );
+  /** Guarda (si hay datos) y envía a revisión. Los errores ya los toastea el hook. */
+  async function handleSubmit(
+    applicationId: string,
+    input?: UpdateApplicationInput,
+  ) {
+    try {
+      if (input) {
+        await updateApplicationMutation.mutateAsync({ applicationId, input });
+      }
+      await submitApplicationMutation.mutateAsync(applicationId);
+      showToast({
+        message: 'Solicitud enviada para revisión.',
+        kind: 'success',
+      });
+    } catch {
+      // Toast de error a cargo de los `onError` de las mutaciones.
+    }
   }
 
-  function handleSubmit(applicationId: string) {
-    submitApplicationMutation.mutate(applicationId, {
-      onSuccess: () => {
-        showToast({
-          message: 'Solicitud enviada para revisión.',
-          kind: 'success',
-        });
-      },
-    });
-  }
-
-  if (isLoading) {
+  if (isLoading || account.isLoading) {
     return (
       <PageShell>
         <div className="onboarding-card">
@@ -169,35 +179,29 @@ export function OnboardingPage() {
     );
   }
 
-  // First-time applicant: offer the welcome screen before the wizard.
-  if (!current && !showWizard) {
+  if (current?.status === 'pending_review') {
     return (
       <PageShell>
-        <WelcomeScreen onStart={() => setShowWizard(true)} />
+        <PendingReviewView />
       </PageShell>
     );
   }
 
-  // Single wizard instance for both create and edit, so its step state survives
-  // the null→created transition (the wizard then jumps to the documents step).
+  // Single wizard instance for create and edit, so its step state survives the
+  // null→created transition (no le pongas un `key` que dependa de la solicitud).
   return (
     <PageShell>
       <DraftWizard
         application={current}
         rejected={current?.status === 'rejected'}
-        pendingReview={current?.status === 'pending_review'}
         creating={createApplicationMutation.isPending}
         saving={updateApplicationMutation.isPending}
-        uploadingDocument={uploadDocumentMutation.isPending}
         submitting={submitApplicationMutation.isPending}
-        uploadedNames={uploadedNames}
+        account={me ? { name: me.name, email: me.email } : null}
         onCreate={handleCreate}
         onSave={handleSave}
-        onUploadDocument={(file) => {
-          if (current) handleUploadDocument(current.id, file);
-        }}
-        onSubmit={() => {
-          if (current) handleSubmit(current.id);
+        onSubmit={(input) => {
+          if (current) void handleSubmit(current.id, input);
         }}
       />
     </PageShell>
