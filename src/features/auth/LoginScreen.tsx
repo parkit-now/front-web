@@ -1,10 +1,10 @@
-import { Eye, EyeOff } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { useToast } from '../../lib/notifications/ToastProvider';
 import {
   signInWithEmail,
   signInWithProvider,
 } from '../../lib/supabase/session';
+import { PasswordInput } from '../../shared/components/ui/PasswordInput';
 import { getErrorMessage, mapAuthError } from './errors';
 import { ProviderIcon, type SocialProvider } from './ProviderIcon';
 import {
@@ -32,7 +32,6 @@ export function LoginScreen({ onSwitchToRegister, onForgotPassword }: Props) {
   const { showToast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [pendingEmail, setPendingEmail] = useState(false);
   const [pendingProvider, setPendingProvider] = useState<SocialProvider | null>(
@@ -137,48 +136,20 @@ export function LoginScreen({ onSwitchToRegister, onForgotPassword }: Props) {
           ) : null}
         </div>
 
-        <div className="form-field">
-          <div className="password-input-wrap">
-            <input
-              type={showPassword ? 'text' : 'password'}
-              aria-label="Contraseña"
-              aria-invalid={errors.password ? true : undefined}
-              aria-describedby={
-                errors.password ? 'login-password-error' : undefined
-              }
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => {
-                setPassword(event.target.value);
-                if (errors.password) {
-                  setErrors((prev) => ({ ...prev, password: undefined }));
-                }
-              }}
-              placeholder="Contraseña"
-              className={errors.password ? 'input-error' : undefined}
-            />
-            <button
-              type="button"
-              className="password-visibility-button"
-              onClick={() => setShowPassword((visible) => !visible)}
-              aria-label={
-                showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'
-              }
-              aria-pressed={showPassword}
-            >
-              {showPassword ? (
-                <EyeOff size={18} aria-hidden="true" />
-              ) : (
-                <Eye size={18} aria-hidden="true" />
-              )}
-            </button>
-          </div>
-          {errors.password ? (
-            <p id="login-password-error" className="field-error">
-              {errors.password}
-            </p>
-          ) : null}
-        </div>
+        <PasswordInput
+          id="login-password"
+          aria-label="Contraseña"
+          autoComplete="current-password"
+          value={password}
+          onChange={(event) => {
+            setPassword(event.target.value);
+            if (errors.password) {
+              setErrors((prev) => ({ ...prev, password: undefined }));
+            }
+          }}
+          placeholder="Contraseña"
+          error={errors.password}
+        />
 
         <button type="submit" className="primary-button" disabled={anyPending}>
           {pendingEmail ? 'Ingresando...' : 'Ingresar'}

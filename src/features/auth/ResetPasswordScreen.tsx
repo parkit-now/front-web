@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { confirmPasswordReset } from '../../lib/api/auth';
 import { translateApiError } from '../../lib/api/translate';
+import { PasswordInput } from '../../shared/components/ui/PasswordInput';
 import { useToast } from '../../lib/notifications/ToastProvider';
 import {
   validatePassword,
@@ -66,62 +67,38 @@ export function ResetPasswordScreen({ token, onSuccess }: Props) {
           void handleSubmit(event);
         }}
       >
-        <div className="form-field">
-          <input
-            type="password"
-            aria-label="Nueva contraseña"
-            aria-invalid={errors.password ? true : undefined}
-            aria-describedby={
-              errors.password ? 'reset-password-error' : undefined
+        <PasswordInput
+          id="reset-password"
+          aria-label="Nueva contraseña"
+          autoComplete="new-password"
+          value={password}
+          onChange={(event) => {
+            setPassword(event.target.value);
+            if (errors.password) {
+              setErrors((prev) => ({ ...prev, password: undefined }));
             }
-            autoComplete="new-password"
-            value={password}
-            onChange={(event) => {
-              setPassword(event.target.value);
-              if (errors.password) {
-                setErrors((prev) => ({ ...prev, password: undefined }));
-              }
-            }}
-            placeholder="Contraseña nueva (mín. 8 caracteres)"
-            className={errors.password ? 'input-error' : undefined}
-          />
-          {errors.password ? (
-            <p id="reset-password-error" className="field-error">
-              {errors.password}
-            </p>
-          ) : null}
-        </div>
+          }}
+          placeholder="Contraseña nueva (mín. 8 caracteres)"
+          error={errors.password}
+        />
 
-        <div className="form-field">
-          <input
-            type="password"
-            aria-label="Repetir contraseña"
-            aria-invalid={errors.passwordConfirmation ? true : undefined}
-            aria-describedby={
-              errors.passwordConfirmation
-                ? 'reset-confirmation-error'
-                : undefined
+        <PasswordInput
+          id="reset-confirmation"
+          aria-label="Repetir contraseña"
+          autoComplete="new-password"
+          value={confirmation}
+          onChange={(event) => {
+            setConfirmation(event.target.value);
+            if (errors.passwordConfirmation) {
+              setErrors((prev) => ({
+                ...prev,
+                passwordConfirmation: undefined,
+              }));
             }
-            autoComplete="new-password"
-            value={confirmation}
-            onChange={(event) => {
-              setConfirmation(event.target.value);
-              if (errors.passwordConfirmation) {
-                setErrors((prev) => ({
-                  ...prev,
-                  passwordConfirmation: undefined,
-                }));
-              }
-            }}
-            placeholder="Repetí la contraseña"
-            className={errors.passwordConfirmation ? 'input-error' : undefined}
-          />
-          {errors.passwordConfirmation ? (
-            <p id="reset-confirmation-error" className="field-error">
-              {errors.passwordConfirmation}
-            </p>
-          ) : null}
-        </div>
+          }}
+          placeholder="Repetí la contraseña"
+          error={errors.passwordConfirmation}
+        />
 
         <button type="submit" className="primary-button" disabled={pending}>
           {pending ? 'Guardando...' : 'Guardar contraseña'}
