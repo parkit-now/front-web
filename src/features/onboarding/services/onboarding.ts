@@ -1,11 +1,8 @@
 import type { components } from '../../../generated/api-types';
 import { apiRequest } from '../../../lib/api/client';
 import { getSession } from '../../../lib/supabase/session';
-import { uploadApplicationDocument } from '../../../lib/supabase/storage';
 
 export type Application = components['schemas']['OnboardingApplicationDto'];
-export type ApplicationDocument =
-  components['schemas']['ApplicationDocumentDto'];
 export type CreateApplicationInput =
   components['schemas']['CreateApplicationDto'];
 export type UpdateApplicationInput =
@@ -26,11 +23,14 @@ export type DeclaredEntity = {
   name?: string;
   address?: string;
   location?: components['schemas']['UpdateEntityAddressDto'];
+  /** Sólo en borradores viejos: el alta nueva ya no los pide. */
   legalName?: string;
   cuit?: string;
   email?: string;
+  /** E.164 en las solicitudes nuevas; los borradores viejos pueden traer otro formato. */
   phone?: string;
   totalSpots?: number;
+  schedules?: components['schemas']['CreateScheduleDto'][];
 };
 
 /** Reads `declaredEntity` as a typed object (empty when absent). */
@@ -86,26 +86,6 @@ export async function updateApplication(
     method: 'PATCH',
     path: `/onboarding/applications/${applicationId}`,
     body: input,
-    bearer: await bearer(),
-  });
-}
-
-/**
- * Uploads the binary to Supabase Storage and then registers its metadata via
- * POST /onboarding/applications/:id/documents.
- */
-export async function uploadAndRegisterDocument(
-  applicationId: string,
-  file: File,
-): Promise<ApplicationDocument> {
-  const { storagePath, mimeType, name } = await uploadApplicationDocument(
-    applicationId,
-    file,
-  );
-  return apiRequest<ApplicationDocument>({
-    method: 'POST',
-    path: `/onboarding/applications/${applicationId}/documents`,
-    body: { name, storagePath, ...(mimeType ? { mimeType } : {}) },
     bearer: await bearer(),
   });
 }
