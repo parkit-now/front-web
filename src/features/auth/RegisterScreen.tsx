@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { IconAlert } from '../../shared/components/icons';
+import { PasswordInput } from '../../shared/components/ui/PasswordInput';
 import { RequiredMark } from '../../shared/components/ui/RequiredMark';
 import { useToast } from '../../lib/notifications/ToastProvider';
 import {
@@ -12,6 +13,7 @@ import {
   validateEmail,
   validateFullName,
   validatePassword,
+  validatePasswordConfirmation,
   type FieldErrors,
 } from './validation';
 
@@ -39,6 +41,7 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
   const [pendingEmail, setPendingEmail] = useState(false);
   const [pendingProvider, setPendingProvider] = useState<SocialProvider | null>(
@@ -56,6 +59,11 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
     if (emailError) next.email = emailError;
     const passwordError = validatePassword(password, { isNew: true });
     if (passwordError) next.password = passwordError;
+    const confirmationError = validatePasswordConfirmation(
+      password,
+      passwordConfirmation,
+    );
+    if (confirmationError) next.passwordConfirmation = confirmationError;
     if (Object.keys(next).length > 0) {
       setErrors(next);
       return;
@@ -177,33 +185,47 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
           <FieldError id="register-email-error" message={errors.email} />
         </div>
 
-        <div className="form-field">
-          <label htmlFor="register-password" className="auth-label">
-            Contraseña
-            <RequiredMark />
-          </label>
-          <input
-            id="register-password"
-            type="password"
-            required
-            aria-required="true"
-            aria-invalid={errors.password ? true : undefined}
-            aria-describedby={
-              errors.password ? 'register-password-error' : undefined
-            }
-            autoComplete="new-password"
-            value={password}
-            onChange={(event) => {
-              setPassword(event.target.value);
-              if (errors.password) {
-                setErrors((prev) => ({ ...prev, password: undefined }));
+        <PasswordInput
+          id="register-password"
+          label="Contraseña"
+          required
+          autoComplete="new-password"
+          value={password}
+          onChange={(event) => {
+            const value = event.target.value;
+            setPassword(value);
+            setErrors((prev) => {
+              if (!prev.password && !prev.passwordConfirmation) return prev;
+              const next = { ...prev, password: undefined };
+              // Si ahora coinciden, el error de confirmación ya no aplica.
+              if (prev.passwordConfirmation && value === passwordConfirmation) {
+                next.passwordConfirmation = undefined;
               }
-            }}
-            placeholder="Contraseña (mín. 8 caracteres)"
-            className={errors.password ? 'input-error' : undefined}
-          />
-          <FieldError id="register-password-error" message={errors.password} />
-        </div>
+              return next;
+            });
+          }}
+          placeholder="Contraseña (mín. 8 caracteres)"
+          error={errors.password}
+        />
+
+        <PasswordInput
+          id="register-password-confirmation"
+          label="Repetir contraseña"
+          required
+          autoComplete="new-password"
+          value={passwordConfirmation}
+          onChange={(event) => {
+            setPasswordConfirmation(event.target.value);
+            if (errors.passwordConfirmation) {
+              setErrors((prev) => ({
+                ...prev,
+                passwordConfirmation: undefined,
+              }));
+            }
+          }}
+          placeholder="Repetí la contraseña"
+          error={errors.passwordConfirmation}
+        />
 
         <button type="submit" className="primary-button" disabled={anyPending}>
           {pendingEmail ? 'Creando cuenta...' : 'Crear cuenta'}
