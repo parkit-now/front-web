@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Input } from '../../../../shared/components/ui/Input';
+import {
+  PhoneInput,
+  phoneFieldError,
+  validatePhone,
+} from '../../../../shared/components/PhoneInput';
 import { Button } from '../../../../shared/components/ui/Button';
 import { AddressPicker } from '../../../../shared/components/AddressPicker/AddressPicker';
 import {
@@ -64,6 +69,7 @@ export function ConfigPerfil() {
   });
 
   const [form, setForm] = useState<PerfilForm | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [capacityError, setCapacityError] = useState<string | undefined>(
     undefined,
   );
@@ -88,6 +94,11 @@ export function ConfigPerfil() {
       });
     },
     onError: (error) => {
+      const phoneMessage = phoneFieldError(error);
+      if (phoneMessage) {
+        setPhoneError(phoneMessage);
+        return;
+      }
       showToast({
         message: translateApiError(error, { endpoint: 'entities.update' }),
         kind: 'error',
@@ -110,6 +121,17 @@ export function ConfigPerfil() {
 
   function handleSave() {
     if (!form) return;
+
+    // El teléfono se valida sólo si la persona lo cambió: igual que el
+    // backend, que acepta el valor viejo (no E.164) mientras no se toque.
+    if (form.phone !== (profile?.phone ?? '')) {
+      const phoneMessage = validatePhone(form.phone);
+      if (phoneMessage) {
+        setPhoneError(phoneMessage);
+        return;
+      }
+    }
+    setPhoneError(null);
 
     // La capacidad volvió acá desde la pestaña Servicios: con UN número es una
     // propiedad del estacionamiento, y este formulario ya hace PATCH al
@@ -197,11 +219,14 @@ export function ConfigPerfil() {
           onChange={textHandler('email')}
           disabled={busy}
         />
-        <Input
+        <PhoneInput
           label="Teléfono"
-          type="tel"
           value={form.phone}
-          onChange={textHandler('phone')}
+          onChange={(e164) => {
+            setField('phone', e164);
+            if (phoneError) setPhoneError(null);
+          }}
+          error={phoneError}
           disabled={busy}
         />
         {/* Un solo número: las plazas no dependen de la carrocería. Qué
