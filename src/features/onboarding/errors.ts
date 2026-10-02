@@ -1,5 +1,5 @@
 import { ApiError } from '../../lib/api/client';
-import { translateApiError } from '../../lib/api/translate';
+import { translateApiError, type EndpointKey } from '../../lib/api/translate';
 import {
   ADDRESS_TEXT_FIELDS,
   type AddressTextField,
@@ -42,32 +42,66 @@ export function readAddressField(field: string): AddressTextField | null {
     : null;
 }
 
+type ValidationItem = { field: string; code: string };
+
 /** Los `validationsErrors` del problem+json, si vienen. */
-function readValidationFields(error: unknown): string[] {
+function readValidationItems(error: unknown): ValidationItem[] {
   if (!(error instanceof ApiError) || !error.problem) return [];
   if (!('validationsErrors' in error.problem)) return [];
   const items = error.problem.validationsErrors;
   if (!Array.isArray(items)) return [];
-  return items
-    .map((item) =>
-      item && typeof item === 'object' && 'field' in item
-        ? String(item.field)
-        : '',
-    )
-    .filter(Boolean);
+  const result: ValidationItem[] = [];
+  for (const item of items) {
+    if (item.field) result.push({ field: item.field, code: item.code ?? '' });
+  }
+  return result;
 }
 
+const SCHEDULE_FIELD = /(^|\.)schedules(\.|\[|$)/;
+
+/** Mensajes en español de los códigos de horarios que emite el backend. */
+export const SCHEDULE_ERROR_MESSAGES: Record<string, string> = {
+  SCHEDULE_INVALID_RANGE:
+    'Revisá los horarios: la hora de cierre tiene que ser posterior a la de apertura.',
+  SCHEDULE_OVERLAP:
+    'Revisá los horarios: hay franjas que se superponen en un mismo día.',
+};
+
+const SCHEDULE_GENERIC_MESSAGE = 'Revisá los horarios de atención.';
+
 /**
- * Mensaje para el toast al fallar el envío.
+ * Mensaje de los horarios inválidos (422 con `declaredEntity.schedules.<i>`),
+ * o `null` si el error no es de horarios. Si hay varios, gana el rango inválido
+ * porque corregirlo suele resolver también el solape.
+ */
+export function describeScheduleErrors(
+  items: readonly ValidationItem[],
+): string | null {
+  const schedule = items.filter((item) => SCHEDULE_FIELD.test(item.field));
+  if (schedule.length === 0) return null;
+  const invalid = schedule.find((i) => i.code === 'SCHEDULE_INVALID_RANGE');
+  const picked = invalid ?? schedule[0];
+  return SCHEDULE_ERROR_MESSAGES[picked.code] ?? SCHEDULE_GENERIC_MESSAGE;
+}
+
+export const PHONE_SERVER_MESSAGE = 'Ingresá un teléfono válido';
+
+/**
+ * Mensaje para el toast al fallar el alta (crear, guardar o enviar).
  *
- * Si el 422 trae los campos de dirección que faltan, los nombra con LAS MISMAS
- * palabras que usa la validación local del paso 1. Si no —otro código, otro
+ * Prioridad: dirección incompleta, horarios inválidos, teléfono inválido. Si
+ * el 422/400 trae los campos de dirección que faltan, los nombra con LAS MISMAS
+ * palabras que usa la validación local del paso 2. Si no —otro código, otro
  * campo, el backend viejo sin `validationsErrors`— delega en el catálogo de
  * `translate.ts`, que nunca muestra el `detail` crudo en inglés.
  */
-export function mapSubmitError(error: unknown): string {
-  const missing = readValidationFields(error)
-    .map(readAddressField)
+export function mapSubmitError(
+  error: unknown,
+  endpoint: EndpointKey = 'onboarding.submit',
+): string {
+  const items = readValidationItems(error);
+  const missing = items
+    .map((item) => readAddressField(item.field))
     .filter((field): field is AddressTextField => field !== null);
 
   // Se respeta el orden canónico del formulario y no el del backend: leer
@@ -79,5 +113,12 @@ export function mapSubmitError(error: unknown): string {
 
   if (ordered.length > 0) return describeMissingAddressFields(ordered);
 
-  return translateApiError(error, { endpoint: 'onboarding.submit' });
+  const scheduleMessage = describeScheduleErrors(items);
+  if (scheduleMessage) return scheduleMessage;
+
+  if (items.some((item) => item.field.split('.').pop() === 'phone')) {
+    return PHONE_SERVER_MESSAGE;
+  }
+
+  return translateApiError(error, { endpoint });
 }
