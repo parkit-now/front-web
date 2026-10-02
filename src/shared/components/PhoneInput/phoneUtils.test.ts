@@ -56,7 +56,7 @@ describe('parseStoredPhone', () => {
   it('ubica el país y el número nacional', () => {
     expect(parseStoredPhone('+541123456789')).toEqual({
       country: 'AR',
-      text: '011 2345-6789',
+      text: '11 2345-6789',
     });
     expect(parseStoredPhone('+12015550123')?.country).toBe('US');
   });
@@ -69,7 +69,7 @@ describe('parseStoredPhone', () => {
 describe('applyTypedPhone', () => {
   it('AR fijo: formatea mientras se tipea y emite E.164', () => {
     const r = applyTypedPhone('01123456789', 'AR');
-    expect(r.text).toBe('011 2345-6789');
+    expect(r.text).toBe('11 2345-6789');
     expect(r.e164).toBe('+541123456789');
   });
   it('AR sin 0 inicial', () => {
@@ -105,8 +105,50 @@ describe('applyTypedPhone', () => {
     });
   });
   it('borrar un separador borra el dígito anterior', () => {
-    const r = applyTypedPhone('0112345', 'AR', '011 2345');
-    expect(r.text.replace(/\D/g, '')).toBe('011234');
+    const r = applyTypedPhone('112345', 'AR', '11 2345');
+    expect(r.text.replace(/\D/g, '')).toBe('11234');
+  });
+});
+
+describe('un único formato: tipear === cargar un valor guardado', () => {
+  const casos: Array<[string, string]> = [
+    ['1123456789', '+541123456789'],
+    ['01123456789', '+541123456789'],
+    ['91123456789', '+5491123456789'],
+    ['011 15 2345 6789', '+5491123456789'],
+    ['11 15 2345-6789', '+5491123456789'],
+    ['03514123456', '+543514123456'],
+  ];
+  it.each(casos)(
+    'AR "%s" se ve igual al tipearlo y al reabrirlo',
+    (raw, e164) => {
+      const typed = applyTypedPhone(raw, 'AR');
+      expect(typed.e164).toBe(e164);
+      expect(parseStoredPhone(e164)?.text).toBe(typed.text);
+      expect(typed.text.startsWith('0')).toBe(false);
+    },
+  );
+
+  it.each([
+    ['2125551234', 'US'],
+    ['099123456', 'UY'],
+    ['612345678', 'ES'],
+  ] as const)('%s (%s) también coincide', (raw, country) => {
+    const typed = applyTypedPhone(raw, country);
+    expect(parseStoredPhone(typed.e164)?.text).toBe(typed.text);
+  });
+
+  it('el ejemplo de AR tiene el mismo formato que lo tipeado', () => {
+    const typed = applyTypedPhone('1123456789', 'AR');
+    expect(getPhoneExample('AR')).toBe(typed.text);
+  });
+
+  it('el ejemplo de cada país se reformatea a sí mismo sin cambios', () => {
+    for (const { code } of getPhoneCountryOptions()) {
+      const example = getPhoneExample(code);
+      if (!example) continue;
+      expect(applyTypedPhone(example, code).text).toBe(example);
+    }
   });
 });
 
@@ -116,11 +158,17 @@ describe('changePhoneCountry', () => {
     expect(r.country).toBe('UY');
     expect(r.e164.startsWith('+598')).toBe(true);
   });
+  it('el texto sale formateado en el mismo paso, sin pasar por crudo', () => {
+    const r = changePhoneCountry('11 2345-6789', 'AR');
+    expect(r.text).toBe('11 2345-6789');
+    const us = changePhoneCountry('2125551234', 'US');
+    expect(us.text).toBe('(212) 555-1234');
+  });
 });
 
 describe('getPhoneExample', () => {
   it('AR muestra un fijo', () => {
-    expect(getPhoneExample('AR')).toBe('011 2345-6789');
+    expect(getPhoneExample('AR')).toBe('11 2345-6789');
   });
   it('otros países usan getExampleNumber', () => {
     expect(getPhoneExample('US')).toBe('(201) 555-0123');

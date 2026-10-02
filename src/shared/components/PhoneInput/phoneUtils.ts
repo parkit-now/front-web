@@ -6,6 +6,7 @@ import {
   isValidPhoneNumber,
   parsePhoneNumberFromString,
   type CountryCode,
+  type PhoneNumber,
 } from 'libphonenumber-js/min';
 import examples from 'libphonenumber-js/examples.mobile.json';
 
@@ -48,13 +49,31 @@ export function callingCodeOf(country: PhoneCountry): string {
 }
 
 /**
- * Ejemplo de número nacional para la ayuda bajo el input. libphonenumber sólo
- * trae ejemplos de celulares; para Argentina, el caso de uso principal, se
- * muestra un fijo porque es el formato que la gente reconoce.
+ * ÚNICO formato nacional que muestra el input, tanto al tipear como al cargar
+ * un valor guardado. Antes cada camino tenía el suyo: al tipear salía lo que
+ * escribía la persona ("11 2345-6789") y al reabrir `formatNational()` le
+ * sumaba el 0 troncal ("011 2345-6789").
+ *
+ * Es el `formatNational()` de libphonenumber, salvo en Argentina: ahí se saca
+ * el 0 troncal (y el "15" sigue donde lo pone la librería), porque el número
+ * que se guarda es el significativo y el 0 es un detalle de discado que la
+ * persona puede escribir o no.
+ */
+export function formatNationalDisplay(number: PhoneNumber): string {
+  const national = number.formatNational();
+  return number.country === 'AR' ? national.replace(/^0/, '') : national;
+}
+
+/**
+ * Ejemplo de número nacional para la ayuda bajo el input, en el MISMO formato
+ * que muestra el input. libphonenumber sólo trae ejemplos de celulares; para
+ * Argentina, el caso de uso principal, se muestra un fijo porque es el formato
+ * que la gente reconoce.
  */
 export function getPhoneExample(country: PhoneCountry): string {
-  if (country === 'AR') return '011 2345-6789';
-  return getExampleNumber(country, examples)?.formatNational() ?? '';
+  if (country === 'AR') return '11 2345-6789';
+  const example = getExampleNumber(country, examples);
+  return example ? formatNationalDisplay(example) : '';
 }
 
 /** Parsea un E.164 guardado para ubicar país y número nacional formateado. */
@@ -65,7 +84,7 @@ export function parseStoredPhone(
   if (!raw.startsWith('+')) return null;
   const parsed = parsePhoneNumberFromString(raw);
   if (!parsed?.country) return null;
-  return { country: parsed.country, text: parsed.formatNational() };
+  return { country: parsed.country, text: formatNationalDisplay(parsed) };
 }
 
 export interface TypedPhone {
@@ -81,12 +100,20 @@ function digitsOf(raw: string): string {
 }
 
 function formatTyped(raw: string, country: PhoneCountry): TypedPhone {
-  const typer = new AsYouType(country);
-  const text = typer.input(raw);
-  const digits = digitsOf(raw);
+  let digits = digitsOf(raw);
+  // En Argentina el 0 troncal no se muestra ni cuenta: "011 2345-6789" y
+  // "11 2345-6789" son la misma persona escribiendo distinto.
+  if (country === 'AR') digits = digits.replace(/^0/, '');
   if (!digits) return { country, text: '', e164: '' };
+  const typer = new AsYouType(country);
+  const typed = typer.input(digits);
   const number = typer.getNumber();
   const e164 = number?.number ?? `${callingCodeOf(country)}${digits}`;
+  // Número completo y válido: exactamente el formato de un valor guardado.
+  const text =
+    number?.country === country && number.isValid()
+      ? formatNationalDisplay(number)
+      : typed;
   return { country, text, e164 };
 }
 
@@ -110,7 +137,7 @@ export function applyTypedPhone(
     if (detected && parsed) {
       return {
         country: detected,
-        text: parsed.formatNational(),
+        text: formatNationalDisplay(parsed),
         e164: parsed.number,
       };
     }
