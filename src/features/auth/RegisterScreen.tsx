@@ -166,7 +166,9 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
             required
             aria-required="true"
             aria-invalid={errors.email ? true : undefined}
-            aria-describedby={errors.email ? 'register-email-error' : undefined}
+            aria-describedby={
+              errors.email ? 'register-email-error' : 'register-email-hint'
+            }
             autoComplete="email"
             value={email}
             onChange={(event) => {
@@ -178,6 +180,11 @@ export function RegisterScreen({ onSwitchToLogin }: Props) {
             placeholder="Email"
             className={errors.email ? 'input-error' : undefined}
           />
+          {errors.email ? null : (
+            <p id="register-email-hint" className="field-hint">
+              Ejemplo: nombre@ejemplo.com
+            </p>
+          )}
           <FieldError id="register-email-error" message={errors.email} />
         </div>
 

@@ -55,6 +55,7 @@ export function ParkingStep({
             value={values.email}
             onChange={(e) => onChange('email', e.target.value)}
             placeholder="encargado@estacionamiento.com"
+            hint="Ejemplo: nombre@ejemplo.com"
             disabled={disabled}
             error={errors.email}
           />

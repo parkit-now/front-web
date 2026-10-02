@@ -5,12 +5,15 @@ import { RequiredMark } from './RequiredMark';
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
+  /** Texto de ayuda bajo el campo; se reemplaza por el error cuando lo hay. */
+  hint?: string;
   icon?: React.ReactNode;
 }
 
 export function Input({
   label,
   error,
+  hint,
   icon,
   className = '',
   id,
@@ -20,6 +23,7 @@ export function Input({
   const hasError = Boolean(error);
   const inputId = id ?? label?.toLowerCase().replace(/\s/g, '-');
   const errorId = inputId ? `${inputId}-error` : undefined;
+  const hintId = inputId ? `${inputId}-hint` : undefined;
   return (
     <div
       style={{
@@ -64,7 +68,7 @@ export function Input({
             borderColor: hasError ? 'var(--err-text, #b42318)' : undefined,
           }}
           aria-invalid={hasError ? true : undefined}
-          aria-describedby={hasError ? errorId : undefined}
+          aria-describedby={hasError ? errorId : hint ? hintId : undefined}
           // El asterisco no puede ser el único indicador: `required` viaja al
           // DOM y `aria-required` lo deja explícito para los lectores que no
           // infieren el estado del atributo nativo.
@@ -97,6 +101,11 @@ export function Input({
           {error}
         </span>
       )}
+      {!hasError && hint ? (
+        <span id={hintId} style={{ fontSize: 12, color: 'var(--text-3)' }}>
+          {hint}
+        </span>
+      ) : null}
     </div>
   );
 }
