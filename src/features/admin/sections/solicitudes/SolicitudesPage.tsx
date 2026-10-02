@@ -12,7 +12,6 @@ import {
 import { AddressMap } from '../../../../shared/components/AddressPicker/AddressMap';
 import {
   addressFromLocation,
-  describeGeocodingSource,
   missingAddressFields,
   REQUIRED_ADDRESS_FIELDS,
   type AddressFormValue,
@@ -85,22 +84,19 @@ const ADDRESS_ROWS: { field: AddressTextField; label: string }[] = [
  * `state_name`/`city_name` y las coordenadas, y ninguno de los dos se puede
  * verificar leyendo "Av. Cabildo 2000, CABA".
  *
- * Tres decisiones de qué mostrar (y qué NO):
+ * Dos decisiones de qué mostrar (y qué NO):
  *
  *  1. Los CUATRO campos que Mercado Pago necesita se muestran SIEMPRE, con "—"
  *     en rojo cuando faltan. Un campo ausente es exactamente el dato que el
  *     revisor tiene que ver antes de aprobar; ocultarlo por "estar vacío"
  *     esconde el único problema que esta sección existe para mostrar. El piso
  *     y el CP, que MP no usa, aparecen sólo si están.
- *  2. El ORIGEN va como badge. "Normalizada con Georef" y "Cargada a mano" no
- *     merecen la misma confianza: la segunda es texto libre que nadie validó.
- *  3. El MAPA va, pero sólo si hay coordenadas. Un par "-34.56, -58.45" es
+ *  2. El MAPA va, pero sólo si hay coordenadas. Un par "-34.56, -58.45" es
  *     ilegible para un humano — y es el dato que decide dónde cae el `Store`.
  *     Es read-only (`disabled`): el revisor verifica, no corrige.
  */
 function DomicilioSection({ address }: { address: AddressFormValue }) {
   const missing = new Set<AddressTextField>(missingAddressFields(address));
-  const sourceLabel = describeGeocodingSource(address.geocodingSource);
   const hasPin = address.latitude !== null && address.longitude !== null;
   const primary = address.formatted.trim();
 
@@ -129,23 +125,6 @@ function DomicilioSection({ address }: { address: AddressFormValue }) {
         >
           {primary || 'Sin domicilio declarado'}
         </p>
-        <span
-          data-testid="solicitud-domicilio-origen"
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.04em',
-            borderRadius: 999,
-            padding: '3px 8px',
-            color: sourceLabel ? 'var(--brand)' : 'var(--warn-text, #b54708)',
-            background: sourceLabel
-              ? 'rgba(14, 95, 216, 0.1)'
-              : 'var(--warn-bg, #fef0c7)',
-          }}
-        >
-          {sourceLabel ?? 'Sin normalizar'}
-        </span>
       </div>
 
       <div

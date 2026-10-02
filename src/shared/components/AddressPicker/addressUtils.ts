@@ -638,12 +638,3 @@ export function toDeclaredLocation(
 ): UpdateEntityAddress | undefined {
   return isAddressEmpty(value) ? undefined : toUpdateAddressDto(value);
 }
-
-/** Etiqueta corta para mostrar el origen del dato. */
-export function describeGeocodingSource(
-  source: GeocodingSource | null,
-): string | null {
-  if (source === 'georef') return 'Normalizada con Georef';
-  if (source === 'manual') return 'Cargada manualmente';
-  return null;
-}

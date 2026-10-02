@@ -15,7 +15,6 @@ import {
   addressPrimaryLine,
   addressSummaryDetail,
   applyCatalogToGeocoded,
-  describeGeocodingSource,
   hasCoordinates,
   isAddressEmpty,
   isGeorefNormalized,
@@ -410,7 +409,6 @@ export function AddressPicker({
 
   const primaryLine = addressPrimaryLine(value);
   const summaryDetail = addressSummaryDetail(value);
-  const sourceLabel = describeGeocodingSource(value.geocodingSource);
 
   /**
    * Las localidades de la provincia elegida. Vacío si no hay provincia o si la
@@ -604,11 +602,6 @@ export function AddressPicker({
               </span>
             ) : null}
           </div>
-          {sourceLabel ? (
-            <span data-testid="address-source" style={badgeStyle}>
-              {sourceLabel}
-            </span>
-          ) : null}
         </div>
       ) : null}
 
@@ -800,15 +793,4 @@ const coordsStyle: React.CSSProperties = {
   background: 'var(--surface-2, #f2f5fa)',
   borderRadius: 6,
   padding: '2px 6px',
-};
-
-const badgeStyle: React.CSSProperties = {
-  fontSize: 11,
-  fontWeight: 600,
-  textTransform: 'uppercase',
-  letterSpacing: '0.04em',
-  color: 'var(--brand, #0e5fd8)',
-  background: 'rgba(14, 95, 216, 0.1)',
-  borderRadius: 999,
-  padding: '3px 8px',
 };

@@ -7,7 +7,6 @@ import {
   addressSummaryDetail,
   applyCatalogToGeocoded,
   composeFormatted,
-  describeGeocodingSource,
   emptyAddress,
   hasCoordinates,
   isAddressEmpty,
@@ -243,14 +242,6 @@ describe('toDeclaredLocation', () => {
   it('manda el objeto cuando hay aunque sea un campo', () => {
     const value = { ...emptyAddress(), formatted: 'Av. Corrientes 1234' };
     expect(toDeclaredLocation(value)?.formatted).toBe('Av. Corrientes 1234');
-  });
-});
-
-describe('describeGeocodingSource', () => {
-  it('traduce el origen para mostrarlo', () => {
-    expect(describeGeocodingSource('georef')).toBe('Normalizada con Georef');
-    expect(describeGeocodingSource('manual')).toBe('Cargada manualmente');
-    expect(describeGeocodingSource(null)).toBeNull();
   });
 });
 
