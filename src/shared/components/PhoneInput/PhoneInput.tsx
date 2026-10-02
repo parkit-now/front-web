@@ -1,5 +1,4 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import * as Flags from 'country-flag-icons/react/3x2';
 import { IconAlert, IconChevronDown, IconSearch } from '../icons';
 import { RequiredMark } from '../ui/RequiredMark';
 import {
@@ -31,24 +30,41 @@ interface PhoneInputProps {
   onBlur?: () => void;
 }
 
-const FlagMap = Flags as unknown as Record<
-  string,
-  React.ComponentType<React.SVGProps<SVGSVGElement>> | undefined
->;
-const FLAG_CODES: ReadonlySet<string> = new Set(
-  Object.keys(FlagMap).filter((k) => /^[A-Z]{2}$/.test(k)),
-);
-const COUNTRY_OPTIONS = getPhoneCountryOptions(FLAG_CODES);
+type FlagComponent = React.ComponentType<React.SVGProps<SVGSVGElement>>;
+type FlagMap = Record<string, FlagComponent | undefined>;
 
-function Flag({ country }: { country: string }) {
-  const Svg = FlagMap[country];
-  if (!Svg) return null;
-  return (
-    <Svg
-      aria-hidden="true"
-      style={{ width: 22, height: 15, borderRadius: 2, flex: 'none' }}
-    />
+const COUNTRY_OPTIONS = getPhoneCountryOptions();
+
+// Las banderas viven en un chunk aparte (carga diferida) para no inflar el
+// bundle principal. Se descarga una sola vez y se comparte entre instancias.
+let flagsPromise: Promise<FlagMap> | null = null;
+function loadFlags(): Promise<FlagMap> {
+  flagsPromise ??= import('country-flag-icons/react/3x2').then(
+    (m) => m as unknown as FlagMap,
   );
+  return flagsPromise;
+}
+
+function useFlags(): FlagMap | null {
+  const [flags, setFlags] = useState<FlagMap | null>(null);
+  useEffect(() => {
+    let alive = true;
+    loadFlags().then((m) => {
+      if (alive) setFlags(m);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return flags;
+}
+
+const FLAG_STYLE = { width: 22, height: 15, borderRadius: 2, flex: 'none' };
+
+function Flag({ country, flags }: { country: string; flags: FlagMap | null }) {
+  const Svg = flags?.[country];
+  if (!Svg) return <span aria-hidden="true" style={FLAG_STYLE} />;
+  return <Svg aria-hidden="true" style={FLAG_STYLE} />;
 }
 
 const ERROR_COLOR = 'var(--err-text, #b42318)';
@@ -216,6 +232,7 @@ function CountrySelect({
   listId,
   onSelect,
 }: CountrySelectProps) {
+  const flags = useFlags();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -271,7 +288,7 @@ function CountrySelect({
           whiteSpace: 'nowrap',
         }}
       >
-        <Flag country={country} />
+        <Flag country={country} flags={flags} />
         <span style={{ fontSize: 14 }}>{callingCodeOf(country)}</span>
         <IconChevronDown size={14} />
       </button>
@@ -388,7 +405,7 @@ function CountrySelect({
                     color: 'var(--text-1)',
                   }}
                 >
-                  <Flag country={o.code} />
+                  <Flag country={o.code} flags={flags} />
                   <span style={{ flex: 1 }}>{o.name}</span>
                   <span style={{ color: 'var(--text-3)' }}>
                     {o.callingCode}
