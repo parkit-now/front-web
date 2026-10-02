@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { RequiredMark } from '../ui/RequiredMark';
 import type {
   GeocodedAddress,
   GeocodingProvider,
@@ -721,13 +720,6 @@ export function AddressPicker({
 
           {EXTRA_FIELDS.map(renderTextField)}
         </div>
-      ) : null}
-
-      {manualMode && required ? (
-        <p style={hintStyle}>
-          Los campos con <RequiredMark /> son obligatorios. Podés enviar la
-          solicitud aunque el servicio de direcciones no esté disponible.
-        </p>
       ) : null}
     </div>
   );
