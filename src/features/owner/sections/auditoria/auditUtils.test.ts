@@ -356,4 +356,148 @@ describe('audit utils', () => {
     expect(row.actionKind).toBe('other');
     expect(row.actionLabel).toBe('Certificado de ARCA vencido');
   });
+
+  describe('reservas', () => {
+    const reservation = (
+      action: string,
+      metadata: Record<string, unknown>,
+      overrides: Partial<AuditEvent> = {},
+    ) =>
+      event({
+        action,
+        entityType: 'reservation',
+        entityId: 'res-1',
+        severity: 'info',
+        metadata: {
+          previousStatus: 'confirmed',
+          vehiclePlate: 'AB123CD',
+          entryAt: '2026-10-05T13:00:00.000Z',
+          ...metadata,
+        },
+        ...overrides,
+      });
+
+    it.each([
+      ['reservation.accepted', 'Reserva aceptada'],
+      ['reservation.rejected', 'Reserva rechazada'],
+      ['reservation.cancelled', 'Reserva cancelada'],
+      ['reservation.refund_retried', 'Reembolso reintentado'],
+      ['reservation.refund_failed', 'Reembolso fallido'],
+      ['reservation.late_payment_refunded', 'Pago tardío reembolsado'],
+    ])('%s se llama "%s" y el dueño la ve', (action, label) => {
+      const row = buildAuditRow(reservation(action, { actorRole: 'owner' }));
+
+      expect(row.actionLabel).toBe(label);
+      expect(isOwnerAuditVisible(action)).toBe(true);
+      expect(
+        buildOwnerAuditRows([reservation(action, { actorRole: 'owner' })]),
+      ).toHaveLength(1);
+    });
+
+    it.each([
+      ['owner', 'Dueño'],
+      ['operator', 'Operador'],
+      ['admin', 'Administrador'],
+      ['driver', 'Conductor'],
+      ['system', 'Sistema'],
+    ])('el rol %s se muestra como %s', (role, label) => {
+      const row = buildAuditRow(
+        reservation('reservation.cancelled', { actorRole: role }),
+      );
+      expect(row.actorRole).toBe(label);
+    });
+
+    it('sin rol en la metadata muestra "-"', () => {
+      const row = buildAuditRow(reservation('reservation.cancelled', {}));
+      expect(row.actorRole).toBe('-');
+    });
+
+    it('cancelación del operador: actor, motivo, patente y monto reembolsado', () => {
+      const row = buildAuditRow(
+        reservation(
+          'reservation.cancelled',
+          {
+            actorRole: 'operator',
+            reason: 'Cierre por mantenimiento',
+            refundArs: 9000,
+            refundStatus: 'pending',
+          },
+          { actorName: 'Operador Once' },
+        ),
+      );
+
+      expect(row.actorName).toBe('Operador Once');
+      expect(row.actorRole).toBe('Operador');
+      expect(row.summary).toBe('Operador canceló la reserva de AB123CD');
+      expect(row.plate).toBe('AB123CD');
+      expect(row.reason).toBe('Cierre por mantenimiento');
+      expect(row.moneyImpact).toBe('Reembolso $9.000');
+      expect(row.impactAmount).toBeNull();
+      expect(row.searchText).toContain('AB123CD');
+      expect(metadataEntries(row)).toEqual(
+        expect.arrayContaining([
+          { key: 'Patente', value: 'AB123CD' },
+          { key: 'Estado anterior', value: 'Confirmada' },
+          { key: 'Motivo', value: 'Cierre por mantenimiento' },
+          { key: 'Reembolso', value: '$9.000' },
+          { key: 'Estado del reembolso', value: 'En curso' },
+        ]),
+      );
+    });
+
+    it('el timeout lo hace el sistema y el código se traduce a motivo', () => {
+      const row = buildAuditRow(
+        reservation(
+          'reservation.rejected',
+          {
+            actorRole: 'system',
+            reasonCode: 'approval_timeout',
+            previousStatus: 'pending_approval',
+            refundArs: 9000,
+          },
+          { actorName: null },
+        ),
+      );
+
+      expect(row.actorName).toBe('Sistema');
+      expect(row.actorRole).toBe('Sistema');
+      expect(row.reason).toBe('Venció el plazo para responder');
+      expect(row.summary).toBe('Sistema rechazó la reserva de AB123CD');
+      expect(metadataEntries(row)).toContainEqual({
+        key: 'Estado anterior',
+        value: 'Esperando aprobación',
+      });
+    });
+
+    it('el conductor que cancela aparece como Conductor', () => {
+      const row = buildAuditRow(
+        reservation('reservation.cancelled', { actorRole: 'driver' }),
+      );
+      expect(row.summary).toBe('Conductor canceló la reserva de AB123CD');
+      expect(row.reason).toBe('-');
+      expect(row.moneyImpact).toBe('-');
+    });
+
+    it('refund_failed muestra el error del reembolso', () => {
+      const row = buildAuditRow(
+        reservation(
+          'reservation.refund_failed',
+          {
+            actorRole: 'owner',
+            refundArs: 4500,
+            refundStatus: 'failed',
+            refundError: 'Sin saldo en la cuenta',
+          },
+          { severity: 'warn' },
+        ),
+      );
+      expect(row.summary).toBe('No se pudo reembolsar la reserva de AB123CD');
+      expect(metadataEntries(row)).toEqual(
+        expect.arrayContaining([
+          { key: 'Estado del reembolso', value: 'Falló' },
+          { key: 'Error del reembolso', value: 'Sin saldo en la cuenta' },
+        ]),
+      );
+    });
+  });
 });
