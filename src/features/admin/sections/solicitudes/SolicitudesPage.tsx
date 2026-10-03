@@ -29,8 +29,8 @@ import {
   getDocumentSignedUrl,
   type ApplicationDocument,
 } from '../../services/applications';
+import { summarizeSchedules } from '../../../../shared/components/WeeklyScheduleEditor';
 import { DocumentPreviewModal } from './DocumentPreviewModal';
-import { summarizeSchedules } from './scheduleSummary';
 
 function formatDate(value: string | null): string {
   if (!value) return '—';

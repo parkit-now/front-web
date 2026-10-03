@@ -9,3 +9,4 @@ export {
   type ScheduleIssue,
   type ScheduleRange,
 } from './scheduleUtils';
+export { summarizeSchedules } from './scheduleSummary';

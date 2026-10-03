@@ -2,7 +2,7 @@ import {
   SCHEDULE_DAYS,
   minutesToTime,
   type ScheduleDay,
-} from '../../../../shared/components/WeeklyScheduleEditor';
+} from './scheduleUtils';
 
 type DeclaredRange = { day: string; openMinute: number; closeMinute: number };
 

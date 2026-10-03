@@ -422,6 +422,128 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/driver/parkings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Nearby active parking lots for drivers, ordered by distance */
+        get: operations["DriverController_findNearby"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/driver/parkings/{parkingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Public parking lot detail with opening hours */
+        get: operations["DriverController_findOne"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/driver/parkings/{parkingId}/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Quote a stay: validates the window (7 days ahead, opening hours) and prices it with the lot reservation rate and pricing engine */
+        post: operations["DriverController_quote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/driver/reservations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in driver's reservations */
+        get: operations["DriverReservationsController_list"];
+        put?: never;
+        /** Create a reservation (idempotent by client id): re-quotes on the server and checks capacity */
+        post: operations["DriverReservationsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/driver/reservations/{reservationId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a reservation that has not started yet */
+        post: operations["DriverReservationsController_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/driver/vehicles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The signed-in driver's vehicles, primary first */
+        get: operations["DriverVehiclesController_list"];
+        put?: never;
+        /** Add a vehicle (the first one is always primary) */
+        post: operations["DriverVehiclesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/driver/vehicles/{vehicleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a vehicle without an active reservation (the oldest one becomes primary if needed) */
+        delete: operations["DriverVehiclesController_remove"];
+        options?: never;
+        head?: never;
+        /** Edit a vehicle or mark it as primary (plate and kind are locked while it has an active reservation) */
+        patch: operations["DriverVehiclesController_update"];
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -1807,8 +1929,26 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update a service for the active tenant */
+        /** Update a service for the active tenant (ADVANCE_RESERVATION also takes the reservation rate and reservable spots) */
         patch: operations["ServicesController_update"];
+        trace?: never;
+    };
+    "/tenants/{tenantId}/services/ADVANCE_RESERVATION/hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reservation hours: mode (opening | custom) and custom ranges */
+        get: operations["ServicesController_getReservationHours"];
+        /** Replace the whole reservation hours set (ranges must fall within the opening hours) */
+        put: operations["ServicesController_putReservationHours"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/tenants/{tenantId}/services/changes": {
@@ -2613,6 +2753,18 @@ export interface components {
              */
             openingCash: number;
         };
+        CreateDriverVehicleDto: {
+            brand?: string | null;
+            /** @description Marcarlo como principal. El primer vehículo del conductor es principal siempre. */
+            isPrimary?: boolean;
+            kind: components["schemas"]["DriverVehicleKind"];
+            model?: string | null;
+            /**
+             * @description Se normaliza (mayúsculas, sin espacios ni guiones).
+             * @example AB123CD
+             */
+            plate: string;
+        };
         CreateEntryDto: {
             /**
              * Format: uuid
@@ -2720,6 +2872,23 @@ export interface components {
             /** @example Naranja X */
             name: string;
         };
+        CreateQuoteDto: {
+            /**
+             * Format: date-time
+             * @example 2026-09-30T10:00:00-03:00
+             */
+            entryAt: string;
+            /**
+             * Format: date-time
+             * @example 2026-09-30T13:00:00-03:00
+             */
+            exitAt: string;
+            /**
+             * @description Patente de uno de tus vehículos. Si se manda, la cotización valida que la playa acepte ese tipo de vehículo (RESERVATION_VEHICLE_KIND_NOT_ACCEPTED).
+             * @example AB123CD
+             */
+            vehiclePlate?: string;
+        };
         CreateRateDto: {
             /**
              * @description Si la fracción se deriva de hora / 12 en el formulario. Preferencia de UI: el valor derivado se guarda igual en fractionPriceArs.
@@ -2759,6 +2928,30 @@ export interface components {
              * @example 8000
              */
             stayPriceArs: number;
+        };
+        CreateReservationDto: {
+            /**
+             * Format: date-time
+             * @example 2026-09-30T10:00:00-03:00
+             */
+            entryAt: string;
+            /**
+             * Format: date-time
+             * @example 2026-09-30T13:00:00-03:00
+             */
+            exitAt: string;
+            /**
+             * Format: uuid
+             * @description Lo genera el cliente: es la clave de idempotencia. Reintentar con el mismo id devuelve la reserva ya creada.
+             */
+            id: string;
+            /** Format: uuid */
+            parkingId: string;
+            /**
+             * @description Se normaliza (mayúsculas, sin espacios ni guiones).
+             * @example AB123CD
+             */
+            vehiclePlate: string;
         };
         CreateScheduleDto: {
             /**
@@ -2942,6 +3135,123 @@ export interface components {
              */
             url: string;
         };
+        DriverNearbyParkingDto: {
+            /** @description Toma reservas: servicio activado, con tarifa de reservas y cupo configurados. */
+            acceptsReservations: boolean;
+            address: string | null;
+            /** @description Lugares libres ahora: capacidad − vehículos adentro. null si la playa no declaró capacidad (no es lo mismo que 0). */
+            availableSpots: number | null;
+            /** @description Distancia al centro buscado. */
+            distanceMeters: number;
+            /** Format: uuid */
+            id: string;
+            latitude: number;
+            longitude: number;
+            name: string;
+            /** @description null si la playa no cargó horarios. */
+            openNow: boolean | null;
+            /** @description Precio de la fracción de 5 minutos de la tarifa de reservas en ARS. null si la playa no toma reservas. */
+            reservationFractionPriceArs: number | null;
+            /** @description Precio de la hora de la tarifa de reservas en ARS, igual para cualquier vehículo. null si la playa no toma reservas. */
+            reservationHourPriceArs: number | null;
+            /** @description Horario efectivo de reservas por día: el de apertura si el dueño no cargó uno propio. null si la playa no toma reservas. */
+            reservationHours: components["schemas"]["DriverScheduleDto"][] | null;
+            /** @description Reglas de la reserva. null si la playa no toma reservas. */
+            reservationRules: components["schemas"]["DriverReservationRulesDto"] | null;
+            /** @description Tipos de vehículo que pueden reservar. null si la playa no toma reservas. */
+            reservationVehicleKinds: components["schemas"]["ReservationVehicleKind"][] | null;
+            totalSpots: number | null;
+        };
+        DriverParkingDetailDto: {
+            /** @description Toma reservas: servicio activado, con tarifa de reservas y cupo configurados. */
+            acceptsReservations: boolean;
+            address: string | null;
+            /** @description Lugares libres ahora: capacidad − vehículos adentro. null si la playa no declaró capacidad (no es lo mismo que 0). */
+            availableSpots: number | null;
+            /** Format: uuid */
+            id: string;
+            latitude: number;
+            longitude: number;
+            name: string;
+            /** @description null si la playa no cargó horarios. */
+            openNow: boolean | null;
+            /** @description Precio de la fracción de 5 minutos de la tarifa de reservas en ARS. null si la playa no toma reservas. */
+            reservationFractionPriceArs: number | null;
+            /** @description Precio de la hora de la tarifa de reservas en ARS, igual para cualquier vehículo. null si la playa no toma reservas. */
+            reservationHourPriceArs: number | null;
+            /** @description Horario efectivo de reservas por día: el de apertura si el dueño no cargó uno propio. null si la playa no toma reservas. */
+            reservationHours: components["schemas"]["DriverScheduleDto"][] | null;
+            /** @description Días hacia adelante en los que se puede reservar. */
+            reservationMaxDaysAhead: number;
+            /** @description Reglas de la reserva. null si la playa no toma reservas. */
+            reservationRules: components["schemas"]["DriverReservationRulesDto"] | null;
+            /** @description Tipos de vehículo que pueden reservar. null si la playa no toma reservas. */
+            reservationVehicleKinds: components["schemas"]["ReservationVehicleKind"][] | null;
+            /** @description Rangos de apertura por día; vacío si no hay horarios. */
+            schedules: components["schemas"]["DriverScheduleDto"][];
+            totalSpots: number | null;
+        };
+        DriverReservationDto: {
+            /** @description Se puede cancelar (activa y sin empezar). */
+            cancellable: boolean;
+            /** @description Código corto para mostrar (R-XXXXXX). */
+            code: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            entryAt: string;
+            /** Format: date-time */
+            exitAt: string;
+            /** Format: uuid */
+            id: string;
+            latitude: number | null;
+            longitude: number | null;
+            parkingAddress: string | null;
+            /** Format: uuid */
+            parkingId: string;
+            parkingName: string;
+            rateName: string;
+            state: components["schemas"]["DriverReservationState"];
+            totalArs: number;
+            vehiclePlate: string;
+        };
+        DriverReservationRulesDto: {
+            /** @description auto = se confirma sola; manual = la acepta el dueño. */
+            acceptanceMode: components["schemas"]["ReservationAcceptanceMode"];
+            /** @description Minutos antes del ingreso desde los que se puede llegar. */
+            earlyArrivalMinutes: number;
+            /** @description Cancelación gratis hasta estos minutos antes del ingreso. */
+            freeCancelMinutes: number;
+            /** @description Tolerancia tras la hora de ingreso; pasada, la reserva se da por perdida. */
+            graceMinutes: number;
+            /** @description % que se reembolsa si se cancela fuera de la ventana gratis. */
+            lateCancelRefundPct: number;
+        };
+        /** @enum {string} */
+        DriverReservationState: "active" | "completed" | "cancelled";
+        DriverScheduleDto: {
+            /** @description Minutos desde 00:00. */
+            closeMinute: number;
+            day: components["schemas"]["ScheduleDay"];
+            /** @description Minutos desde 00:00. */
+            openMinute: number;
+        };
+        DriverVehicleDto: {
+            brand: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** @description Tiene una reserva activa: no se puede borrar ni cambiar patente o categoría. */
+            hasActiveReservation: boolean;
+            /** Format: uuid */
+            id: string;
+            isPrimary: boolean;
+            kind: components["schemas"]["DriverVehicleKind"];
+            model: string | null;
+            /** @example AB123CD */
+            plate: string;
+        };
+        /** @enum {string} */
+        DriverVehicleKind: "car" | "suv_pickup" | "motorcycle";
         EntityAddressDto: {
             /**
              * @description Localidad.
@@ -4271,6 +4581,28 @@ export interface components {
              */
             title: string;
         };
+        QuoteDto: {
+            durationMinutes: number;
+            /** Format: date-time */
+            entryAt: string;
+            /** Format: date-time */
+            exitAt: string;
+            /** Format: uuid */
+            parkingId: string;
+            /** @description Tarifa de reservas de la playa con la que se cotizó. */
+            rate: components["schemas"]["QuoteRateDto"];
+            /** @description Total en ARS con el mismo motor que cobra la playa (entries/pricing.ts). */
+            totalArs: number;
+        };
+        QuoteRateDto: {
+            fractionPriceArs: number;
+            hourPriceArs: number;
+            /** @description Tope de 12 h (0 = sin tope). */
+            mediaEstadiaPriceArs: number;
+            name: string;
+            /** @description Tope de 24 h (0 = sin tope). */
+            stayPriceArs: number;
+        };
         RateChangesResponseDto: {
             items: components["schemas"]["RateDto"][];
             /** @description Highest sync sequence included in this page. */
@@ -4339,6 +4671,82 @@ export interface components {
              */
             reason: string;
         };
+        /**
+         * @description auto = se confirma sola; manual = la acepta el dueño.
+         * @enum {string}
+         */
+        ReservationAcceptanceMode: "auto" | "manual";
+        ReservationHourRangeDto: {
+            /** @description Minutos desde 00:00. */
+            closeMinute: number;
+            day: components["schemas"]["ScheduleDay"];
+            /** @description Minutos desde 00:00. */
+            openMinute: number;
+        };
+        ReservationHoursDto: {
+            /** @description opening = el horario de apertura (sin rangos propios); custom = los rangos de `ranges`, que tienen que caer dentro de la apertura. */
+            mode: components["schemas"]["ReservationHoursMode"];
+            /** @description Rangos propios; siempre vacío en modo opening. */
+            ranges: components["schemas"]["ReservationHourRangeDto"][];
+        };
+        /**
+         * @description opening = se reserva en el horario de apertura; custom = en los rangos de GET /services/ADVANCE_RESERVATION/hours.
+         * @enum {string}
+         */
+        ReservationHoursMode: "opening" | "custom";
+        ReservationNotReadyProblemDto: {
+            /**
+             * @description Stable, machine-readable identifier of the error class (SCREAMING_SNAKE_CASE). Independent of HTTP status and wording. Clients map this to a localized user-facing message.
+             * @example AUTH_EMAIL_ALREADY_EXISTS
+             */
+            code: string;
+            /**
+             * @description A human-readable explanation specific to this occurrence of the problem. English. Clients should not display this verbatim — use `code` to look up a localized message.
+             * @example Email already registered
+             */
+            detail: string;
+            /**
+             * @description The request path that produced the error.
+             * @example /auth/register
+             */
+            instance: string;
+            /** @description Requisitos que faltan para activar las reservas. */
+            missing: components["schemas"]["ReservationRequirement"][];
+            /**
+             * @description The HTTP status code generated by the origin server. Mirrors the response status.
+             * @example 409
+             */
+            status: number;
+            /**
+             * @description A short, human-readable summary of the problem type. Stable across occurrences of the same error class.
+             * @example Conflict
+             */
+            title: string;
+            /** @description Un ítem por requisito faltante (patrón de validationsErrors). */
+            validationsErrors: {
+                /** @example required */
+                code?: string;
+                /** @example readiness.mp_account */
+                field?: string;
+                reason?: string;
+            }[];
+        };
+        ReservationReadinessDto: {
+            /** @description Requisitos que faltan, en el orden de la pantalla: mp_account (Mercado Pago vinculado), spots (plazas reservables), hours (horario), vehicles (al menos un tipo de vehículo) y rate (tarifa activa). */
+            missing: components["schemas"]["ReservationRequirement"][];
+            /** @description Se cumplen todos los requisitos: se pueden activar las reservas. */
+            ready: boolean;
+        };
+        /**
+         * @description Requisitos que faltan, en el orden de la pantalla: mp_account (Mercado Pago vinculado), spots (plazas reservables), hours (horario), vehicles (al menos un tipo de vehículo) y rate (tarifa activa).
+         * @enum {string}
+         */
+        ReservationRequirement: "mp_account" | "spots" | "hours" | "vehicles" | "rate";
+        /**
+         * @description Tipos de vehículo que pueden reservar. null si la playa no toma reservas.
+         * @enum {string}
+         */
+        ReservationVehicleKind: "car" | "suv_pickup" | "motorcycle";
         ResetPasswordDto: {
             /**
              * @description New plaintext password.
@@ -4460,6 +4868,8 @@ export interface components {
             /** @description Highest sync sequence included in this page. */
             maxSeq: number;
         };
+        /** @enum {string} */
+        ScheduleDay: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
         ScheduleDto: {
             /** @description Minutes since midnight (1..1440). */
             closeMinute: number;
@@ -4479,9 +4889,36 @@ export interface components {
             version: number;
         };
         ServiceCatalogItemDto: {
+            /** @description auto = se confirma sola; manual = la acepta el dueño. */
+            acceptanceMode: components["schemas"]["ReservationAcceptanceMode"];
+            /** @description Minutos que tiene el dueño para responder en modo manual. */
+            approvalWindowMinutes: number;
             /** @enum {string} */
             code: "ADVANCE_RESERVATION";
+            /** @description Minutos antes del ingreso desde los que se puede llegar. */
+            earlyArrivalMinutes: number;
             enabled: boolean;
+            /** @description Cancelación gratis hasta estos minutos antes del ingreso. */
+            freeCancelMinutes: number;
+            /** @description Tolerancia tras la hora de ingreso; pasada, la reserva es no-show. */
+            graceMinutes: number;
+            /** @description % que se reembolsa si el conductor cancela fuera de plazo. */
+            lateCancelRefundPct: number;
+            /** @description Requisitos para activar las reservas (ADVANCE_RESERVATION). */
+            readiness: components["schemas"]["ReservationReadinessDto"];
+            /** @description Plazas que se pueden reservar a la vez (sólo ADVANCE_RESERVATION). */
+            reservableSpots: number | null;
+            /** @description opening = se reserva en el horario de apertura; custom = en los rangos de GET /services/ADVANCE_RESERVATION/hours. */
+            reservationHoursMode: components["schemas"]["ReservationHoursMode"];
+            /**
+             * Format: uuid
+             * @description Tarifa con la que se cotizan y cobran las reservas, sin distinción de vehículo (sólo ADVANCE_RESERVATION).
+             */
+            reservationRateId: string | null;
+            /** @description Tipos de vehículo (los de DriverVehicle.kind) que pueden reservar (sólo ADVANCE_RESERVATION; vacío en otros códigos). */
+            reservationVehicleKinds: components["schemas"]["ReservationVehicleKind"][];
+            /** @description Reservas confirmadas con ingreso futuro: siguen vigentes aunque se desactive el servicio. */
+            upcomingPaidReservations: number;
         };
         ServiceChangesResponseDto: {
             items: components["schemas"]["ServiceDto"][];
@@ -4489,13 +4926,31 @@ export interface components {
             maxSeq: number;
         };
         ServiceDto: {
+            /** @description ADVANCE_RESERVATION: auto | manual. */
+            acceptanceMode: string;
+            approvalWindowMinutes: number;
             /** @enum {string} */
             code: "ADVANCE_RESERVATION";
             /** Format: date-time */
             createdAt: string;
+            earlyArrivalMinutes: number;
             enabled: boolean;
+            freeCancelMinutes: number;
+            graceMinutes: number;
             /** Format: uuid */
             id: string;
+            lateCancelRefundPct: number;
+            /** @description ADVANCE_RESERVATION: plazas que se pueden reservar a la vez. null = sin configurar. */
+            reservableSpots: number | null;
+            /** @description ADVANCE_RESERVATION: opening | custom. */
+            reservationHoursMode: string;
+            /**
+             * Format: uuid
+             * @description ADVANCE_RESERVATION: tarifa con la que se cobran las reservas. null = sin configurar.
+             */
+            reservationRateId: string | null;
+            /** @description ADVANCE_RESERVATION: tipos de vehículo que pueden reservar. */
+            reservationVehicleKinds: string[];
             syncSeq: number;
             /** Format: uuid */
             tenantId: string;
@@ -4891,6 +5346,19 @@ export interface components {
             /** @description IP camera username. Password is intentionally not persisted. */
             username?: string;
         };
+        UpdateDriverVehicleDto: {
+            brand?: string | null;
+            /** @description true lo marca como principal (y desmarca al anterior). Para cambiar el principal se marca otro: false no se acepta. */
+            isPrimary?: boolean;
+            /** @description No se puede cambiar con una reserva activa del vehículo. */
+            kind?: components["schemas"]["DriverVehicleKind"];
+            model?: string | null;
+            /**
+             * @description Se normaliza. No se puede cambiar con una reserva activa del vehículo.
+             * @example AB123CD
+             */
+            plate?: string;
+        };
         UpdateEntityAddressDto: {
             /**
              * @description Localidad.
@@ -5129,8 +5597,29 @@ export interface components {
             openMinute?: number;
         };
         UpdateServiceDto: {
+            /** @description Sólo ADVANCE_RESERVATION: auto = se confirma sola; manual = la acepta el dueño. */
+            acceptanceMode?: components["schemas"]["ReservationAcceptanceMode"];
+            /** @description Sólo ADVANCE_RESERVATION: minutos para aceptar (modo manual). */
+            approvalWindowMinutes?: number;
+            /** @description Sólo ADVANCE_RESERVATION: llegada anticipada, en minutos. */
+            earlyArrivalMinutes?: number;
             /** @description Whether the amenity is offered by the tenant. */
             enabled?: boolean;
+            /** @description Sólo ADVANCE_RESERVATION: cancelación gratis, en minutos. */
+            freeCancelMinutes?: number;
+            /** @description Sólo ADVANCE_RESERVATION: tolerancia de no-show, en minutos. */
+            graceMinutes?: number;
+            /** @description Sólo ADVANCE_RESERVATION: % de reembolso en cancelación tardía. */
+            lateCancelRefundPct?: number;
+            /** @description Sólo ADVANCE_RESERVATION: plazas que se pueden reservar a la vez, hasta la capacidad de la playa. null lo deja sin configurar. */
+            reservableSpots?: number | null;
+            /**
+             * Format: uuid
+             * @description Sólo ADVANCE_RESERVATION: id de una tarifa activa de la playa con la que se cotizan y cobran las reservas. null la desasocia.
+             */
+            reservationRateId?: string | null;
+            /** @description Sólo ADVANCE_RESERVATION: tipos de vehículo que pueden reservar, sin duplicados. */
+            reservationVehicleKinds?: components["schemas"]["ReservationVehicleKind"][];
         };
         UpdateStaffMemberDto: {
             /**
@@ -6543,6 +7032,236 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    DriverController_findNearby: {
+        parameters: {
+            query: {
+                /** @description Latitud del centro. */
+                latitude: number;
+                /** @description Longitud del centro. */
+                longitude: number;
+                /** @description Radio de búsqueda en metros. */
+                radiusMeters?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverNearbyParkingDto"][];
+                };
+            };
+        };
+    };
+    DriverController_findOne: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                parkingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverParkingDetailDto"];
+                };
+            };
+        };
+    };
+    DriverController_quote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                parkingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateQuoteDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteDto"];
+                };
+            };
+            /** @description RESERVATION_VEHICLE_KIND_NOT_ACCEPTED, RESERVATION_OUTSIDE_RESERVATION_HOURS, RESERVATION_OUTSIDE_OPENING_HOURS, DRIVER_RESERVATIONS_DISABLED o RESERVATION_VEHICLE_NOT_FOUND. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
+                };
+            };
+        };
+    };
+    DriverReservationsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverReservationDto"][];
+                };
+            };
+        };
+    };
+    DriverReservationsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateReservationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverReservationDto"];
+                };
+            };
+        };
+    };
+    DriverReservationsController_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reservationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverReservationDto"];
+                };
+            };
+        };
+    };
+    DriverVehiclesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverVehicleDto"][];
+                };
+            };
+        };
+    };
+    DriverVehiclesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDriverVehicleDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverVehicleDto"];
+                };
+            };
+        };
+    };
+    DriverVehiclesController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DriverVehiclesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDriverVehicleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverVehicleDto"];
                 };
             };
         };
@@ -10037,6 +10756,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ServiceCatalogItemDto"];
+                };
+            };
+            /** @description SERVICE_RESERVATION_NOT_READY: se intentó activar las reservas sin cumplir los requisitos; `missing` los lista. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationNotReadyProblemDto"];
+                };
+            };
+        };
+    };
+    ServicesController_getReservationHours: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the tenant (parking lot) */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationHoursDto"];
+                };
+            };
+        };
+    };
+    ServicesController_putReservationHours: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ID of the tenant (parking lot) */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReservationHoursDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationHoursDto"];
+                };
+            };
+            /** @description RESERVATION_HOURS_OUTSIDE_OPENING: algún rango no cae dentro del horario de apertura. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
         };
