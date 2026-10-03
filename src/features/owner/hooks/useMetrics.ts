@@ -5,10 +5,11 @@ import {
   getRevenueByPaymentMethod,
   getRevenueSeries,
   getTopPlates,
+  getVehicleCategoryBreakdown,
   type Granularity,
   type MetricsScope,
   type TopPlatesOrderBy,
-  type VehicleTypeFilter,
+  type VehicleCategoryFilter,
 } from '../services/metrics';
 import { useSucursal } from '../context/SucursalContext';
 
@@ -22,7 +23,7 @@ const METRICS_KEY = ['metrics'] as const;
 export type RevenueFilters = MetricsScope & {
   granularity: Granularity;
   paymentMethod?: string;
-  vehicleType?: VehicleTypeFilter;
+  vehicleCategory?: VehicleCategoryFilter;
 };
 
 /** Solo la parte del recorte, para las queries que no usan granularidad. */
@@ -74,18 +75,18 @@ export function useRevenueSeries(filters: RevenueFilters | null) {
 
 /**
  * Torta por método de pago. No acepta `paymentMethod` (es el desglose
- * completo), pero sí `vehicleType` y la caja.
+ * completo), pero sí `vehicleCategory` y la caja.
  */
 export function useRevenueByPaymentMethod(filters: RevenueFilters | null) {
   const { sucursalId } = useSucursal();
   const scope = filters && scopeOf(filters);
-  const vehicleType = filters?.vehicleType;
+  const vehicleCategory = filters?.vehicleCategory;
   return useQuery({
     queryKey: [
       ...METRICS_KEY,
       sucursalId,
       'by-payment-method',
-      { scope, vehicleType },
+      { scope, vehicleCategory },
     ],
     queryFn:
       sucursalId && scope
@@ -93,8 +94,25 @@ export function useRevenueByPaymentMethod(filters: RevenueFilters | null) {
             getRevenueByPaymentMethod({
               tenantId: sucursalId,
               ...scope,
-              vehicleType,
+              vehicleCategory,
             })
+        : skipToken,
+  });
+}
+
+/**
+ * Torta por categoría de vehículo. Es la distribución completa del período, así
+ * que ignora el filtro de categoría (con uno solo elegido sería una torta de una
+ * porción) pero respeta la ventana o la caja.
+ */
+export function useVehicleCategoryBreakdown(filters: RevenueFilters | null) {
+  const { sucursalId } = useSucursal();
+  const scope = filters && scopeOf(filters);
+  return useQuery({
+    queryKey: [...METRICS_KEY, sucursalId, 'by-vehicle-category', { scope }],
+    queryFn:
+      sucursalId && scope
+        ? () => getVehicleCategoryBreakdown({ tenantId: sucursalId, ...scope })
         : skipToken,
   });
 }
@@ -109,14 +127,14 @@ export function useTopPlates(
 ) {
   const { sucursalId } = useSucursal();
   const scope = filters && scopeOf(filters);
-  const vehicleType = filters?.vehicleType;
+  const vehicleCategory = filters?.vehicleCategory;
   const limit = options?.limit ?? 10;
   return useQuery({
     queryKey: [
       ...METRICS_KEY,
       sucursalId,
       'top-plates',
-      { scope, vehicleType, limit },
+      { scope, vehicleCategory, limit },
     ],
     queryFn:
       sucursalId && scope
@@ -124,7 +142,7 @@ export function useTopPlates(
             getTopPlates({
               tenantId: sucursalId,
               ...scope,
-              vehicleType,
+              vehicleCategory,
               limit,
             })
         : skipToken,
@@ -142,4 +160,4 @@ export function useMetricsSummary() {
   });
 }
 
-export type { Granularity, TopPlatesOrderBy, VehicleTypeFilter };
+export type { Granularity, TopPlatesOrderBy, VehicleCategoryFilter };

@@ -66,6 +66,7 @@ export type EndpointKey =
   | 'services.toggle'
   | 'metrics.revenue'
   | 'metrics.byPaymentMethod'
+  | 'metrics.byVehicleCategory'
   | 'metrics.topPlates'
   | 'metrics.summary'
   | 'cashSessions.list'

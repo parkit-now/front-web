@@ -13,11 +13,14 @@ import { translateApiError } from '../../../../lib/api/translate';
 import type { Granularity } from '../../../../shared/utils/ar-datetime';
 import { useSucursal } from '../../context/SucursalContext';
 import { listPaymentMethods } from '../../services/entities';
-import { listVehicleTypes } from '../../services/vehicle-types';
+import { categoryLabel } from '../../services/vehicle-categories';
+import type { VehicleCategoryFilter } from '../../services/metrics';
+import { useVehicleCategories } from '../../hooks/useVehicleCategories';
 import {
   useRevenueByPaymentMethod,
   useRevenueSeries,
   useTopPlates,
+  useVehicleCategoryBreakdown,
   type RevenueFilters,
 } from '../../hooks/useMetrics';
 import { useCashSessions } from '../../hooks/useCashSessions';
@@ -37,12 +40,14 @@ import {
   type PresetOption,
 } from './filters';
 import {
+  buildCategorySlices,
   buildPieSlices,
   formatAxisValue,
   formatBucketLabel,
   formatCashSessionLabel,
   formatWindowLabel,
   hasInconsistentUnallocated,
+  hasUncategorizedStays,
 } from './transform';
 
 const PRESETS: PresetOption[] = ['hoy', '7d', '30d', 'custom', 'caja'];
@@ -178,9 +183,10 @@ export function EstadisticasPage() {
   const [manualGranularity, setManualGranularity] =
     useState<Granularity | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('');
-  // Nombre del tipo, o '' para no filtrar. Es texto libre desde que el contrato
-  // dejó de exponer `vehicleType` como enum.
-  const [vehicleType, setVehicleType] = useState('');
+  // Código de la categoría, o '' para no filtrar.
+  const [vehicleCategory, setVehicleCategory] = useState<
+    VehicleCategoryFilter | ''
+  >('');
   const [cashSessionId, setCashSessionId] = useState('');
   const [serie, setSerie] = useState<SerieTab>('ingresos');
 
@@ -223,18 +229,19 @@ export function EstadisticasPage() {
     const common = {
       granularity,
       paymentMethod: paymentMethod || undefined,
-      vehicleType: vehicleType || undefined,
+      vehicleCategory: vehicleCategory || undefined,
     };
     // Con caja no se manda ventana: la deriva el backend (ver `MetricsScope`).
     return resolved.cashSessionId
       ? { ...common, cashSessionId: resolved.cashSessionId }
       : { ...common, from: resolved.from, to: resolved.to };
-  }, [canQuery, resolved, granularity, paymentMethod, vehicleType]);
+  }, [canQuery, resolved, granularity, paymentMethod, vehicleCategory]);
   const isCashSession = Boolean(filters?.cashSessionId);
 
   const seriesQuery = useRevenueSeries(filters);
   const breakdownQuery = useRevenueByPaymentMethod(filters);
   const topPlatesQuery = useTopPlates(filters);
+  const categoryBreakdownQuery = useVehicleCategoryBreakdown(filters);
 
   const paymentMethodsQuery = useQuery({
     queryKey: ['payment-methods', sucursalId],
@@ -243,14 +250,7 @@ export function EstadisticasPage() {
     staleTime: 300_000,
   });
 
-  // Misma queryKey que las secciones de Vehículos y Tipos de vehículo, así
-  // TanStack comparte caché en vez de pedir el catálogo de nuevo.
-  const vehicleTypesQuery = useQuery({
-    queryKey: ['vehicle-types', sucursalId],
-    queryFn: () => listVehicleTypes(sucursalId),
-    enabled: Boolean(sucursalId),
-    staleTime: 300_000,
-  });
+  const { categories, isLoading: categoriesLoading } = useVehicleCategories();
 
   function choosePreset(next: PresetOption) {
     setPreset(next);
@@ -454,20 +454,22 @@ export function EstadisticasPage() {
           </label>
 
           <label style={{ fontSize: 13, color: 'var(--text-2)' }}>
-            Tipo de vehículo{' '}
+            Categoría de vehículo{' '}
             <select
               className="pk-input"
-              value={vehicleType}
-              onChange={(event) => setVehicleType(event.target.value)}
-              disabled={vehicleTypesQuery.isLoading}
-              style={{ width: 160, display: 'inline-block' }}
+              value={vehicleCategory}
+              onChange={(event) =>
+                setVehicleCategory(
+                  event.target.value as VehicleCategoryFilter | '',
+                )
+              }
+              disabled={categoriesLoading}
+              style={{ width: 180, display: 'inline-block' }}
             >
-              <option value="">Todos</option>
-              {/* Se compara por nombre contra el snapshot guardado en la
-                  estadía, así que el value es el nombre, no el id. */}
-              {(vehicleTypesQuery.data ?? []).map((type) => (
-                <option key={type.id} value={type.name}>
-                  {type.name}
+              <option value="">Todas</option>
+              {categories.map((category) => (
+                <option key={category.code} value={category.code}>
+                  {category.label}
                 </option>
               ))}
             </select>
@@ -504,14 +506,12 @@ export function EstadisticasPage() {
           </Note>
         )}
 
-        {vehicleType && (
+        {vehicleCategory && (
           <Note>
-            El tipo de vehículo solo se registra en los ingresos automáticos de
-            vehículos por lectura de patente. Los ingresos manuales quedan sin
-            tipo y este filtro los excluye, así que el total puede quedar muy
-            por debajo del real. Además, cada estadía guarda el nombre que el
-            tipo tenía ese día: si se renombró desde entonces, las estadías
-            anteriores no aparecen bajo el nombre nuevo.
+            Este filtro deja afuera las estadías sin categoría (las anteriores a
+            que existieran las categorías o las que registra una caja que
+            todavía no la envía), así que el total puede quedar por debajo del
+            real.
           </Note>
         )}
       </div>
@@ -690,6 +690,52 @@ export function EstadisticasPage() {
                 )}
               </>
             )}
+          </div>
+
+          {/* Torta por categoría de vehículo */}
+          <div className="pk-card pk-card-pad" style={{ marginBottom: 12 }}>
+            <div style={{ marginBottom: 10 }}>
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--text-2)',
+                }}
+              >
+                Recaudación por categoría de vehículo
+              </span>
+            </div>
+
+            {categoryBreakdownQuery.isLoading ? (
+              <Skeleton height={168} />
+            ) : categoryBreakdownQuery.isError ? (
+              <EmptyState
+                title="No se pudo cargar el desglose"
+                description={translateApiError(categoryBreakdownQuery.error, {
+                  endpoint: 'metrics.byVehicleCategory',
+                })}
+              />
+            ) : categoryBreakdownQuery.data ? (
+              <>
+                <DonutChart
+                  slices={buildCategorySlices(
+                    categoryBreakdownQuery.data,
+                    (code) => categoryLabel(categories, code),
+                  )}
+                  total={categoryBreakdownQuery.data.totalRevenue}
+                  title="Recaudación por categoría de vehículo"
+                  emptyMessage="Sin estadías cerradas en el período."
+                />
+                {hasUncategorizedStays(categoryBreakdownQuery.data) && (
+                  <Note>
+                    "Sin dato" son las estadías que no tienen categoría: las
+                    anteriores a que existieran las categorías y las que
+                    registra una caja que todavía no la envía. Se muestran
+                    aparte para que las porciones sumen el total.
+                  </Note>
+                )}
+              </>
+            ) : null}
           </div>
 
           {/* Top de patentes */}

@@ -5,6 +5,9 @@ interface DonutChartProps {
   slices: PieSlice[];
   total: number;
   size?: number;
+  /** Para lectores de pantalla; por defecto, la torta de métodos de pago. */
+  title?: string;
+  emptyMessage?: string;
 }
 
 /**
@@ -25,13 +28,19 @@ function sliceOpacity(slice: PieSlice, index: number): number {
   return SLICE_OPACITIES[index] ?? 0.15;
 }
 
-export function DonutChart({ slices, total, size = 168 }: DonutChartProps) {
+export function DonutChart({
+  slices,
+  total,
+  size = 168,
+  title = 'Recaudación por método de pago',
+  emptyMessage = 'Sin recaudación en el período.',
+}: DonutChartProps) {
   const visible = slices.filter((slice) => slice.share > 0);
 
   if (visible.length === 0 || total <= 0) {
     return (
       <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
-        Sin recaudación en el período.
+        {emptyMessage}
       </p>
     );
   }
@@ -62,7 +71,7 @@ export function DonutChart({ slices, total, size = 168 }: DonutChartProps) {
           height={size}
           viewBox="0 0 42 42"
           role="img"
-          aria-label={`Recaudación por método de pago, total ${fmtMoney0(total)}`}
+          aria-label={`${title}, total ${fmtMoney0(total)}`}
         >
           <circle
             cx="21"
@@ -92,7 +101,7 @@ export function DonutChart({ slices, total, size = 168 }: DonutChartProps) {
                 strokeDashoffset={offset}
                 transform="rotate(-90 21 21)"
               >
-                <title>{`${slice.name}: ${fmtMoney0(slice.amount)}`}</title>
+                <title>{`${slice.name}: ${fmtMoney0(slice.amount)}${slice.detail ? ` (${slice.detail})` : ''}`}</title>
               </circle>
             );
           })}
@@ -163,6 +172,11 @@ export function DonutChart({ slices, total, size = 168 }: DonutChartProps) {
               title={slice.name}
             >
               {slice.name}
+              {slice.detail && (
+                <span style={{ marginLeft: 6, color: 'var(--text-3)' }}>
+                  {slice.detail}
+                </span>
+              )}
             </span>
             <span
               style={{
