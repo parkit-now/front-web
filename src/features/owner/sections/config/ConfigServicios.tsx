@@ -1,25 +1,18 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { ReservationSetupCard } from './ReservationSetupCard';
 import { Switch } from '../../../../shared/components/ui/Switch';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { ApiError } from '../../../../lib/api/client';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useSucursal } from '../../context/SucursalContext';
-import {
-  listServices,
-  updateService,
-  type ServiceCode,
-} from '../../services/services';
+import { listServices } from '../../services/services';
 import {
   listVehicleTypes,
   updateVehicleType,
   type VehicleType,
 } from '../../services/vehicle-types';
-
-const SERVICE_LABELS: Record<ServiceCode, string> = {
-  ADVANCE_RESERVATION: 'Reserva anticipada',
-};
 
 export function ConfigServicios() {
   const { showToast } = useToast();
@@ -34,7 +27,7 @@ export function ConfigServicios() {
     enabled: Boolean(sucursalId),
   });
   const services = useMemo(() => data ?? [], [data]);
-  const byCode = new Map(services.map((s) => [s.code, s]));
+  const reservation = services.find((s) => s.code === 'ADVANCE_RESERVATION');
 
   // "Qué vehículos acepta la playa" ya no es un enum de cinco códigos fijos:
   // son los tipos por estacionamiento, que el dueño administra en su propia
@@ -48,16 +41,6 @@ export function ConfigServicios() {
   const types = useMemo(() => typesQuery.data ?? [], [typesQuery.data]);
 
   const [busyTypeId, setBusyTypeId] = useState<string | null>(null);
-
-  const mutation = useMutation({
-    mutationFn: (code: ServiceCode) =>
-      updateService(sucursalId, code, { enabled: !isEnabled(code) }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: servicesKey });
-    },
-    onError: (error) =>
-      showToast({ message: translateApiError(error), kind: 'error' }),
-  });
 
   /**
    * El toggle de un tipo lleva `expectedVersion`, así que puede dar 409 — algo
@@ -88,10 +71,6 @@ export function ConfigServicios() {
     },
   });
 
-  function isEnabled(code: ServiceCode): boolean {
-    return byCode.get(code)?.enabled ?? false;
-  }
-
   if (isLoading) {
     return (
       <p style={{ color: 'var(--text-3)', fontSize: 14 }}>
@@ -118,44 +97,10 @@ export function ConfigServicios() {
         </p>
       </div>
 
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <h3 style={sectionTitle}>Reservas</h3>
-        <div
-          className="pk-card"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 12,
-            padding: 16,
-          }}
-        >
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <span
-              style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}
-            >
-              {SERVICE_LABELS.ADVANCE_RESERVATION}
-            </span>
-            <p
-              style={{
-                margin: '2px 0 0',
-                fontSize: 13,
-                color: 'var(--text-3)',
-              }}
-            >
-              Permite a los clientes reservar un lugar con anticipación.
-            </p>
-          </div>
-          <Switch
-            checked={isEnabled('ADVANCE_RESERVATION')}
-            onChange={() => mutation.mutate('ADVANCE_RESERVATION')}
-            disabled={!canEdit || mutation.isPending}
-            aria-label={SERVICE_LABELS.ADVANCE_RESERVATION}
-          />
-        </div>
-      </section>
+      {reservation && <ReservationSetupCard service={reservation} />}
 
       <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <h3 style={sectionTitle}>Vehículos aceptados</h3>
+        <h3 style={sectionTitle}>Vehículos aceptados en la caja</h3>
 
         {typesQuery.isLoading && (
           <p style={{ margin: 0, fontSize: 13, color: 'var(--text-3)' }}>
