@@ -247,6 +247,22 @@ const CODE_MESSAGES: Record<string, string> = {
   MP_MALFORMED_RESPONSE:
     'Mercado Pago respondió algo que no pudimos interpretar, así que no sabemos cómo quedó el cobro. Revisalo en Mercado Pago antes de generar otro.',
 
+  // Desvincular Mercado Pago (409): se bloquea mientras haya plata o cobros en
+  // juego (reservas pagas por venir, reservas esperando aceptación, checkouts
+  // abiertos o reembolsos pendientes). Dice qué hacer, no solo que no se puede.
+  MP_ACCOUNT_HAS_ACTIVE_RESERVATIONS:
+    'No podés desvincular Mercado Pago mientras tengas reservas pagas por venir o reembolsos en curso. Cancelalas o esperá a que terminen.',
+  // Checkout Pro de las reservas: Mercado Pago rechazó la operación. Mensajes
+  // cortos y genéricos; la salida es reintentar.
+  MP_PREFERENCE_CREATE_FAILED:
+    'Mercado Pago no pudo generar el link de pago de la reserva. Volvé a intentarlo en unos minutos.',
+  MP_PAYMENT_READ_FAILED:
+    'No pudimos consultar el pago en Mercado Pago. Volvé a intentarlo en unos minutos.',
+  MP_REFUND_FAILED:
+    'Mercado Pago no pudo procesar el reembolso. Volvé a intentarlo en unos minutos.',
+  MP_PAYMENT_CANCEL_FAILED:
+    'Mercado Pago no pudo cancelar el pago. Volvé a intentarlo en unos minutos.',
+
   // Cobros con QR (intentos de pago). Mismo criterio que el bloque de arriba:
   // le hablamos al operario que tiene al cliente adelante, no a un backend.
   // El mismo code cubre un cobro inexistente y uno de otro estacionamiento, a
