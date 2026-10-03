@@ -94,7 +94,10 @@ export function useReservationsBoard(tenantId: string) {
 
   return {
     reservations,
-    isLoading: live.isLoading || history.isLoading,
+    // `isPending` y no `isLoading`: mientras no hay estacionamiento activo las
+    // consultas están deshabilitadas e `isLoading` da false con datos vacíos, y la
+    // pantalla decidiría la pestaña inicial sin saber nada.
+    isLoading: live.isPending || history.isPending,
     isError: live.isError || history.isError,
     error: live.error ?? history.error,
     isFetching: live.isFetching || history.isFetching,
