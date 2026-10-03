@@ -11,6 +11,7 @@ import type {
   ServiceItem,
   UpdateServiceInput,
 } from '../../services/services';
+import type { VehicleType } from '../../services/vehicle-types';
 import { parseCapacityTotal } from './capacity';
 
 /**
@@ -25,7 +26,7 @@ export type HoursMode = ServiceItem['reservationHoursMode'];
 /** Texto de los campos numéricos tal cual los tipea la persona. */
 export interface ReservationForm {
   reservableSpots: string;
-  kinds: ReservationVehicleCategory[];
+  categories: ReservationVehicleCategory[];
   hoursMode: HoursMode;
   ranges: ScheduleRange[];
   rateId: string;
@@ -36,17 +37,6 @@ export interface ReservationForm {
   earlyArrivalMinutes: string;
   graceMinutes: string;
 }
-
-export const VEHICLE_KIND_OPTIONS: {
-  id: ReservationVehicleCategory;
-  label: string;
-}[] = [
-  { id: 'car', label: 'Auto' },
-  { id: 'suv', label: 'SUV' },
-  { id: 'pickup', label: 'Pickup' },
-  { id: 'van', label: 'Utilitario / Van' },
-  { id: 'motorcycle', label: 'Moto' },
-];
 
 export const LATE_REFUND_OPTIONS = [0, 50, 100] as const;
 
@@ -72,7 +62,7 @@ export function toReservationForm(
   return {
     reservableSpots:
       service.reservableSpots === null ? '' : String(service.reservableSpots),
-    kinds: [...service.reservationVehicleCategories],
+    categories: [...service.reservationVehicleCategories],
     hoursMode: hours.mode,
     ranges: sortRanges(hours.ranges),
     rateId: service.reservationRateId ?? '',
@@ -89,7 +79,7 @@ export function toReservationForm(
 function canonical(form: ReservationForm) {
   return {
     ...form,
-    kinds: [...form.kinds].sort(),
+    categories: [...form.categories].sort(),
     ranges: form.hoursMode === 'custom' ? sortRanges(form.ranges) : [],
     reservableSpots: form.reservableSpots.trim(),
   };
@@ -184,10 +174,10 @@ export function buildServicePatch(
     patch.acceptanceMode = form.acceptanceMode;
   }
   if (
-    JSON.stringify([...form.kinds].sort()) !==
-    JSON.stringify([...initial.kinds].sort())
+    JSON.stringify([...form.categories].sort()) !==
+    JSON.stringify([...initial.categories].sort())
   ) {
-    patch.reservationVehicleCategories = [...form.kinds];
+    patch.reservationVehicleCategories = [...form.categories];
   }
 
   return Object.keys(errors).length > 0 ? { errors } : { patch };
@@ -351,4 +341,24 @@ export function unreservedSpotsText(
   return rest === 1
     ? 'La otra sigue para quien llega sin reserva.'
     : `Las otras ${rest} siguen para quien llega sin reserva.`;
+}
+
+// ------------------------------------------------- reservas vs. caja (aviso)
+
+/**
+ * Categorías reservables elegidas que NINGÚN tipo aceptado en caja cubre.
+ *
+ * Reservas y caja son independientes (no se bloquea nada), pero si el conductor
+ * reserva una categoría que la caja no acepta, el operador no va a poder
+ * registrar su ingreso. Es solo un aviso. Los tipos son los vivos del
+ * estacionamiento.
+ */
+export function categoriesWithoutCashType(
+  selected: readonly ReservationVehicleCategory[],
+  types: readonly Pick<VehicleType, 'category' | 'accepted'>[],
+): ReservationVehicleCategory[] {
+  const acceptedCategories = new Set(
+    types.filter((t) => t.accepted).map((t) => t.category),
+  );
+  return selected.filter((c) => !acceptedCategories.has(c));
 }

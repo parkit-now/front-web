@@ -6,6 +6,7 @@ import {
   buildHoursPut,
   buildPricePreview,
   buildServicePatch,
+  categoriesWithoutCashType,
   hoursChanged,
   isDirty,
   needsAttention,
@@ -59,8 +60,10 @@ describe('toReservationForm / isDirty', () => {
 
   it('el orden de los vehículos no ensucia', () => {
     const initial = toReservationForm(service, hours);
-    expect(isDirty({ ...initial, kinds: ['suv', 'car'] }, initial)).toBe(false);
-    expect(isDirty({ ...initial, kinds: ['car'] }, initial)).toBe(true);
+    expect(isDirty({ ...initial, categories: ['suv', 'car'] }, initial)).toBe(
+      false,
+    );
+    expect(isDirty({ ...initial, categories: ['car'] }, initial)).toBe(true);
   });
 
   it('en modo opening los rangos no cuentan', () => {
@@ -89,7 +92,7 @@ describe('buildServicePatch', () => {
       {
         ...initial,
         reservableSpots: '10',
-        kinds: ['car'],
+        categories: ['car'],
         rateId: '',
         acceptanceMode: 'manual',
         lateCancelRefundPct: '50',
@@ -272,5 +275,31 @@ describe('unreservedSpotsText', () => {
     expect(unreservedSpotsText(40, '41')).toBeNull();
     expect(unreservedSpotsText(40, 'x')).toBeNull();
     expect(unreservedSpotsText(undefined, '8')).toBeNull();
+  });
+});
+
+describe('categoriesWithoutCashType', () => {
+  const types = [
+    { category: 'car', accepted: true },
+    { category: 'suv', accepted: false },
+    { category: 'pickup', accepted: true },
+  ] as const;
+
+  it('devuelve las elegidas sin ningún tipo aceptado en la caja', () => {
+    expect(
+      categoriesWithoutCashType(['car', 'suv', 'van', 'motorcycle'], types),
+    ).toEqual(['suv', 'van', 'motorcycle']);
+  });
+
+  it('con un tipo aceptado por categoría no avisa nada', () => {
+    expect(categoriesWithoutCashType(['car', 'pickup'], types)).toEqual([]);
+  });
+
+  it('un tipo no aceptado no cubre la categoría, aunque haya otro de otra', () => {
+    expect(categoriesWithoutCashType(['suv'], types)).toEqual(['suv']);
+  });
+
+  it('sin categorías elegidas no hay aviso', () => {
+    expect(categoriesWithoutCashType([], [])).toEqual([]);
   });
 });

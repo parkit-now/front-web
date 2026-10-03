@@ -23,24 +23,31 @@ import { translateApiError } from '../../../../lib/api/translate';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { useSucursal } from '../../context/SucursalContext';
 import { useMpAccount } from '../../hooks/useMpAccount';
+import { useVehicleCategories } from '../../hooks/useVehicleCategories';
 import { getEntityProfile } from '../../services/entities';
 import { listRates } from '../../services/rates';
 import { listSchedules } from '../../services/schedules';
+import {
+  categoryLabel,
+  reservableCategories,
+} from '../../services/vehicle-categories';
+import { listVehicleTypes } from '../../services/vehicle-types';
 import {
   getReservationHours,
   putReservationHours,
   updateService,
   type ReservationRequirement,
+  type ReservationVehicleCategory,
   type ServiceItem,
 } from '../../services/services';
 import {
   LATE_REFUND_OPTIONS,
   SECTION_IDS,
-  VEHICLE_KIND_OPTIONS,
   buildChecklist,
   buildHoursPut,
   buildPricePreview,
   buildServicePatch,
+  categoriesWithoutCashType,
   describeRate,
   formatArs,
   hoursChanged,
@@ -105,6 +112,17 @@ export function ReservationSetupCard({ service }: ReservationSetupCardProps) {
     enabled: Boolean(sucursalId),
   });
   const mpQuery = useMpAccount(sucursalId);
+  const { categories: allCategories } = useVehicleCategories();
+  // Misma queryKey que Tipos de vehículo y Servicios: comparten caché.
+  const typesQuery = useQuery({
+    queryKey: ['vehicle-types', sucursalId],
+    queryFn: () => listVehicleTypes(sucursalId),
+    enabled: Boolean(sucursalId),
+  });
+  const categoryOptions = useMemo(
+    () => reservableCategories(allCategories),
+    [allCategories],
+  );
 
   const rates = useMemo(() => ratesQuery.data ?? [], [ratesQuery.data]);
   const capacityTotal = profileQuery.data?.capacity.total;
@@ -299,6 +317,9 @@ export function ReservationSetupCard({ service }: ReservationSetupCardProps) {
   const selectedRate = rates.find((r) => r.id === form.rateId);
   const preview = buildPricePreview(selectedRate);
   const unreserved = unreservedSpotsText(capacityTotal, form.reservableSpots);
+  const uncoveredCategories = typesQuery.data
+    ? categoriesWithoutCashType(form.categories, typesQuery.data)
+    : [];
   const openingSummary = summarizeSchedules(schedulesQuery.data);
   const upcoming = service.upcomingPaidReservations;
 
@@ -480,26 +501,31 @@ export function ReservationSetupCard({ service }: ReservationSetupCardProps) {
         {/* 4. Vehículos */}
         <Block
           id={SECTION_IDS.vehicles}
-          title="Vehículos que pueden reservar"
+          title="Vehículos que pueden reservar desde la app"
           pill={pill('vehicles')}
         >
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {VEHICLE_KIND_OPTIONS.map(({ id, label }) => {
-              const on = form.kinds.includes(id);
+            {categoryOptions.map(({ code: id, label }) => {
+              const on = form.categories.includes(
+                id as ReservationVehicleCategory,
+              );
               return (
                 <button
                   key={id}
                   type="button"
                   role="checkbox"
                   aria-checked={on}
-                  data-testid={`reservation-kind-${id}`}
+                  data-testid={`reservation-category-${id}`}
                   disabled={disabled}
                   onClick={() =>
                     setField(
-                      'kinds',
+                      'categories',
                       on
-                        ? form.kinds.filter((k) => k !== id)
-                        : [...form.kinds, id],
+                        ? form.categories.filter((k) => k !== id)
+                        : [
+                            ...form.categories,
+                            id as ReservationVehicleCategory,
+                          ],
                     )
                   }
                   style={chipStyle(on, disabled)}
@@ -510,7 +536,35 @@ export function ReservationSetupCard({ service }: ReservationSetupCardProps) {
               );
             })}
           </div>
+          {categoryOptions.length === 0 && (
+            <p style={helpText}>Cargando categorías...</p>
+          )}
           <p style={helpText}>Mismo precio para todos.</p>
+          <p style={helpText}>
+            Esto es independiente de lo que acepta la caja: un vehículo puede
+            reservar desde la app aunque en la caja no esté aceptado (y al
+            revés).
+          </p>
+          {uncoveredCategories.length > 0 && (
+            <Alert
+              variant="warn"
+              title="La caja no acepta algunas de estas categorías"
+              description={
+                <>
+                  Ningún tipo aceptado en la caja es{' '}
+                  {uncoveredCategories
+                    .map((c) => categoryLabel(allCategories, c))
+                    .join(', ')}
+                  . Los conductores van a poder reservar, pero el operador no va
+                  a poder registrar su ingreso hasta que aceptes un tipo de esa
+                  categoría.{' '}
+                  <Link to="../tipos-de-vehiculo">
+                    Administrar tipos de vehículo
+                  </Link>
+                </>
+              }
+            />
+          )}
         </Block>
       </div>
 
