@@ -127,7 +127,17 @@ const DISPLAY_FIELDS: Array<keyof EntrySnapshot> = [
 
 const NON_OWNER_AUDIT_CORRECTION_FIELDS = new Set(['color', 'notes']);
 
-const OWNER_AUDIT_VISIBLE_ACTIONS = new Set([
+/** Acciones sobre reservas (backend: `reservation.*`). */
+const RESERVATION_AUDIT_ACTIONS = [
+  'reservation.accepted',
+  'reservation.rejected',
+  'reservation.cancelled',
+  'reservation.refund_retried',
+  'reservation.refund_failed',
+  'reservation.late_payment_refunded',
+] as const;
+
+const OWNER_AUDIT_VISIBLE_ACTIONS = new Set<string>([
   'entry.corrected',
   'entry.undercharged',
   'invoice.cert_expired',
@@ -137,9 +147,10 @@ const OWNER_AUDIT_VISIBLE_ACTIONS = new Set([
   'mp_account.token_expired',
   'payment_intent.cancel_mp_failed',
   'payment_intent.refunded',
+  ...RESERVATION_AUDIT_ACTIONS,
 ]);
 
-const KNOWN_AUDIT_ACTIONS = new Set([
+const KNOWN_AUDIT_ACTIONS = new Set<string>([
   'application.created',
   'application.updated',
   'application.submitted',
@@ -180,6 +191,7 @@ const KNOWN_AUDIT_ACTIONS = new Set([
   'mp_account.token_expired',
   'payment_intent.cancel_mp_failed',
   'payment_intent.refunded',
+  ...RESERVATION_AUDIT_ACTIONS,
 ]);
 
 function isExcludedOwnerAuditAction(action: string): boolean {
@@ -377,7 +389,69 @@ const OTHER_ACTION_LABELS: Record<string, string> = {
   'payment_intent.cancel_mp_failed':
     'No se pudo cancelar una orden de Mercado Pago',
   'payment_intent.refunded': 'Pago devuelto por Mercado Pago',
+  'reservation.accepted': 'Reserva aceptada',
+  'reservation.rejected': 'Reserva rechazada',
+  'reservation.cancelled': 'Reserva cancelada',
+  'reservation.refund_retried': 'Reembolso reintentado',
+  'reservation.refund_failed': 'Reembolso fallido',
+  'reservation.late_payment_refunded': 'Pago tardío reembolsado',
 };
+
+/** Quién actuó, según `metadata.actorRole`. */
+const ACTOR_ROLE_LABELS: Record<string, string> = {
+  owner: 'Dueño',
+  operator: 'Operador',
+  admin: 'Administrador',
+  driver: 'Conductor',
+  system: 'Sistema',
+};
+
+export function actorRoleLabel(role: string): string {
+  return ACTOR_ROLE_LABELS[role] ?? role;
+}
+
+/** Motivos fijos que escribe el sistema (`metadata.reasonCode`). */
+const REASON_CODE_LABELS: Record<string, string> = {
+  approval_timeout: 'Venció el plazo para responder',
+  late_payment_no_capacity: 'Pago tardío sin cupo disponible',
+  payment_after_cancel: 'Pago recibido con la reserva ya cancelada',
+};
+
+function isReservationAction(action: string): boolean {
+  return action.startsWith('reservation.');
+}
+
+function reservationReason(metadata: Record<string, unknown>): string {
+  const reason = readString(metadata, 'reason');
+  if (reason) return reason;
+  const code = readString(metadata, 'reasonCode');
+  return code ? (REASON_CODE_LABELS[code] ?? code.replaceAll('_', ' ')) : '';
+}
+
+function reservationSummary(
+  action: string,
+  metadata: Record<string, unknown>,
+): string {
+  const plate = readString(metadata, 'vehiclePlate');
+  const who = actorRoleLabel(readString(metadata, 'actorRole') || 'system');
+  const suffix = plate ? ` de ${plate}` : '';
+  if (action === 'reservation.accepted') {
+    return `${who} aceptó la reserva${suffix}`;
+  }
+  if (action === 'reservation.rejected') {
+    return `${who} rechazó la reserva${suffix}`;
+  }
+  if (action === 'reservation.cancelled') {
+    return `${who} canceló la reserva${suffix}`;
+  }
+  if (action === 'reservation.refund_retried') {
+    return `${who} reintentó el reembolso de la reserva${suffix}`;
+  }
+  if (action === 'reservation.refund_failed') {
+    return `No se pudo reembolsar la reserva${suffix}`;
+  }
+  return `Se reembolsó un pago tardío de la reserva${suffix}`;
+}
 
 export function actionLabelFor(action: string): string {
   if (action === 'entry.corrected') return 'Corrección de estadía';
@@ -410,6 +484,9 @@ function actionSummaryFor(
   }
   if (action === 'payment_intent.cancel_mp_failed') {
     return 'Mercado Pago no aceptó cancelar una orden pendiente';
+  }
+  if (isReservationAction(action)) {
+    return reservationSummary(action, metadata);
   }
   if (action === 'payment_intent.refunded') {
     const amount = readNumber(metadata, 'amount');
@@ -542,6 +619,16 @@ function moneyImpactFor(
     };
   }
 
+  if (isReservationAction(action)) {
+    // Plata que se devuelve al conductor: se muestra, no suma a ninguna pérdida.
+    const refund = readNumber(metadata, 'refundArs');
+    return {
+      label:
+        refund === null || refund <= 0 ? '-' : `Reembolso ${fmtMoney0(refund)}`,
+      amount: null,
+    };
+  }
+
   if (action === 'entry.corrected') {
     const economicImpact = readEconomicImpact(metadata);
     if (
@@ -585,15 +672,20 @@ export function buildAuditRow(event: AuditEvent): AuditRow {
   const labels = changedFieldLabels(changedFields);
   const origin = readOrigin(metadata);
   const kind = actionKindFor(event.action);
-  const plate = after.plate ?? before.plate ?? readString(metadata, 'plate');
+  const plate =
+    after.plate ??
+    before.plate ??
+    (readString(metadata, 'plate') || readString(metadata, 'vehiclePlate'));
   const ticket =
     after.ticketNumber ??
     before.ticketNumber ??
     readNumber(metadata, 'ticketNumber');
   const moneyImpact = moneyImpactFor(event.action, metadata, before, after);
   const economicImpact = readEconomicImpact(metadata);
-  const reason = readString(metadata, 'reason');
-  const actorRole = readString(metadata, 'actorRole');
+  const reason = isReservationAction(event.action)
+    ? reservationReason(metadata)
+    : readString(metadata, 'reason');
+  const actorRole = actorRoleLabel(readString(metadata, 'actorRole'));
   const cashSessionId =
     after.cashSessionId ??
     before.cashSessionId ??
@@ -700,12 +792,44 @@ export function correctionComparisons(row: AuditRow): AuditComparisonRow[] {
   }));
 }
 
+const RESERVATION_STATUS_LABELS: Record<string, string> = {
+  'pending payment': 'Esperando el pago',
+  'pending approval': 'Esperando aprobación',
+  confirmed: 'Confirmada',
+  'checked in': 'En curso',
+  completed: 'Completada',
+  cancelled: 'Cancelada',
+  rejected: 'Rechazada',
+  expired: 'Vencida',
+  'no show': 'No se presentó',
+};
+
+function reservationStatusLabel(value: string): string {
+  return RESERVATION_STATUS_LABELS[value] ?? value;
+}
+
+const REFUND_STATUS_LABELS: Record<string, string> = {
+  none: 'Sin reembolso',
+  pending: 'En curso',
+  refunded: 'Reembolsado',
+  partial: 'Reembolso parcial',
+  failed: 'Falló',
+};
+
+function refundStatusLabel(value: string): string {
+  return REFUND_STATUS_LABELS[value] ?? value;
+}
+
 type MetadataEntry = { key: string; value: string };
 
 function formatMetadataValue(key: string, value: unknown): string {
   if (value === null || value === undefined || value === '') return '-';
   if (typeof value === 'number') {
-    if (key.toLowerCase().includes('amount') || key === 'delta') {
+    if (
+      key.toLowerCase().includes('amount') ||
+      key === 'delta' ||
+      key === 'refundArs'
+    ) {
       return fmtMoney0(value);
     }
     if (key === 'confidence') return `${Math.round(value * 100)}%`;
@@ -782,6 +906,28 @@ export function metadataEntries(row: AuditRow): MetadataEntry[] {
       metadataEntry(metadata, 'paymentIntentId', 'Intento de pago'),
       metadataEntry(metadata, 'orderId', 'Orden Mercado Pago'),
     ]);
+  }
+
+  if (isReservationAction(row.action)) {
+    const entries = compactEntries([
+      metadataEntry(metadata, 'vehiclePlate', 'Patente'),
+      metadataEntry(metadata, 'entryAt', 'Ingreso reservado'),
+      metadataEntry(metadata, 'previousStatus', 'Estado anterior'),
+      reservationReason(metadata)
+        ? { key: 'Motivo', value: reservationReason(metadata) }
+        : null,
+      metadataEntry(metadata, 'refundArs', 'Reembolso'),
+      metadataEntry(metadata, 'refundStatus', 'Estado del reembolso'),
+      metadataEntry(metadata, 'refundError', 'Error del reembolso'),
+      metadataEntry(metadata, 'attempt', 'Intento'),
+    ]);
+    return entries.map((entry) =>
+      entry.key === 'Estado anterior'
+        ? { ...entry, value: reservationStatusLabel(entry.value) }
+        : entry.key === 'Estado del reembolso'
+          ? { ...entry, value: refundStatusLabel(entry.value) }
+          : entry,
+    );
   }
 
   return Object.entries(metadata)
