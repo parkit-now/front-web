@@ -4,6 +4,7 @@ import {
   countVehiclesByType,
   describeUsage,
   reassignTargets,
+  splitReassignTargets,
   validateReassignTarget,
 } from './reassign';
 
@@ -114,5 +115,23 @@ describe('countVehiclesByType', () => {
 
   it('un tipo sin vehículos no aparece: el llamador tiene que defaultear a 0', () => {
     expect(countVehiclesByType([]).get('t-1')).toBeUndefined();
+  });
+});
+
+describe('splitReassignTargets', () => {
+  it('separa los de la misma categoría de los demás, sin incluir al borrado', () => {
+    const car2 = makeType({ id: 't-4', name: 'Sedán', category: 'car' });
+    const suv = makeType({ id: 't-2', name: 'SUV', category: 'suv' });
+    const { sameCategory, others } = splitReassignTargets(
+      [AUTO, car2, suv],
+      AUTO,
+    );
+    expect(sameCategory.map((t) => t.id)).toEqual(['t-4']);
+    expect(others.map((t) => t.id)).toEqual(['t-2']);
+  });
+
+  it('sin tipos de la misma categoría, sameCategory queda vacío', () => {
+    const suv = makeType({ id: 't-2', name: 'SUV', category: 'suv' });
+    expect(splitReassignTargets([AUTO, suv], AUTO).sameCategory).toEqual([]);
   });
 });

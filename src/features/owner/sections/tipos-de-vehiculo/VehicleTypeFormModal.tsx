@@ -3,6 +3,7 @@ import { Button } from '../../../../shared/components/ui/Button';
 import { Input } from '../../../../shared/components/ui/Input';
 import { Modal } from '../../../../shared/components/ui/Modal';
 import { Switch } from '../../../../shared/components/ui/Switch';
+import { useVehicleCategories } from '../../hooks/useVehicleCategories';
 import type { VehicleType } from '../../services/vehicle-types';
 import {
   canSubmitVehicleTypeForm,
@@ -11,6 +12,7 @@ import {
   vehicleTypeToForm,
   type VehicleTypeFormErrors,
   type VehicleTypeFormState,
+  type VehicleTypePayload,
 } from './validation';
 
 interface VehicleTypeFormModalProps {
@@ -23,7 +25,7 @@ interface VehicleTypeFormModalProps {
   pending: boolean;
   /** Error del servidor sobre el nombre (409 duplicado). */
   nameError?: string;
-  onSubmit: (payload: VehicleTypeFormState) => void;
+  onSubmit: (payload: VehicleTypePayload) => void;
 }
 
 export function VehicleTypeFormModal({
@@ -36,6 +38,7 @@ export function VehicleTypeFormModal({
   onSubmit,
 }: VehicleTypeFormModalProps) {
   const isEdit = type !== null;
+  const { categories, isLoading: categoriesLoading } = useVehicleCategories();
   const [form, setForm] = useState<VehicleTypeFormState>(emptyVehicleTypeForm);
   const [errors, setErrors] = useState<VehicleTypeFormErrors>({});
 
@@ -110,6 +113,54 @@ export function VehicleTypeFormModal({
       <div
         style={{
           display: 'flex',
+          flexDirection: 'column',
+          gap: 6,
+          marginTop: 16,
+        }}
+      >
+        <label className="pk-label" htmlFor="vehicle-type-category">
+          Categoría
+        </label>
+        <select
+          id="vehicle-type-category"
+          className="pk-input"
+          value={form.category}
+          disabled={pending || categoriesLoading}
+          onChange={(e) => {
+            setForm((prev) => ({
+              ...prev,
+              category: e.target.value as VehicleTypeFormState['category'],
+            }));
+            if (errors.category)
+              setErrors((prev) => ({ ...prev, category: undefined }));
+          }}
+        >
+          <option value="" disabled>
+            {categoriesLoading
+              ? 'Cargando categorías...'
+              : 'Elegí una categoría'}
+          </option>
+          {categories.map((c) => (
+            <option key={c.code} value={c.code}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+        <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+          Sirve para reservas y estadísticas; el nombre es como lo ves vos.
+        </span>
+        {type?.categoryInferred && (
+          <span style={{ fontSize: 12, color: 'var(--warn-text)' }}>
+            Asignamos esta categoría automáticamente. Revisala y guardá para
+            confirmarla.
+          </span>
+        )}
+        {errors.category && <p className="field-error">{errors.category}</p>}
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 12,
@@ -117,9 +168,10 @@ export function VehicleTypeFormModal({
         }}
       >
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600 }}>Aceptado</div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>Se acepta en caja</div>
           <div style={{ fontSize: 12, color: 'var(--text-3)' }}>
-            Si el estacionamiento recibe este tipo de vehículo.
+            Si el operador puede registrar ingresos de este tipo en la caja. No
+            afecta a las reservas desde la app.
           </div>
         </div>
         <Switch

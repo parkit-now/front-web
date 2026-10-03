@@ -2,10 +2,13 @@ import { useEffect, useState } from 'react';
 import { Button } from '../../../../shared/components/ui/Button';
 import { Input } from '../../../../shared/components/ui/Input';
 import { Modal } from '../../../../shared/components/ui/Modal';
+import { useVehicleCategories } from '../../hooks/useVehicleCategories';
+import { typeOptionLabel } from '../../services/vehicle-categories';
 import type { VehicleType } from '../../services/vehicle-types';
 import {
   describeUsage,
   reassignTargets,
+  splitReassignTargets,
   validateReassignTarget,
   type ReassignTarget,
 } from './reassign';
@@ -47,7 +50,9 @@ export function DeleteVehicleTypeModal({
   onClose,
   onSubmit,
 }: DeleteVehicleTypeModalProps) {
+  const { categories } = useVehicleCategories();
   const targets = reassignTargets(types, type.id);
+  const { sameCategory, others } = splitReassignTargets(types, type);
   // Si el que se borra es el ÚNICO que queda no hay destino posible, así que se
   // arranca directo en modo "crear uno nuevo". Sin esto el diálogo quedaría en
   // deadlock: pide elegir un tipo y no hay ninguno para elegir.
@@ -111,6 +116,8 @@ export function DeleteVehicleTypeModal({
     >
       <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--text-2)' }}>
         {describeUsage(usageCount)} Elegí a cuál moverlos antes de eliminarlo.
+        {sameCategory.length > 0 &&
+          ' Conviene uno de la misma categoría, así las reservas y estadísticas no cambian.'}
       </p>
 
       {!onlyOption && (
@@ -130,11 +137,26 @@ export function DeleteVehicleTypeModal({
             <option value="" disabled>
               Elegí un tipo
             </option>
-            {targets.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
+            {sameCategory.length > 0 && (
+              <optgroup label="Misma categoría (recomendado)">
+                {sameCategory.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {typeOptionLabel(t, categories)}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {others.length > 0 && (
+              <optgroup
+                label={sameCategory.length > 0 ? 'Otras categorías' : 'Tipos'}
+              >
+                {others.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {typeOptionLabel(t, categories)}
+                  </option>
+                ))}
+              </optgroup>
+            )}
             <option value={NEW_SENTINEL}>+ Crear un tipo nuevo...</option>
           </select>
         </div>
@@ -152,6 +174,11 @@ export function DeleteVehicleTypeModal({
           <label className="pk-label" htmlFor="reassign-new-name">
             Nombre del tipo nuevo
           </label>
+          <p
+            style={{ margin: '0 0 6px', fontSize: 12, color: 'var(--text-3)' }}
+          >
+            Va a quedar con la misma categoría que "{type.name}".
+          </p>
           <Input
             id="reassign-new-name"
             placeholder="Ej. Utilitario"

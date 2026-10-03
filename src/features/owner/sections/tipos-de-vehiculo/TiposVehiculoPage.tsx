@@ -17,6 +17,8 @@ import { translateApiError } from '../../../../lib/api/translate';
 import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
 import { generateUuidV7 } from '../../../../shared/utils/uuid';
 import { useSucursal } from '../../context/SucursalContext';
+import { useVehicleCategories } from '../../hooks/useVehicleCategories';
+import { categoryLabel } from '../../services/vehicle-categories';
 import {
   createVehicleType,
   deleteVehicleType,
@@ -27,7 +29,7 @@ import {
 import { DeleteVehicleTypeModal } from './DeleteVehicleTypeModal';
 import { VehicleTypeFormModal } from './VehicleTypeFormModal';
 import type { ReassignTarget } from './reassign';
-import { diffVehicleTypeUpdate, type VehicleTypeFormState } from './validation';
+import { diffVehicleTypeUpdate, type VehicleTypePayload } from './validation';
 
 const CONFLICT_MESSAGE =
   'El tipo fue modificado por otra persona. Actualizamos la lista, revisá los datos y volvé a intentar.';
@@ -52,6 +54,7 @@ export function TiposVehiculoPage() {
   const queryClient = useQueryClient();
 
   const canManage = sucursal?.role === 'owner';
+  const { categories } = useVehicleCategories();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<VehicleType | null>(null);
@@ -133,13 +136,14 @@ export function TiposVehiculoPage() {
   const saveMutation = useMutation({
     mutationFn: (
       vars:
-        | { kind: 'create'; payload: VehicleTypeFormState }
-        | { kind: 'update'; type: VehicleType; payload: VehicleTypeFormState },
+        | { kind: 'create'; payload: VehicleTypePayload }
+        | { kind: 'update'; type: VehicleType; payload: VehicleTypePayload },
     ) =>
       vars.kind === 'create'
         ? createVehicleType(sucursalId, {
             id: generateUuidV7(),
             name: vars.payload.name,
+            category: vars.payload.category,
             accepted: vars.payload.accepted,
           })
         : updateVehicleType(
@@ -195,6 +199,9 @@ export function TiposVehiculoPage() {
         const created = await createVehicleType(sucursalId, {
           id: generateUuidV7(),
           name: vars.target.name.trim().replace(/\s+/g, ' '),
+          // Hereda la categoría del que se borra: las estadísticas y las
+          // reservas de esos vehículos no cambian.
+          category: vars.type.category,
           accepted: true,
         });
         reassignToTypeId = created.id;
@@ -268,7 +275,7 @@ export function TiposVehiculoPage() {
     );
   }
 
-  function handleFormSubmit(payload: VehicleTypeFormState) {
+  function handleFormSubmit(payload: VehicleTypePayload) {
     if (!editing) {
       saveMutation.mutate({ kind: 'create', payload });
       return;
@@ -296,8 +303,31 @@ export function TiposVehiculoPage() {
         ),
       },
       {
+        id: 'category',
+        header: 'Categoría',
+        accessorFn: (type) => categoryLabel(categories, type.category),
+        size: 200,
+        cell: ({ row }) => (
+          <span
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
+          >
+            <span style={{ fontSize: 13, color: 'var(--text-1)' }}>
+              {categoryLabel(categories, row.original.category)}
+            </span>
+            {row.original.categoryInferred && (
+              <Badge
+                variant="warn"
+                title="Asignamos esta categoría automáticamente. Editá el tipo para confirmarla o corregirla."
+              >
+                Revisá
+              </Badge>
+            )}
+          </span>
+        ),
+      },
+      {
         id: 'accepted',
-        header: 'Aceptado',
+        header: 'Se acepta en caja',
         // Se ordena y filtra por lo que se ve, no por el booleano crudo.
         accessorFn: (type) => (type.accepted ? 'Sí' : 'No'),
         size: 130,
@@ -371,7 +401,7 @@ export function TiposVehiculoPage() {
         },
       },
     ];
-  }, [canManage, isBusy]);
+  }, [canManage, isBusy, categories]);
 
   return (
     <>
@@ -379,7 +409,7 @@ export function TiposVehiculoPage() {
         data={types}
         columns={columns}
         title="Tipos de vehículo"
-        subtitle="Las categorías con las que este estacionamiento clasifica su catálogo."
+        subtitle="Los nombres con los que este estacionamiento clasifica sus vehículos. Cada uno cuelga de una categoría de la plataforma."
         isLoading={listQuery.isLoading}
         emptyMessage={
           listQuery.isError
@@ -390,11 +420,15 @@ export function TiposVehiculoPage() {
         }
         searchPlaceholder="Buscar por nombre..."
         searchableKeys={['name']}
-        filterableColumns={['accepted']}
+        filterableColumns={['category', 'accepted']}
         filterOptionsByColumn={{
+          category: categories.map((c) => ({
+            value: c.label,
+            label: c.label,
+          })),
           accepted: [
-            { value: 'Sí', label: 'Aceptado' },
-            { value: 'No', label: 'No aceptado' },
+            { value: 'Sí', label: 'Se acepta en caja' },
+            { value: 'No', label: 'No se acepta en caja' },
           ],
         }}
         getRowId={(type) => type.id}
