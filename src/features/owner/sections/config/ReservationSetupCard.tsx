@@ -30,7 +30,7 @@ import { listSchedules } from '../../services/schedules';
 import {
   categoryLabel,
   reservableCategories,
-} from '../../services/vehicle-categories';
+} from '../../services/vehicle-category-labels';
 import { listVehicleTypes } from '../../services/vehicle-types';
 import {
   getReservationHours,

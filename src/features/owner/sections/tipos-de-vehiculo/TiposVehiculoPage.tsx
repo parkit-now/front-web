@@ -18,7 +18,7 @@ import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
 import { generateUuidV7 } from '../../../../shared/utils/uuid';
 import { useSucursal } from '../../context/SucursalContext';
 import { useVehicleCategories } from '../../hooks/useVehicleCategories';
-import { categoryLabel } from '../../services/vehicle-categories';
+import { categoryLabel } from '../../services/vehicle-category-labels';
 import {
   createVehicleType,
   deleteVehicleType,

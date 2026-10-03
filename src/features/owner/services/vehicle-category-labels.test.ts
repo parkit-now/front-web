@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import type { VehicleCategoryItem } from './vehicle-categories';
 import {
   categoryLabel,
   reservableCategories,
   typeOptionLabel,
-  type VehicleCategoryItem,
-} from './vehicle-categories';
+} from './vehicle-category-labels';
 
 const CATEGORIES: VehicleCategoryItem[] = [
   { code: 'car', label: 'Auto', sortOrder: 1, reservable: true },

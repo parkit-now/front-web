@@ -3,7 +3,7 @@ import { Button } from '../../../../shared/components/ui/Button';
 import { Input } from '../../../../shared/components/ui/Input';
 import { Modal } from '../../../../shared/components/ui/Modal';
 import { useVehicleCategories } from '../../hooks/useVehicleCategories';
-import { typeOptionLabel } from '../../services/vehicle-categories';
+import { typeOptionLabel } from '../../services/vehicle-category-labels';
 import type { VehicleType } from '../../services/vehicle-types';
 import {
   describeUsage,

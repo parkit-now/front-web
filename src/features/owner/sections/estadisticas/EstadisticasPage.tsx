@@ -13,7 +13,7 @@ import { translateApiError } from '../../../../lib/api/translate';
 import type { Granularity } from '../../../../shared/utils/ar-datetime';
 import { useSucursal } from '../../context/SucursalContext';
 import { listPaymentMethods } from '../../services/entities';
-import { categoryLabel } from '../../services/vehicle-categories';
+import { categoryLabel } from '../../services/vehicle-category-labels';
 import type { VehicleCategoryFilter } from '../../services/metrics';
 import { useVehicleCategories } from '../../hooks/useVehicleCategories';
 import {

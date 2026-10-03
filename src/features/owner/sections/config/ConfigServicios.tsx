@@ -8,7 +8,7 @@ import { ApiError } from '../../../../lib/api/client';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useSucursal } from '../../context/SucursalContext';
 import { useVehicleCategories } from '../../hooks/useVehicleCategories';
-import { categoryLabel } from '../../services/vehicle-categories';
+import { categoryLabel } from '../../services/vehicle-category-labels';
 import { listServices } from '../../services/services';
 import {
   listVehicleTypes,
