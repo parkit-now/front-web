@@ -6,6 +6,8 @@ import {
 } from '../../../../shared/utils/ar-datetime';
 import type {
   OwnerReservation,
+  OwnerReservationPayment,
+  OwnerReservationPolicy,
   RefundStatus,
   ReservationStatus,
 } from '../../services/reservations';
@@ -302,3 +304,28 @@ export function fullRefundArs(r: Pick<OwnerReservation, 'totalArs'>): number {
 }
 
 export type { RefundStatus };
+
+/** Lo que cobró Mercado Pago por la reserva (el intento aprobado más nuevo). */
+export function paidAmountArs(
+  payments: readonly Pick<OwnerReservationPayment, 'status' | 'amountArs'>[],
+): number | null {
+  const paid = payments.find((p) =>
+    ['approved', 'refunded', 'partially_refunded'].includes(p.status),
+  );
+  return paid ? paid.amountArs : null;
+}
+
+/** La política que tenía la reserva al momento de reservar, en frases. */
+export function policyLines(policy: OwnerReservationPolicy): string[] {
+  const late =
+    policy.lateCancelRefundPct > 0
+      ? `si cancela más tarde, se le devuelve el ${policy.lateCancelRefundPct} %`
+      : 'si cancela más tarde, no se le devuelve nada';
+  return [
+    `Cancelación gratis hasta ${policy.freeCancelMinutes} min antes; ${late}.`,
+    `Puede llegar hasta ${policy.earlyArrivalMinutes} min antes y tiene ${policy.graceMinutes} min de tolerancia.`,
+    policy.acceptanceMode === 'manual'
+      ? `Aceptación manual: ${policy.approvalWindowMinutes} min para responder.`
+      : 'Aceptación automática.',
+  ];
+}

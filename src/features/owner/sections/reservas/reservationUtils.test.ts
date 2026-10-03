@@ -6,6 +6,8 @@ import {
   countdownTo,
   explainRefundFailure,
   failedRefunds,
+  paidAmountArs,
+  policyLines,
   formatSlot,
   reasonLabel,
   refundChip,
@@ -296,5 +298,31 @@ describe('reasonLabel', () => {
     );
     expect(reasonLabel({ reason: 'Corte de luz' })).toBe('Corte de luz');
     expect(reasonLabel({ reason: null })).toBeNull();
+  });
+});
+
+describe('paidAmountArs y policyLines', () => {
+  it('toma el cobro aprobado, aunque después se haya reembolsado', () => {
+    expect(
+      paidAmountArs([
+        { status: 'rejected', amountArs: 100 },
+        { status: 'refunded', amountArs: 4500 },
+      ]),
+    ).toBe(4500);
+    expect(paidAmountArs([{ status: 'created', amountArs: 4500 }])).toBeNull();
+  });
+
+  it('resume la política de la reserva', () => {
+    const lines = policyLines(res().policy);
+    expect(lines[0]).toContain('gratis hasta 60 min');
+    expect(lines[0]).toContain('no se le devuelve nada');
+    expect(lines[2]).toBe('Aceptación automática.');
+    const manual = policyLines({
+      ...res().policy,
+      acceptanceMode: 'manual',
+      lateCancelRefundPct: 50,
+    });
+    expect(manual[0]).toContain('el 50 %');
+    expect(manual[2]).toContain('15 min para responder');
   });
 });
