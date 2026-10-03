@@ -10,8 +10,8 @@ export type ReservationHourRange =
   components['schemas']['ReservationHourRangeDto'];
 export type ReservationRequirement =
   components['schemas']['ReservationRequirement'];
-export type ReservationVehicleKind =
-  components['schemas']['ReservationVehicleKind'];
+export type ReservationVehicleCategory =
+  components['schemas']['ReservableVehicleCategory'];
 
 async function bearer(): Promise<string> {
   const session = await getSession();

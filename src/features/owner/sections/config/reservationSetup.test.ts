@@ -20,7 +20,7 @@ const service: ServiceItem = {
   enabled: false,
   reservableSpots: 8,
   reservationRateId: 'rate-1',
-  reservationVehicleKinds: ['car', 'suv_pickup'],
+  reservationVehicleCategories: ['car', 'suv'],
   reservationHoursMode: 'opening',
   acceptanceMode: 'auto',
   approvalWindowMinutes: 15,
@@ -59,9 +59,7 @@ describe('toReservationForm / isDirty', () => {
 
   it('el orden de los vehículos no ensucia', () => {
     const initial = toReservationForm(service, hours);
-    expect(isDirty({ ...initial, kinds: ['suv_pickup', 'car'] }, initial)).toBe(
-      false,
-    );
+    expect(isDirty({ ...initial, kinds: ['suv', 'car'] }, initial)).toBe(false);
     expect(isDirty({ ...initial, kinds: ['car'] }, initial)).toBe(true);
   });
 
@@ -101,7 +99,7 @@ describe('buildServicePatch', () => {
     expect(result).toEqual({
       patch: {
         reservableSpots: 10,
-        reservationVehicleKinds: ['car'],
+        reservationVehicleCategories: ['car'],
         reservationRateId: null,
         acceptanceMode: 'manual',
         lateCancelRefundPct: 50,

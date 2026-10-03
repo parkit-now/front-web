@@ -13,6 +13,8 @@ function makeType(overrides: Partial<VehicleType> = {}): VehicleType {
     tenantId: 'tenant-1',
     name: 'Auto',
     accepted: true,
+    category: 'car',
+    categoryInferred: false,
     vehicleCount: 0,
     version: 1,
     syncSeq: 1,

@@ -7,7 +7,7 @@ import type { Rate } from '../../services/rates';
 import type {
   ReservationHours,
   ReservationRequirement,
-  ReservationVehicleKind,
+  ReservationVehicleCategory,
   ServiceItem,
   UpdateServiceInput,
 } from '../../services/services';
@@ -25,7 +25,7 @@ export type HoursMode = ServiceItem['reservationHoursMode'];
 /** Texto de los campos numéricos tal cual los tipea la persona. */
 export interface ReservationForm {
   reservableSpots: string;
-  kinds: ReservationVehicleKind[];
+  kinds: ReservationVehicleCategory[];
   hoursMode: HoursMode;
   ranges: ScheduleRange[];
   rateId: string;
@@ -38,11 +38,13 @@ export interface ReservationForm {
 }
 
 export const VEHICLE_KIND_OPTIONS: {
-  id: ReservationVehicleKind;
+  id: ReservationVehicleCategory;
   label: string;
 }[] = [
   { id: 'car', label: 'Auto' },
-  { id: 'suv_pickup', label: 'SUV / Pickup' },
+  { id: 'suv', label: 'SUV' },
+  { id: 'pickup', label: 'Pickup' },
+  { id: 'van', label: 'Utilitario / Van' },
   { id: 'motorcycle', label: 'Moto' },
 ];
 
@@ -70,7 +72,7 @@ export function toReservationForm(
   return {
     reservableSpots:
       service.reservableSpots === null ? '' : String(service.reservableSpots),
-    kinds: [...service.reservationVehicleKinds],
+    kinds: [...service.reservationVehicleCategories],
     hoursMode: hours.mode,
     ranges: sortRanges(hours.ranges),
     rateId: service.reservationRateId ?? '',
@@ -185,7 +187,7 @@ export function buildServicePatch(
     JSON.stringify([...form.kinds].sort()) !==
     JSON.stringify([...initial.kinds].sort())
   ) {
-    patch.reservationVehicleKinds = [...form.kinds];
+    patch.reservationVehicleCategories = [...form.kinds];
   }
 
   return Object.keys(errors).length > 0 ? { errors } : { patch };
