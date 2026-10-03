@@ -8,6 +8,8 @@ import {
   buildServicePatch,
   hoursChanged,
   isDirty,
+  needsAttention,
+  planSaveSteps,
   readMissingFromProblem,
   toReservationForm,
   unreservedSpotsText,
@@ -187,6 +189,46 @@ describe('buildChecklist', () => {
     expect(buildChecklist([], ['spots'], true).some((i) => i.failed)).toBe(
       false,
     );
+  });
+});
+
+describe('buildChecklist con markAllMissingFailed', () => {
+  it('marca como fallidos todos los requisitos faltantes', () => {
+    const items = buildChecklist(['mp_account', 'rate'], [], true, true);
+    expect(items.map((i) => i.failed)).toEqual([
+      true,
+      false,
+      false,
+      false,
+      true,
+    ]);
+  });
+});
+
+describe('needsAttention', () => {
+  it('solo cuando está activa y no cumple los requisitos', () => {
+    expect(needsAttention(true, false)).toBe(true);
+    expect(needsAttention(true, true)).toBe(false);
+    expect(needsAttention(false, false)).toBe(false);
+    expect(needsAttention(false, true)).toBe(false);
+  });
+});
+
+describe('planSaveSteps', () => {
+  it('manda los horarios antes que la configuración', () => {
+    expect(planSaveSteps({ hasPatch: true, hasHours: true })).toEqual([
+      'hours',
+      'config',
+    ]);
+  });
+  it('omite lo que no cambió', () => {
+    expect(planSaveSteps({ hasPatch: true, hasHours: false })).toEqual([
+      'config',
+    ]);
+    expect(planSaveSteps({ hasPatch: false, hasHours: true })).toEqual([
+      'hours',
+    ]);
+    expect(planSaveSteps({ hasPatch: false, hasHours: false })).toEqual([]);
   });
 });
 

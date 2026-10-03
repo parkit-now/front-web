@@ -45,12 +45,25 @@ import {
   formatArs,
   hoursChanged,
   isDirty,
+  needsAttention,
+  planSaveSteps,
   readMissingFromProblem,
   toReservationForm,
   unreservedSpotsText,
   type FormErrors,
   type ReservationForm,
+  type SaveStep,
 } from './reservationSetup';
+
+/** Un paso de Guardar falló; `done` son los pasos que ya habían salido bien. */
+class PartialSaveError extends Error {
+  constructor(
+    readonly cause: unknown,
+    readonly done: SaveStep[],
+  ) {
+    super('save step failed');
+  }
+}
 
 interface ReservationSetupCardProps {
   service: ServiceItem;
@@ -173,10 +186,23 @@ export function ReservationSetupCard({ service }: ReservationSetupCardProps) {
       patch: Parameters<typeof updateService>[2];
       hours: ReturnType<typeof buildHoursPut> | null;
     }) => {
-      if (Object.keys(input.patch).length > 0) {
-        await updateService(sucursalId, 'ADVANCE_RESERVATION', input.patch);
+      const steps = planSaveSteps({
+        hasPatch: Object.keys(input.patch).length > 0,
+        hasHours: input.hours !== null,
+      });
+      const done: SaveStep[] = [];
+      for (const step of steps) {
+        try {
+          if (step === 'hours' && input.hours) {
+            await putReservationHours(sucursalId, input.hours);
+          } else if (step === 'config') {
+            await updateService(sucursalId, 'ADVANCE_RESERVATION', input.patch);
+          }
+        } catch (cause) {
+          throw new PartialSaveError(cause, done);
+        }
+        done.push(step);
       }
-      if (input.hours) await putReservationHours(sucursalId, input.hours);
     },
     onSuccess: () => {
       setHoursError(null);
@@ -186,15 +212,27 @@ export function ReservationSetupCard({ service }: ReservationSetupCardProps) {
         kind: 'success',
       });
     },
-    onError: (error) => {
+    onError: (raw) => {
+      const error = raw instanceof PartialSaveError ? raw.cause : raw;
+      const hoursSaved =
+        raw instanceof PartialSaveError && raw.done.includes('hours');
       const code =
         error instanceof ApiError && error.problem ? error.problem.code : '';
       if (typeof code === 'string' && code.startsWith('RESERVATION_HOURS_')) {
         setHoursError(translateApiError(error));
         return;
       }
-      showToast({ message: translateApiError(error), kind: 'error' });
+      showToast({
+        message: hoursSaved
+          ? `Se guardó el horario, pero no el resto de la configuración. ${translateApiError(error)}`
+          : translateApiError(error),
+        kind: 'error',
+      });
     },
+    // Siempre refresca: si un paso salió bien y el siguiente falló, el estado
+    // "del servidor" del form tiene que reflejar lo que realmente quedó. Los
+    // cambios pendientes de lo que no se guardó se conservan (los efectos solo
+    // reinician cada parte cuando cambian sus datos).
     onSettled: refresh,
   });
 
@@ -249,10 +287,12 @@ export function ReservationSetupCard({ service }: ReservationSetupCardProps) {
 
   const { readiness } = service;
   const missing = readiness.missing;
+  const attention = needsAttention(service.enabled, readiness.ready);
   const checklist = buildChecklist(
     missing,
     failedRequirements,
     rates.length > 0,
+    attention,
   );
   const mpLinked = mpQuery.data?.status === 'linked';
   const disabled = !canEdit || saveMutation.isPending;
@@ -333,6 +373,14 @@ export function ReservationSetupCard({ service }: ReservationSetupCardProps) {
             aria-label="Aceptar reservas desde la app"
           />
         </div>
+        {attention && (
+          <div style={{ marginTop: 10 }} data-testid="reservation-attention">
+            <Alert
+              variant="warn"
+              title="Los conductores no ven tu estacionamiento como reservable hasta que completes los requisitos marcados."
+            />
+          </div>
+        )}
         <ul
           data-testid="reservation-checklist"
           style={{

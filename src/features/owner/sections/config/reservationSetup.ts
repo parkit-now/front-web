@@ -198,6 +198,31 @@ export function buildHoursPut(form: ReservationForm): ReservationHours {
   };
 }
 
+// ------------------------------------------------------------------ guardado
+
+export type SaveStep = 'hours' | 'config';
+
+/**
+ * Pasos de Guardar, en orden. Los horarios van primero: el backend los valida
+ * contra el horario de apertura y es lo que más falla (400/422); así, si
+ * fallan, no queda la configuración guardada a medias. Solo se incluye lo que
+ * cambió.
+ */
+export function planSaveSteps(input: {
+  hasPatch: boolean;
+  hasHours: boolean;
+}): SaveStep[] {
+  const steps: SaveStep[] = [];
+  if (input.hasHours) steps.push('hours');
+  if (input.hasPatch) steps.push('config');
+  return steps;
+}
+
+/** Activas pero el backend dice que ya no cumplen los requisitos. */
+export function needsAttention(enabled: boolean, ready: boolean): boolean {
+  return enabled && !ready;
+}
+
 // ---------------------------------------------------------------- checklist
 
 export type ChecklistTarget =
@@ -231,13 +256,15 @@ export const SECTION_IDS: Record<ReservationRequirement, string> = {
 
 /**
  * Los 5 requisitos en el orden de la pantalla. `missing` viene del backend
- * (`readiness`); `failed` son los que marcó el último 422. Sin tarifas activas,
+ * (`readiness`); `failed` son los que marcó el último 422. Con
+ * `markAllMissingFailed` (activas sin readiness) todo lo faltante figura fallido. Sin tarifas activas,
  * el link de "Tarifa activa" lleva a crear una en Tarifas.
  */
 export function buildChecklist(
   missing: readonly ReservationRequirement[],
   failed: readonly ReservationRequirement[],
   hasActiveRates: boolean,
+  markAllMissingFailed = false,
 ): ChecklistItem[] {
   return CHECKLIST.map(({ key, label }) => {
     const ok = !missing.includes(key);
@@ -247,7 +274,8 @@ export function buildChecklist(
     if (key === 'rate' && !hasActiveRates) {
       target = { kind: 'route', to: '../tasas' };
     }
-    return { key, label, ok, failed: !ok && failed.includes(key), target };
+    const isFailed = !ok && (markAllMissingFailed || failed.includes(key));
+    return { key, label, ok, failed: isFailed, target };
   });
 }
 
