@@ -164,13 +164,14 @@ export function ReservasPage() {
     if (tab === 'pending' && !showPendingTab) setTab('upcoming');
   }, [tab, showPendingTab]);
 
-  // Con reservas por aceptar, se abre en esa pestaña la primera vez que se sabe.
-  const [pickedInitialTab, setPickedInitialTab] = useState(false);
+  // Con reservas por aceptar, se abre en esa pestaña la primera vez que se
+  // conocen los datos de cada estacionamiento (también al cambiar de sucursal).
+  const [pickedFor, setPickedFor] = useState<string | null>(null);
   useEffect(() => {
-    if (pickedInitialTab || board.isLoading) return;
-    setPickedInitialTab(true);
-    if (counts.pending > 0) setTab('pending');
-  }, [pickedInitialTab, board.isLoading, counts.pending]);
+    if (pickedFor === sucursalId || board.isLoading) return;
+    setPickedFor(sucursalId);
+    setTab(counts.pending > 0 ? 'pending' : 'upcoming');
+  }, [pickedFor, sucursalId, board.isLoading, counts.pending]);
 
   const rows = useMemo(
     () => board.reservations.filter((r) => tabOf(r) === tab),
