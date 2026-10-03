@@ -8,6 +8,7 @@ import {
   IconDollar,
   IconClock,
   IconInbox,
+  IconCalendar,
   IconAuto,
   IconLayers,
   IconCreditCard,
@@ -33,6 +34,11 @@ export const OWNER_NAV_ITEMS: NavItem[] = [
     segment: 'caja',
     label: 'Caja',
     icon: <IconInbox size={18} />,
+  },
+  {
+    segment: 'reservas',
+    label: 'Reservas',
+    icon: <IconCalendar size={18} />,
   },
   { segment: 'personal', label: 'Personal', icon: <IconUsers size={18} /> },
   {
@@ -84,6 +90,8 @@ interface OwnerSidebarProps {
   basePath?: string;
   /** Push the sticky sidebar down when an impersonation bar sits above it. */
   topOffset?: number;
+  /** Contador por sección (`segment`), p. ej. las reservas por aceptar. */
+  badges?: Record<string, number>;
 }
 
 export function OwnerSidebar({
@@ -92,6 +100,7 @@ export function OwnerSidebar({
   onSignOut,
   basePath = '/app',
   topOffset = 0,
+  badges = {},
 }: OwnerSidebarProps) {
   const { pathname } = useLocation();
 
@@ -164,7 +173,16 @@ export function OwnerSidebar({
               }}
             >
               {item.icon}
-              {item.label}
+              <span style={{ flex: 1 }}>{item.label}</span>
+              {(badges[item.segment] ?? 0) > 0 && (
+                <span
+                  className="pk-badge pk-badge-brand"
+                  aria-label={`${badges[item.segment]} por atender`}
+                  style={{ fontFamily: 'var(--mono)' }}
+                >
+                  {badges[item.segment]}
+                </span>
+              )}
             </Link>
           );
         })}

@@ -13,6 +13,7 @@ import { Button } from '../../../shared/components/ui/Button';
 import { IconBuilding } from '../../../shared/components/icons';
 import { MobileBottomNav } from '../../../shared/components/MobileBottomNav';
 import { OWNER_NAV_ITEMS, OwnerSidebar } from './OwnerSidebar';
+import { usePendingApprovalCount } from '../hooks/useReservations';
 import { OwnerTopBar } from './OwnerTopBar';
 import {
   AdminImpersonationBar,
@@ -83,6 +84,61 @@ function OwnerContent({ mode }: { mode: SucursalMode }) {
   return <Outlet />;
 }
 
+/**
+ * Chrome del portal (sidebar + nav móvil). Vive adentro del `SucursalProvider`
+ * porque el badge de "Reservas" (las que esperan la respuesta del dueño) se
+ * consulta por estacionamiento activo.
+ */
+function OwnerShell({
+  mode,
+  userName,
+  basePath,
+  onSignOut,
+}: {
+  mode: SucursalMode;
+  userName: string;
+  basePath: string;
+  onSignOut: () => void;
+}) {
+  const isAdmin = mode === 'admin';
+  const { sucursalId } = useSucursal();
+  const pendingReservations = usePendingApprovalCount(sucursalId);
+  const badges = { reservas: pendingReservations };
+  const sidebarOffset = isAdmin ? ADMIN_BAR_HEIGHT : 0;
+  const mobileNavItems = OWNER_NAV_ITEMS.map((item) => ({
+    to: `${basePath}/${item.segment}`,
+    label: item.label,
+    icon: item.icon,
+    badge: badges[item.segment as keyof typeof badges],
+  }));
+
+  return (
+    <div className="portal-shell">
+      {isAdmin && <AdminImpersonationBar />}
+      <div className="portal-body">
+        <OwnerSidebar
+          userName={userName}
+          userRole={isAdmin ? 'Administrador' : 'Dueño'}
+          onSignOut={onSignOut}
+          basePath={basePath}
+          topOffset={sidebarOffset}
+          badges={badges}
+        />
+        <div className="portal-content">
+          <OwnerTopBar />
+          <main className="portal-main">
+            <OwnerContent mode={mode} />
+          </main>
+        </div>
+      </div>
+      <MobileBottomNav
+        items={mobileNavItems}
+        ariaLabel="Navegación de operación"
+      />
+    </div>
+  );
+}
+
 export function OwnerPortal({ mode = 'owner' }: { mode?: SucursalMode }) {
   const navigate = useNavigate();
   const params = useParams();
@@ -109,37 +165,15 @@ export function OwnerPortal({ mode = 'owner' }: { mode?: SucursalMode }) {
   const basePath = isAdmin
     ? `/ops/estacionamientos/${params.tenantId ?? ''}`
     : '/app';
-  const sidebarOffset = isAdmin ? ADMIN_BAR_HEIGHT : 0;
-  const mobileNavItems = OWNER_NAV_ITEMS.map((item) => ({
-    to: `${basePath}/${item.segment}`,
-    label: item.label,
-    icon: item.icon,
-  }));
 
   return (
     <SucursalProvider mode={mode}>
-      <div className="portal-shell">
-        {isAdmin && <AdminImpersonationBar />}
-        <div className="portal-body">
-          <OwnerSidebar
-            userName={userName}
-            userRole={isAdmin ? 'Administrador' : 'Dueño'}
-            onSignOut={() => void handleSignOut()}
-            basePath={basePath}
-            topOffset={sidebarOffset}
-          />
-          <div className="portal-content">
-            <OwnerTopBar />
-            <main className="portal-main">
-              <OwnerContent mode={mode} />
-            </main>
-          </div>
-        </div>
-        <MobileBottomNav
-          items={mobileNavItems}
-          ariaLabel="Navegación de operación"
-        />
-      </div>
+      <OwnerShell
+        mode={mode}
+        userName={userName}
+        basePath={basePath}
+        onSignOut={() => void handleSignOut()}
+      />
     </SucursalProvider>
   );
 }

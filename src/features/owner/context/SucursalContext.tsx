@@ -57,6 +57,7 @@ const SucursalContext = createContext<SucursalContextValue | null>(null);
 const SECTIONS = [
   'historial',
   'caja',
+  'reservas',
   'personal',
   'estadisticas',
   'auditoria',
