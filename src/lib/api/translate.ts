@@ -66,6 +66,7 @@ export type EndpointKey =
   | 'services.toggle'
   | 'metrics.revenue'
   | 'metrics.byPaymentMethod'
+  | 'metrics.byVehicleCategory'
   | 'metrics.topPlates'
   | 'metrics.summary'
   | 'cashSessions.list'
@@ -192,8 +193,8 @@ const CODE_MESSAGES: Record<string, string> = {
     'Los horarios de reservas no pueden superponerse y la hora de cierre debe ser posterior a la de apertura.',
   RESERVATION_HOURS_OUTSIDE_OPENING:
     'El horario de reservas tiene que estar dentro del horario del estacionamiento.',
-  RESERVATION_VEHICLE_KIND_NOT_ACCEPTED:
-    'Este estacionamiento no acepta reservas para ese tipo de vehículo.',
+  RESERVATION_VEHICLE_CATEGORY_NOT_ACCEPTED:
+    'Este estacionamiento no acepta reservas para esa categoría de vehículo.',
   RESERVATION_OUTSIDE_RESERVATION_HOURS:
     'La reserva queda fuera del horario de reservas.',
 

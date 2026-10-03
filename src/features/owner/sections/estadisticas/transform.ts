@@ -2,6 +2,7 @@ import type {
   PaymentMethodBreakdown,
   TopPlate,
   TopPlatesOrderBy,
+  VehicleCategoryBreakdown,
 } from '../../services/metrics';
 import { AR_TZ, type Granularity } from '../../../../shared/utils/ar-datetime';
 
@@ -157,8 +158,10 @@ export interface PieSlice {
   amount: number;
   /** Proporción sobre el total, 0–1. */
   share: number;
-  /** Recaudación sin método asociado. */
+  /** Recaudación sin método asociado ("Sin detalle") o sin categoría ("Sin dato"). */
   isUnallocated: boolean;
+  /** Texto secundario de la leyenda, p. ej. "12 estadías". */
+  detail?: string;
 }
 
 export const UNALLOCATED_LABEL = 'Sin detalle';
@@ -225,4 +228,43 @@ export function formatMinutes(totalMinutes: number): string {
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
   return hours > 0 ? `${hours}h ${rest}m` : `${rest}m`;
+}
+
+export const NO_CATEGORY_LABEL = 'Sin dato';
+
+/**
+ * Porciones de la torta por categoría. La recaudación manda (es lo que dice el
+ * centro del gráfico); la cantidad de estadías va como detalle. "Sin dato"
+ * (`category: null`) se pinta en gris y queda última, igual que "Sin detalle".
+ */
+export function buildCategorySlices(
+  breakdown: VehicleCategoryBreakdown,
+  labelOf: (code: string) => string,
+): PieSlice[] {
+  const slices = breakdown.categories.map((slice): PieSlice => {
+    const share =
+      breakdown.totalRevenue > 0
+        ? slice.revenue / breakdown.totalRevenue
+        : (slice.share ?? 0);
+    return {
+      name:
+        slice.category === null ? NO_CATEGORY_LABEL : labelOf(slice.category),
+      amount: slice.revenue,
+      share,
+      isUnallocated: slice.category === null,
+      detail: slice.stays === 1 ? '1 estadía' : `${slice.stays} estadías`,
+    };
+  });
+  // Sin dato siempre al final, aunque el backend ya lo mande así.
+  return [
+    ...slices.filter((s) => !s.isUnallocated),
+    ...slices.filter((s) => s.isUnallocated),
+  ];
+}
+
+/** Hay estadías sin categoría en el período (para la nota de la torta). */
+export function hasUncategorizedStays(
+  breakdown: VehicleCategoryBreakdown,
+): boolean {
+  return breakdown.categories.some((c) => c.category === null && c.stays > 0);
 }

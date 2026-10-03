@@ -55,6 +55,21 @@ export function validateReassignTarget(
   return null;
 }
 
+/**
+ * Los destinos partidos en los de la misma categoría que el tipo que se borra
+ * (lo razonable: las estadísticas y las reservas no cambian) y el resto.
+ */
+export function splitReassignTargets(
+  types: VehicleType[],
+  deleting: Pick<VehicleType, 'id' | 'category'>,
+): { sameCategory: VehicleType[]; others: VehicleType[] } {
+  const targets = reassignTargets(types, deleting.id);
+  return {
+    sameCategory: targets.filter((t) => t.category === deleting.category),
+    others: targets.filter((t) => t.category !== deleting.category),
+  };
+}
+
 /** "1 vehículo usa" / "N vehículos usan". */
 export function describeUsage(count: number): string {
   return count === 1

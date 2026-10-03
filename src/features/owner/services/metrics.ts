@@ -17,7 +17,13 @@ type RevenueQuery = NonNullable<
 >;
 
 export type Granularity = NonNullable<RevenueQuery['granularity']>;
-export type VehicleTypeFilter = NonNullable<RevenueQuery['vehicleType']>;
+export type VehicleCategoryFilter = NonNullable<
+  RevenueQuery['vehicleCategory']
+>;
+export type VehicleCategoryBreakdown =
+  components['schemas']['VehicleCategoryBreakdownDto'];
+export type VehicleCategorySlice =
+  components['schemas']['VehicleCategorySliceDto'];
 export type TopPlatesOrderBy = NonNullable<
   NonNullable<
     operations['metricsGetTopPlates']['parameters']['query']
@@ -43,7 +49,7 @@ export type MetricsScope =
 export type MetricsWindow = MetricsScope & {
   tenantId: string;
   tz?: string;
-  vehicleType?: VehicleTypeFilter;
+  vehicleCategory?: VehicleCategoryFilter;
 };
 
 async function bearer(): Promise<string> {
@@ -67,7 +73,11 @@ function windowParams(input: MetricsWindow): URLSearchParams {
     params.set('to', input.to);
   }
   params.set('tz', input.tz ?? AR_TZ);
-  if (input.vehicleType) params.set('vehicleType', input.vehicleType);
+  // `vehicleType` (texto libre) está deprecado en el backend: se filtra por
+  // categoría, que es estable aunque el dueño renombre sus tipos.
+  if (input.vehicleCategory) {
+    params.set('vehicleCategory', input.vehicleCategory);
+  }
   return params;
 }
 
@@ -129,6 +139,26 @@ export async function getRevenueByPaymentMethod(
 }
 
 /**
+ * Estadías y recaudación por categoría de vehículo (la torta por categoría).
+ *
+ * `category: null` es "Sin dato": estadías anteriores a las categorías o de una
+ * caja que todavía no la envía. Viene siempre última.
+ */
+export async function getVehicleCategoryBreakdown(
+  input: MetricsWindow,
+): Promise<VehicleCategoryBreakdown> {
+  return apiRequest<VehicleCategoryBreakdown>({
+    method: 'GET',
+    path: metricsPath(
+      input.tenantId,
+      'by-vehicle-category',
+      windowParams(input),
+    ),
+    bearer: await bearer(),
+  });
+}
+
+/**
  * Ranking de patentes. Las tres métricas vienen siempre, así que cambiar el
  * criterio de orden es un re-sort en cliente mientras no cambie `limit`.
  *
@@ -163,6 +193,5 @@ export async function getMetricsSummary(input: {
 }
 
 // `GET /metrics/occupancy` no se consume: la ocupación que muestra el panel sale
-// de `/metrics/summary`. Si algún día el monitor en vivo necesita el desglose
-// `byVehicleType`, tener en cuenta que sus `type` son nombres históricos y
-// pueden no existir ya en el catálogo del tenant.
+// de `/metrics/summary`. Si algún día el monitor en vivo necesita el desglose,
+// que use `byVehicleCategory` (`byVehicleType` está deprecado).

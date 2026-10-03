@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { PaymentMethodBreakdown, TopPlate } from '../../services/metrics';
+import type {
+  PaymentMethodBreakdown,
+  TopPlate,
+  VehicleCategoryBreakdown,
+} from '../../services/metrics';
 import {
+  NO_CATEGORY_LABEL,
   UNALLOCATED_LABEL,
+  buildCategorySlices,
   buildPieSlices,
   formatAxisValue,
   formatBucketLabel,
@@ -9,6 +15,7 @@ import {
   formatMinutes,
   formatWindowLabel,
   hasInconsistentUnallocated,
+  hasUncategorizedStays,
   niceTicks,
   sortTopPlates,
 } from './transform';
@@ -258,5 +265,108 @@ describe('formatMinutes', () => {
 
   it('redondea los minutos fraccionarios', () => {
     expect(formatMinutes(59.6)).toBe('1h 0m');
+  });
+});
+
+describe('buildCategorySlices', () => {
+  const labels: Record<string, string> = {
+    car: 'Auto',
+    van: 'Utilitario / Van',
+  };
+  const labelOf = (code: string) => labels[code] ?? code;
+
+  function makeCategoryBreakdown(
+    overrides: Partial<VehicleCategoryBreakdown> = {},
+  ): VehicleCategoryBreakdown {
+    return {
+      from: '2026-10-01T00:00:00.000Z',
+      to: '2026-10-08T00:00:00.000Z',
+      currency: 'ARS',
+      totalStays: 10,
+      totalRevenue: 10000,
+      categories: [
+        { category: 'car', stays: 6, revenue: 6000, share: 0.6 },
+        { category: 'van', stays: 1, revenue: 3000, share: 0.1 },
+        { category: null, stays: 3, revenue: 1000, share: 0.3 },
+      ],
+      ...overrides,
+    };
+  }
+
+  it('usa las etiquetas y deja "Sin dato" gris y al final', () => {
+    const slices = buildCategorySlices(makeCategoryBreakdown(), labelOf);
+    expect(slices.map((s) => s.name)).toEqual([
+      'Auto',
+      'Utilitario / Van',
+      NO_CATEGORY_LABEL,
+    ]);
+    expect(slices.map((s) => s.isUnallocated)).toEqual([false, false, true]);
+  });
+
+  it('reordena "Sin dato" al final aunque llegue en el medio', () => {
+    const base = makeCategoryBreakdown();
+    const slices = buildCategorySlices(
+      {
+        ...base,
+        categories: [
+          base.categories[2],
+          base.categories[0],
+          base.categories[1],
+        ],
+      },
+      labelOf,
+    );
+    expect(slices[2].name).toBe(NO_CATEGORY_LABEL);
+  });
+
+  it('la proporción es sobre la recaudación y suma 1', () => {
+    const slices = buildCategorySlices(makeCategoryBreakdown(), labelOf);
+    expect(slices[1].share).toBeCloseTo(0.3, 5);
+    expect(slices.reduce((a, s) => a + s.share, 0)).toBeCloseTo(1, 5);
+  });
+
+  it('sin recaudación cae a la proporción de estadías del backend', () => {
+    const slices = buildCategorySlices(
+      makeCategoryBreakdown({
+        totalRevenue: 0,
+        categories: [{ category: 'car', stays: 1, revenue: 0, share: 1 }],
+      }),
+      labelOf,
+    );
+    expect(slices[0].share).toBe(1);
+  });
+
+  it('muestra la cantidad de estadías como detalle', () => {
+    const slices = buildCategorySlices(makeCategoryBreakdown(), labelOf);
+    expect(slices[0].detail).toBe('6 estadías');
+    expect(slices[1].detail).toBe('1 estadía');
+  });
+});
+
+describe('hasUncategorizedStays', () => {
+  const base = {
+    from: '',
+    to: '',
+    currency: 'ARS',
+    totalStays: 0,
+    totalRevenue: 0,
+  };
+
+  it('detecta la porción "Sin dato" con estadías', () => {
+    expect(
+      hasUncategorizedStays({
+        ...base,
+        categories: [{ category: null, stays: 2, revenue: 0, share: 1 }],
+      }),
+    ).toBe(true);
+  });
+
+  it('no avisa si todas las estadías tienen categoría', () => {
+    expect(
+      hasUncategorizedStays({
+        ...base,
+        categories: [{ category: 'car', stays: 2, revenue: 0, share: 1 }],
+      }),
+    ).toBe(false);
   });
 });

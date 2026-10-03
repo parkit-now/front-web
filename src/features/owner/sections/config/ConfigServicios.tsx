@@ -7,6 +7,8 @@ import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { ApiError } from '../../../../lib/api/client';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useSucursal } from '../../context/SucursalContext';
+import { useVehicleCategories } from '../../hooks/useVehicleCategories';
+import { categoryLabel } from '../../services/vehicle-categories';
 import { listServices } from '../../services/services';
 import {
   listVehicleTypes,
@@ -40,6 +42,7 @@ export function ConfigServicios() {
   });
   const types = useMemo(() => typesQuery.data ?? [], [typesQuery.data]);
 
+  const { categories } = useVehicleCategories();
   const [busyTypeId, setBusyTypeId] = useState<string | null>(null);
 
   /**
@@ -99,8 +102,23 @@ export function ConfigServicios() {
 
       {reservation && <ReservationSetupCard service={reservation} />}
 
+      {/* Separación deliberada: lo de arriba son las reservas desde la app, lo
+          de abajo es qué se puede cobrar en la caja. Son configuraciones
+          independientes y no se bloquean entre sí. */}
+      <hr
+        style={{
+          border: 0,
+          borderTop: '1px solid var(--border-soft)',
+          margin: '8px 0 0',
+        }}
+      />
+
       <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <h3 style={sectionTitle}>Vehículos aceptados en la caja</h3>
+        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-3)' }}>
+          Qué tipos de vehículo puede registrar el operador en la caja. No
+          afecta a las reservas desde la app.
+        </p>
 
         {typesQuery.isLoading && (
           <p style={{ margin: 0, fontSize: 13, color: 'var(--text-3)' }}>
@@ -146,6 +164,16 @@ export function ConfigServicios() {
                   }}
                 >
                   {type.name}
+                  <span
+                    style={{
+                      marginLeft: 8,
+                      fontSize: 12,
+                      fontWeight: 400,
+                      color: 'var(--text-3)',
+                    }}
+                  >
+                    {categoryLabel(categories, type.category)}
+                  </span>
                 </span>
                 <Switch
                   checked={type.accepted}

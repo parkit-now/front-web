@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { Button } from '../../../../shared/components/ui/Button';
 import { Input } from '../../../../shared/components/ui/Input';
 import { Modal } from '../../../../shared/components/ui/Modal';
+import { useVehicleCategories } from '../../hooks/useVehicleCategories';
+import { typeOptionLabel } from '../../services/vehicle-categories';
 import type { VehicleType } from '../../services/vehicle-types';
 import type { Vehicle } from '../../services/vehicles';
 import {
@@ -52,6 +54,7 @@ export function VehicleFormModal({
   onSubmit,
 }: VehicleFormModalProps) {
   const isEdit = vehicle !== null;
+  const { categories } = useVehicleCategories();
   const [form, setForm] = useState<VehicleFormState>(emptyVehicleForm);
   const [errors, setErrors] = useState<VehicleFormErrors>({});
 
@@ -171,7 +174,7 @@ export function VehicleFormModal({
               </option>
               {types.map((type) => (
                 <option key={type.id} value={type.id}>
-                  {type.name}
+                  {typeOptionLabel(type, categories)}
                 </option>
               ))}
             </>
