@@ -382,6 +382,7 @@ describe('audit utils', () => {
       ['reservation.rejected', 'Reserva rechazada'],
       ['reservation.cancelled', 'Reserva cancelada'],
       ['reservation.refund_retried', 'Reembolso reintentado'],
+      ['reservation.refund_confirmed', 'Reembolso confirmado'],
       ['reservation.refund_failed', 'Reembolso fallido'],
       ['reservation.late_payment_refunded', 'Pago tardío reembolsado'],
     ])('%s se llama "%s" y el dueño la ve', (action, label) => {

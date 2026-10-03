@@ -133,6 +133,7 @@ const RESERVATION_AUDIT_ACTIONS = [
   'reservation.rejected',
   'reservation.cancelled',
   'reservation.refund_retried',
+  'reservation.refund_confirmed',
   'reservation.refund_failed',
   'reservation.late_payment_refunded',
 ] as const;
@@ -393,6 +394,7 @@ const OTHER_ACTION_LABELS: Record<string, string> = {
   'reservation.rejected': 'Reserva rechazada',
   'reservation.cancelled': 'Reserva cancelada',
   'reservation.refund_retried': 'Reembolso reintentado',
+  'reservation.refund_confirmed': 'Reembolso confirmado',
   'reservation.refund_failed': 'Reembolso fallido',
   'reservation.late_payment_refunded': 'Pago tardío reembolsado',
 };
