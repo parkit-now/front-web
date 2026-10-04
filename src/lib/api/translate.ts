@@ -198,6 +198,24 @@ const CODE_MESSAGES: Record<string, string> = {
   RESERVATION_OUTSIDE_RESERVATION_HOURS:
     'La reserva queda fuera del horario de reservas.',
 
+  // Reservas pagas: acciones del dueño y del conductor sobre una reserva.
+  RESERVATION_NOT_FOUND: 'No encontramos la reserva.',
+  RESERVATION_NOT_CANCELLABLE:
+    'Esta reserva ya no se puede cancelar. Actualizá la lista para ver cómo quedó.',
+  RESERVATION_NOT_PENDING_APPROVAL:
+    'Esta reserva ya no está esperando tu respuesta. Actualizá la lista para ver cómo quedó.',
+  RESERVATION_APPROVAL_EXPIRED:
+    'Se pasó el plazo para responder: la reserva se rechazó sola y se reembolsó al conductor.',
+  RESERVATION_REFUND_NOT_RETRYABLE:
+    'Este reembolso no está fallido, así que no hay nada para reintentar.',
+  RESERVATION_REASON_REQUIRED: 'Escribí el motivo para continuar.',
+  RESERVATION_NO_CAPACITY: 'Ya no quedan lugares disponibles en esa franja.',
+  RESERVATION_NOT_PAYABLE: 'Esta reserva ya no admite pago.',
+  RESERVATION_ALREADY_PAID: 'Esta reserva ya está paga.',
+  RESERVATION_HOLD_EXPIRED: 'Venció el tiempo de espera para pagar la reserva.',
+  RESERVATION_CHECKOUT_UNAVAILABLE:
+    'No pudimos abrir el pago de la reserva. Volvé a intentarlo en unos minutos.',
+
   // Cajas. El mismo code cubre una caja inexistente y una de otra sucursal, a
   // propósito: distinguirlos le confirmaría a un tercero que el id existe.
   CASH_SESSION_NOT_FOUND:
