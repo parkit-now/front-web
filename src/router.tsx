@@ -10,6 +10,10 @@ import { CajaPage } from './features/owner/sections/operacion/CajaPage';
 import { ReservasPage } from './features/owner/sections/reservas/ReservasPage';
 import { AuditoriaPage } from './features/owner/sections/auditoria/AuditoriaPage';
 import { ConfigPage } from './features/owner/sections/config/ConfigPage';
+import { ConfigPerfil } from './features/owner/sections/config/ConfigPerfil';
+import { ConfigHorarios } from './features/owner/sections/config/ConfigHorarios';
+import { ConfigServicios } from './features/owner/sections/config/ConfigServicios';
+import { ConfigRetencion } from './features/owner/sections/config/ConfigRetencion';
 import { PaymentMethodsPage } from './features/owner/sections/payment-methods/PaymentMethodsPage';
 import { IntegracionesPage } from './features/owner/sections/integraciones/IntegracionesPage';
 import {
@@ -19,7 +23,7 @@ import {
 import { ArcaWizardPage } from './features/owner/sections/integraciones/arca/ArcaWizardPage';
 import { ArcaEmisionPage } from './features/owner/sections/integraciones/arca/ArcaEmisionPage';
 import { ArcaRenovarPage } from './features/owner/sections/integraciones/arca/ArcaRenovarPage';
-import { TasasPage } from './features/owner/sections/tasas/TasasPage';
+import { TarifasPage } from './features/owner/sections/tarifas/TarifasPage';
 import { TiposVehiculoPage } from './features/owner/sections/tipos-de-vehiculo/TiposVehiculoPage';
 import { VehiculosPage } from './features/owner/sections/vehiculos/VehiculosPage';
 import { SolicitudesPage } from './features/admin/sections/solicitudes/SolicitudesPage';
@@ -89,7 +93,8 @@ const ownerSectionRoutes = [
     path: 'revision-lpr',
     element: <Navigate to="../auditoria?tab=lpr" replace />,
   },
-  { path: 'tasas', element: <TasasPage /> },
+  { path: 'tarifas', element: <TarifasPage /> },
+  { path: 'tasas', element: <Navigate to="../tarifas" replace /> },
   { path: 'vehiculos', element: <VehiculosPage /> },
   { path: 'tipos-de-vehiculo', element: <TiposVehiculoPage /> },
   { path: 'metodos-de-pago', element: <PaymentMethodsPage /> },
@@ -97,7 +102,17 @@ const ownerSectionRoutes = [
   { path: 'integraciones/arca/vincular', element: <ArcaWizardPage /> },
   { path: 'integraciones/arca/emision', element: <ArcaEmisionPage /> },
   { path: 'integraciones/arca/renovar', element: <ArcaRenovarPage /> },
-  { path: 'config', element: <ConfigPage /> },
+  {
+    path: 'config',
+    element: <ConfigPage />,
+    children: [
+      { index: true, element: <Navigate to="perfil" replace /> },
+      { path: 'perfil', element: <ConfigPerfil /> },
+      { path: 'horarios', element: <ConfigHorarios /> },
+      { path: 'servicios', element: <ConfigServicios /> },
+      { path: 'retencion', element: <ConfigRetencion /> },
+    ],
+  },
 ];
 
 /**

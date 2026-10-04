@@ -447,6 +447,12 @@ function reservationSummary(
     return `${who} rechazó la reserva${suffix}`;
   }
   if (action === 'reservation.cancelled') {
+    const role = readString(metadata, 'actorRole');
+    // Cancelación del lado del estacionamiento (dueño/operador/admin): el
+    // backend la marca como advertencia, y se dice así de claro.
+    if (role === 'owner' || role === 'operator' || role === 'admin') {
+      return `Reserva${suffix} cancelada por el estacionamiento (${who})`;
+    }
     return `${who} canceló la reserva${suffix}`;
   }
   if (action === 'reservation.refund_retried') {

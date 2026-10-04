@@ -12,7 +12,7 @@ import type { CatalogMatch } from '../../../lib/locations/catalog';
  * campos de texto y la regla de `geocodingSource`.
  *
  * Vive separada del componente (y con tests colocalizados) por la misma razón
- * que `sections/tasas/validation.ts`: es la parte que se puede romper en
+ * que `sections/tarifas/validation.ts`: es la parte que se puede romper en
  * silencio, y probarla no necesita ni DOM ni red.
  */
 

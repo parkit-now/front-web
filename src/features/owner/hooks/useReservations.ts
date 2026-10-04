@@ -17,6 +17,7 @@ import {
   type OwnerReservation,
   type OwnerReservationDetail,
 } from '../services/reservations';
+import { listServices } from '../services/services';
 import {
   HISTORY_STATUSES,
   LIVE_STATUSES,
@@ -204,4 +205,23 @@ export function useNow(active: boolean, intervalMs = 1000): number {
     return () => window.clearInterval(id);
   }, [active, intervalMs]);
   return now;
+}
+
+/**
+ * Estado del servicio ADVANCE_RESERVATION del estacionamiento. `enabled` es
+ * `undefined` mientras carga (no mostrar avisos hasta saberlo).
+ */
+export function useReservationService(tenantId: string) {
+  const query = useQuery({
+    queryKey: ['services', tenantId],
+    queryFn: () => listServices(tenantId),
+    enabled: Boolean(tenantId),
+    staleTime: 30_000,
+  });
+  const service = query.data?.find((s) => s.code === 'ADVANCE_RESERVATION');
+  return {
+    isLoading: query.isLoading,
+    enabled: service ? service.enabled : undefined,
+    acceptanceMode: service?.acceptanceMode,
+  };
 }

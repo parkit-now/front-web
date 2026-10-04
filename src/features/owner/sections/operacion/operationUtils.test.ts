@@ -182,6 +182,88 @@ describe('operation utils', () => {
   });
 });
 
+describe('computeSessionStats — cobrado por reservas', () => {
+  const NOW = new Date('2026-09-21T18:00:00.000Z').getTime();
+
+  it('suma el prepago de los que salieron, sin tocar el efectivo esperado', () => {
+    const stats = computeSessionStats(
+      cashSession({ openingCash: 700 }),
+      [
+        entry({
+          id: 'entry-1',
+          cashSessionId: 'cash-1',
+          leftAt: '2026-09-21T11:00:00.000Z',
+          prepaidAmountArs: 4500,
+        }),
+        entry({
+          id: 'entry-2',
+          cashSessionId: 'cash-1',
+          leftAt: undefined,
+          prepaidAmountArs: 3000,
+        }),
+      ],
+      [payment({ entryId: 'entry-1', amount: 0 })],
+      NOW,
+    );
+    expect(stats.reservationPrepaid).toBe(4500);
+    expect(stats.summary.cashTotal).toBe(700);
+    expect(stats.summary.grandTotal).toBe(0);
+  });
+
+  it('entró en una caja y salió en otra: cuenta en la de salida (la de sus pagos)', () => {
+    const entries = [
+      entry({
+        id: 'entry-1',
+        cashSessionId: 'cash-1', // caja de entrada
+        leftAt: '2026-09-21T15:00:00.000Z',
+        prepaidAmountArs: 1000,
+      }),
+    ];
+    const payments = [
+      payment({ entryId: 'entry-1', cashSessionId: 'cash-2', amount: 200 }),
+    ];
+    const closed = cashSession({
+      id: 'cash-1',
+      closedAt: '2026-09-21T14:00:00.000Z',
+    });
+    const exit = cashSession({
+      id: 'cash-2',
+      openedAt: '2026-09-21T14:00:00.000Z',
+    });
+    expect(
+      computeSessionStats(closed, entries, payments, NOW).reservationPrepaid,
+    ).toBe(0);
+    expect(
+      computeSessionStats(exit, entries, payments, NOW).reservationPrepaid,
+    ).toBe(1000);
+  });
+
+  it('sin pagos (salida de $0) usa la ventana de la caja, con fin exclusivo', () => {
+    const entries = [
+      entry({
+        id: 'entry-1',
+        cashSessionId: 'cash-1',
+        leftAt: '2026-09-21T14:00:00.000Z',
+        prepaidAmountArs: 1000,
+      }),
+    ];
+    const closed = cashSession({
+      id: 'cash-1',
+      closedAt: '2026-09-21T14:00:00.000Z',
+    });
+    const next = cashSession({
+      id: 'cash-2',
+      openedAt: '2026-09-21T14:00:00.000Z',
+    });
+    expect(
+      computeSessionStats(closed, entries, [], NOW).reservationPrepaid,
+    ).toBe(0);
+    expect(computeSessionStats(next, entries, [], NOW).reservationPrepaid).toBe(
+      1000,
+    );
+  });
+});
+
 describe('attachPaymentsToEntries — factura', () => {
   it('une la factura de la estadía y resuelve el estado y el receptor', () => {
     const [row] = attachPaymentsToEntries(

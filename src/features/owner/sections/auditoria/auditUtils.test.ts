@@ -452,7 +452,9 @@ describe('audit utils', () => {
 
       expect(row.actorName).toBe('Operador Once');
       expect(row.actorRole).toBe('Operador');
-      expect(row.summary).toBe('Operador canceló la reserva de AB123CD');
+      expect(row.summary).toBe(
+        'Reserva de AB123CD cancelada por el estacionamiento (Operador)',
+      );
       expect(row.plate).toBe('AB123CD');
       expect(row.reason).toBe('Cierre por mantenimiento');
       expect(row.moneyImpact).toBe('Reembolso $9.000');

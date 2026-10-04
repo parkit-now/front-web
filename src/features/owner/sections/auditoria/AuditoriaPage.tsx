@@ -1412,6 +1412,8 @@ export function AuditoriaPage() {
   const [selected, setSelected] = useState<AuditRow | null>(null);
   const [onlyCurrentCashSession, setOnlyCurrentCashSession] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  // Filas visibles en la tabla de eventos con todos los filtros activos.
+  const [visibleCount, setVisibleCount] = useState<number | null>(null);
   const [lprSearch, setLprSearch] = useState('');
   const [lprFilters, setLprFilters] = useState<LprFilterState>(() =>
     clearLprFilters(),
@@ -1524,9 +1526,20 @@ export function AuditoriaPage() {
   const suspiciousDismissals = lprEvents.filter(
     (event) => event.confidence >= SUSPICIOUS_LPR_CONFIDENCE,
   ).length;
+  // Eventos que el dueño tiene que mirar: severidad real warn o crit.
   const criticalCount = periodRows.filter(
-    (row) => row.actionKind !== 'other',
+    (row) => row.severity === 'warn' || row.severity === 'crit',
   ).length;
+  // Con la pestaña de eventos activa manda el conteo de la tabla (todos los
+  // filtros). Sin la tabla montada (pestaña Patentes) se aproxima con el
+  // filtro por defecto de severidad, y se descarta lo que quedó viejo.
+  useEffect(() => {
+    if (activeTab !== 'events') setVisibleCount(null);
+  }, [activeTab, rows]);
+  const eventsCount =
+    visibleCount ??
+    rows.filter((row) => row.severity === 'warn' || row.severity === 'crit')
+      .length;
   const riskMetrics = useMemo<AuditRiskMetrics>(() => {
     let underchargedLoss = 0;
     let chargeReductionLoss = 0;
@@ -1556,13 +1569,13 @@ export function AuditoriaPage() {
 
     return {
       chargeReductionLoss,
-      periodEvents: periodRows.length,
+      periodEvents: eventsCount,
       possibleLoss: underchargedLoss + chargeReductionLoss,
       suspiciousDismissals,
       suggestedReductionRisk,
       underchargedLoss,
     };
-  }, [periodRows, suspiciousDismissals]);
+  }, [periodRows, suspiciousDismissals, eventsCount]);
 
   const cashSessionOptions = useMemo(() => {
     const byId = new Map<string, string>();
@@ -1786,7 +1799,7 @@ export function AuditoriaPage() {
           aria-selected={activeTab === 'events'}
         >
           Eventos
-          <span>{rows.length}</span>
+          <span>{eventsCount}</span>
         </button>
         <button
           type="button"
@@ -1876,6 +1889,7 @@ export function AuditoriaPage() {
               auditQuery.isFetching || cashSessionsQuery.isFetching
             }
             onRowClick={setSelected}
+            onFilteredCountChange={setVisibleCount}
             toolbarLeading={
               <div className="dt-quick-switches">
                 <QuickSwitch

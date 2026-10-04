@@ -161,6 +161,28 @@ function CashAudit({ stats }: { stats: SessionStats }) {
           </>
         ) : null}
       </div>
+      {stats.reservationPrepaid > 0 ? (
+        <div
+          className="operation-audit-box"
+          style={{ marginTop: 8 }}
+          data-testid="caja-reservation-prepaid"
+        >
+          <div className="operation-audit-row">
+            <span>Cobrado por reservas (Mercado Pago)</span>
+            <strong>{fmtMoney(stats.reservationPrepaid)}</strong>
+          </div>
+          <p
+            style={{
+              margin: '4px 0 0',
+              fontSize: 12,
+              color: 'var(--text-3)',
+            }}
+          >
+            Informativo: se cobró online, no pasó por la caja y no suma al
+            efectivo esperado.
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }

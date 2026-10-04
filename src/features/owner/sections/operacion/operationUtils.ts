@@ -57,6 +57,12 @@ export interface SessionStats {
   shiftDurationMinutes: number | null;
   topRate: { name: string; count: number } | null;
   withdrawnCash: number | null;
+  /**
+   * Informativo: lo que los conductores prepagaron con reserva (Mercado Pago)
+   * en los autos que salieron en esta caja. NO entra en el efectivo esperado ni
+   * en los totales del cajón: esa plata no pasó por la caja.
+   */
+  reservationPrepaid: number;
 }
 
 export function localDateKey(iso: string | undefined): string {
@@ -276,6 +282,47 @@ function topRate(entries: Entry[]): { name: string; count: number } | null {
   return top;
 }
 
+/**
+ * REGLA ÚNICA (web, desktop y backend): el prepago de una reserva se acredita
+ * cuando el auto SALE, así que pertenece a la caja bajo la cual salió.
+ *  1. Si la estadía tiene pagos, la caja de salida es la de sus pagos
+ *     (`payment_transactions.cashSessionId`).
+ *  2. Si no tiene pagos (salida de $0 por prepago), se usa la ventana de la
+ *     caja: `leftAt ∈ [openedAt, closedAt ?? ahora)`. Hay a lo sumo una caja
+ *     abierta por estacionamiento, así que las ventanas no se solapan.
+ * No usar `entry.cashSessionId`: es la caja de entrada y se reasigna al cerrar.
+ */
+function computeReservationPrepaid(
+  session: CashSession,
+  entries: Entry[],
+  transactions: PaymentTransaction[],
+  now: number,
+): number {
+  const from = Date.parse(session.openedAt);
+  const to = session.closedAt ? Date.parse(session.closedAt) : now;
+  const sessionsByEntry = new Map<string, Set<string>>();
+  for (const tx of transactions) {
+    if (!tx.cashSessionId) continue;
+    const set = sessionsByEntry.get(tx.entryId) ?? new Set<string>();
+    set.add(tx.cashSessionId);
+    sessionsByEntry.set(tx.entryId, set);
+  }
+  let total = 0;
+  for (const entry of entries) {
+    if (
+      !entry.leftAt ||
+      !(entry.prepaidAmountArs && entry.prepaidAmountArs > 0)
+    )
+      continue;
+    const paidIn = sessionsByEntry.get(entry.id);
+    const belongs = paidIn
+      ? paidIn.has(session.id)
+      : Date.parse(entry.leftAt) >= from && Date.parse(entry.leftAt) < to;
+    if (belongs) total += entry.prepaidAmountArs;
+  }
+  return total;
+}
+
 export function computeSessionStats(
   session: CashSession,
   entries: Entry[],
@@ -304,6 +351,13 @@ export function computeSessionStats(
       ? summary.cashTotal - session.leavingCash
       : null;
 
+  const reservationPrepaid = computeReservationPrepaid(
+    session,
+    entries,
+    transactions,
+    now,
+  );
+
   return {
     session,
     summary,
@@ -322,6 +376,7 @@ export function computeSessionStats(
     ),
     topRate: topRate(sessionEntries),
     withdrawnCash,
+    reservationPrepaid,
   };
 }
 

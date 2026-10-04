@@ -45,7 +45,7 @@ import { RatePropagationDialog } from './RatePropagationDialog';
  * la otra persona, que es justo lo que el control de versión evita.
  */
 const CONFLICT_MESSAGE =
-  'La tasa fue modificada por otra persona. Actualizamos la lista, revisá los datos y volvé a intentar.';
+  'La tarifa fue modificada por otra persona. Actualizamos la lista, revisá los datos y volvé a intentar.';
 
 type RateConfirmAction = {
   kind: 'activate' | 'deactivate' | 'delete';
@@ -56,7 +56,7 @@ function rateStatus(rate: Rate): 'Activa' | 'Inactiva' {
   return rate.isActive ? 'Activa' : 'Inactiva';
 }
 
-export function TasasPage() {
+export function TarifasPage() {
   const { showToast } = useToast();
   const { sucursalId, sucursal } = useSucursal();
   const userId = useCurrentUserId();
@@ -79,7 +79,7 @@ export function TasasPage() {
     null,
   );
 
-  // El editor y el diálogo guardan una foto de la tasa (id y version) del
+  // El editor y el diálogo guardan una foto de la tarifa (id y version) del
   // estacionamiento activo. Si se cambia de estacionamiento con alguno abierto,
   // esa foto queda apuntando a otra playa: la validación compara contra tarifas
   // ajenas y el guardado saldría contra el tenant equivocado. Se descartan.
@@ -155,7 +155,8 @@ export function TasasPage() {
       closeForm();
       invalidate();
       showToast({
-        message: vars.kind === 'create' ? 'Tasa creada.' : 'Tasa actualizada.',
+        message:
+          vars.kind === 'create' ? 'Tarifa creada.' : 'Tarifa actualizada.',
         kind: 'success',
       });
     },
@@ -170,7 +171,7 @@ export function TasasPage() {
       setConfirmAction(null);
       invalidate();
       showToast({
-        message: vars.isActive ? 'Tasa reactivada.' : 'Tasa desactivada.',
+        message: vars.isActive ? 'Tarifa reactivada.' : 'Tarifa desactivada.',
         kind: 'success',
       });
     },
@@ -182,7 +183,7 @@ export function TasasPage() {
     onSuccess: () => {
       setConfirmAction(null);
       invalidate();
-      showToast({ message: 'Tasa eliminada.', kind: 'success' });
+      showToast({ message: 'Tarifa eliminada.', kind: 'success' });
     },
     onError: (error) => onError(error, 'rates.delete'),
   });
@@ -364,7 +365,7 @@ export function TasasPage() {
               <button
                 type="button"
                 className="pk-btn pk-btn-ghost pk-btn-icon"
-                title="Editar tasa"
+                title="Editar tarifa"
                 aria-label={`Editar ${rate.name}`}
                 disabled={isBusy}
                 onClick={() => openEdit(rate)}
@@ -374,7 +375,7 @@ export function TasasPage() {
               <button
                 type="button"
                 className="pk-btn pk-btn-ghost pk-btn-icon"
-                title={inactive ? 'Reactivar tasa' : 'Desactivar tasa'}
+                title={inactive ? 'Reactivar tarifa' : 'Desactivar tarifa'}
                 aria-label={`${inactive ? 'Reactivar' : 'Desactivar'} ${rate.name}`}
                 disabled={isBusy}
                 onClick={() =>
@@ -389,7 +390,7 @@ export function TasasPage() {
               <button
                 type="button"
                 className="pk-btn pk-btn-ghost pk-btn-icon"
-                title="Eliminar tasa"
+                title="Eliminar tarifa"
                 aria-label={`Eliminar ${rate.name}`}
                 style={{ color: 'var(--err-text)' }}
                 disabled={isBusy}
@@ -408,21 +409,21 @@ export function TasasPage() {
     ? {
         activate: {
           title: `Reactivar "${confirmAction.rate.name}"`,
-          message: 'La tasa volverá a estar disponible para operar.',
+          message: 'La tarifa volverá a estar disponible para operar.',
           confirmLabel: 'Reactivar',
           destructive: false,
         },
         deactivate: {
           title: `Desactivar "${confirmAction.rate.name}"`,
           message:
-            'La tasa quedará oculta de la operación activa. Podés volver a activarla desde la tabla.',
+            'La tarifa quedará oculta de la operación activa. Podés volver a activarla desde la tabla.',
           confirmLabel: 'Desactivar',
           destructive: false,
         },
         delete: {
           title: `Eliminar "${confirmAction.rate.name}"`,
           message:
-            'Esta acción es permanente e irreversible. La tasa será eliminada definitivamente.',
+            'Esta acción es permanente e irreversible. La tarifa será eliminada definitivamente.',
           confirmLabel: 'Eliminar',
           destructive: true,
         },
@@ -438,15 +439,15 @@ export function TasasPage() {
         subtitle="Filtrá, ordená y guardá vistas para operar más rápido."
         isLoading={listQuery.isLoading}
         emptyMessage={
-          // Sin esta rama, una carga fallida se ve igual que "no hay tasas" y el
+          // Sin esta rama, una carga fallida se ve igual que "no hay tarifas" y el
           // dueño puede creer que se le borraron las tarifas.
           listQuery.isError
-            ? 'No pudimos cargar las tasas. Probá recargar la tabla.'
+            ? 'No pudimos cargar las tarifas. Probá recargar la tabla.'
             : canManage
-              ? 'Creá la primera tasa para empezar a operar con precios desde la app.'
-              : 'Todavía no hay tasas configuradas para este estacionamiento.'
+              ? 'Creá la primera tarifa para empezar a operar con precios desde la app.'
+              : 'Todavía no hay tarifas configuradas para este estacionamiento.'
         }
-        searchPlaceholder="Buscar tasa por nombre..."
+        searchPlaceholder="Buscar tarifa por nombre..."
         searchableKeys={['name']}
         filterableColumns={['status']}
         filterOptionsByColumn={{
@@ -473,7 +474,7 @@ export function TasasPage() {
               disabled={isBusy}
               onClick={openCreate}
             >
-              Nueva tasa
+              Nueva tarifa
             </Button>
           ) : (
             <Badge>Solo lectura</Badge>

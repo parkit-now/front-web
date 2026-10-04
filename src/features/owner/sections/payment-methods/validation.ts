@@ -5,7 +5,7 @@ import type { PaymentMethodType } from '../../services/entities';
  * Lógica pura de los medios de pago respaldados por una integración.
  *
  * Vive separada del componente (y con tests colocalizados) por la misma razón
- * que `sections/tasas/validation.ts` y `sections/integraciones/validation.ts`:
+ * que `sections/tarifas/validation.ts` y `sections/integraciones/validation.ts`:
  * decidir si el interruptor se puede tocar no necesita ni DOM ni red, y si se
  * rompe lo hace en silencio.
  */

@@ -61,7 +61,7 @@ const SECTIONS = [
   'personal',
   'estadisticas',
   'auditoria',
-  'tasas',
+  'tarifas',
   'vehiculos',
   'tipos-de-vehiculo',
   'metodos-de-pago',
@@ -171,7 +171,10 @@ export function SucursalProvider({
 
   function setSucursalId(id: string) {
     if (mode === 'admin') {
-      const seg = location.pathname.split('/').filter(Boolean).pop() ?? '';
+      // Sección = primer segmento después de `/ops/estacionamientos/:id`
+      // (las de configuración tienen sub-rutas: `config/perfil`).
+      const parts = location.pathname.split('/').filter(Boolean);
+      const seg = parts[3] ?? '';
       const section = (SECTIONS as readonly string[]).includes(seg)
         ? seg
         : 'estadisticas';

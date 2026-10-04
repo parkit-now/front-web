@@ -31,8 +31,20 @@ function makeBreakdown(
     from: '2026-08-07T16:00:00.000Z',
     to: '2026-08-10T16:00:00.000Z',
     methods: [
-      { name: 'Transferencia', amount: 14200, count: 2, share: 0.5892 },
-      { name: 'Efectivo', amount: 7500, count: 2, share: 0.3112 },
+      {
+        name: 'Transferencia',
+        amount: 14200,
+        count: 2,
+        share: 0.5892,
+        kind: 'payment',
+      },
+      {
+        name: 'Efectivo',
+        amount: 7500,
+        count: 2,
+        share: 0.3112,
+        kind: 'payment',
+      },
     ],
     ...overrides,
   };
@@ -317,6 +329,25 @@ describe('buildCategorySlices', () => {
       labelOf,
     );
     expect(slices[2].name).toBe(NO_CATEGORY_LABEL);
+  });
+
+  it('traduce la porción "reservation_unused" a «Reservas sin uso», sin estadías', () => {
+    const slices = buildCategorySlices(
+      makeCategoryBreakdown({
+        totalRevenue: 7000,
+        categories: [
+          { category: 'car', stays: 6, revenue: 6000, share: 1 },
+          { category: 'reservation_unused', stays: 0, revenue: 1000, share: 0 },
+        ],
+      }),
+      labelOf,
+    );
+    expect(slices[1]).toMatchObject({
+      name: 'Reservas sin uso',
+      amount: 1000,
+      detail: 'Sin estadía',
+      isUnallocated: false,
+    });
   });
 
   it('la proporción es sobre la recaudación y suma 1', () => {

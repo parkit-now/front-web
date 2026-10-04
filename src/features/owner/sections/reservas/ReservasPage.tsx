@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../../../data-table';
 import { translateApiError } from '../../../../lib/api/translate';
@@ -11,7 +11,11 @@ import { Button } from '../../../../shared/components/ui/Button';
 import { EmptyState } from '../../../../shared/components/ui/EmptyState';
 import { Tabs } from '../../../../shared/components/ui/Tabs';
 import { Skeleton } from '../../../../shared/components/ui/Skeleton';
-import { IconAlert, IconCalendar } from '../../../../shared/components/icons';
+import {
+  IconAlert,
+  IconCalendar,
+  IconSettings,
+} from '../../../../shared/components/icons';
 import { fmtMoney0 } from '../../../../shared/utils/fmt';
 import { useSucursal } from '../../context/SucursalContext';
 import { useMetricsSummary } from '../../hooks/useMetrics';
@@ -19,10 +23,10 @@ import {
   useNow,
   useReservationActions,
   useReservationDetail,
+  useReservationService,
   useReservationsBoard,
   useTodayReservations,
 } from '../../hooks/useReservations';
-import { listServices } from '../../services/services';
 import type { OwnerReservation } from '../../services/reservations';
 import { Countdown } from './Countdown';
 import { ReasonDialog } from './ReasonDialog';
@@ -40,6 +44,9 @@ import {
   type ReservationAction,
   type ReservationTab,
 } from './reservationUtils';
+
+/** Relativo a la sección: resuelve igual bajo `/app` y `/ops/estacionamientos/:id`. */
+const RESERVATIONS_SETTINGS_PATH = '../config/servicios#reservas';
 
 const EMPTY_COPY: Record<
   ReservationTab,
@@ -127,14 +134,8 @@ export function ReservasPage() {
   const summary = useMetricsSummary();
   const actions = useReservationActions(sucursalId);
 
-  const servicesQuery = useQuery({
-    queryKey: ['services', sucursalId],
-    queryFn: () => listServices(sucursalId),
-    enabled: Boolean(sucursalId),
-  });
-  const acceptanceMode = servicesQuery.data?.find(
-    (s) => s.code === 'ADVANCE_RESERVATION',
-  )?.acceptanceMode;
+  const { acceptanceMode, enabled: reservationsEnabled } =
+    useReservationService(sucursalId);
 
   const [tab, setTab] = useState<ReservationTab>('upcoming');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -440,7 +441,35 @@ export function ReservasPage() {
       <SectionHeader
         title="Reservas"
         subtitle="Las reservas pagas de tus conductores: aceptalas, cancelalas y seguí los reembolsos."
+        action={
+          // Relativo: resuelve igual bajo /app y bajo /ops/estacionamientos.
+          <Link
+            to={RESERVATIONS_SETTINGS_PATH}
+            className="pk-btn pk-btn-ghost pk-btn-icon"
+            aria-label="Configurar reservas"
+            title="Configurar reservas"
+          >
+            <IconSettings size={18} />
+          </Link>
+        }
       />
+
+      {reservationsEnabled === false ? (
+        <Alert
+          variant="warn"
+          icon={<IconAlert size={16} />}
+          title="Las reservas están desactivadas."
+          description="Activalas para que los conductores puedan reservar."
+          action={
+            <Link
+              to={RESERVATIONS_SETTINGS_PATH}
+              className="pk-btn pk-btn-primary pk-btn-sm"
+            >
+              Activar reservas
+            </Link>
+          }
+        />
+      ) : null}
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
         <Kpi

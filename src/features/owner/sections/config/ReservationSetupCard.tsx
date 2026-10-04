@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Alert } from '../../../../shared/components/ui/Alert';
 import { Badge } from '../../../../shared/components/ui/Badge';
 import { Button } from '../../../../shared/components/ui/Button';
@@ -58,6 +58,7 @@ import {
   toReservationForm,
   unreservedSpotsText,
   type FormErrors,
+  type DurationUnit,
   type ReservationForm,
   type SaveStep,
 } from './reservationSetup';
@@ -140,6 +141,17 @@ export function ReservationSetupCard({ service }: ReservationSetupCardProps) {
     ReservationRequirement[]
   >([]);
   const [confirmOff, setConfirmOff] = useState(false);
+
+  // Anchor `#reservas` (viene del aviso de Reservas): el contenido aparece
+  // recién cuando cargan los datos, así que se scrollea cuando el form existe.
+  const { hash } = useLocation();
+  const formReady = form !== null;
+  useEffect(() => {
+    if (hash !== '#reservas' || !formReady) return;
+    document
+      .getElementById('reservas')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [hash, formReady]);
 
   // Dos efectos (uno por origen de datos) para que un refetch de los horarios
   // no pise lo que se está editando en el resto del formulario, y al revés.
@@ -355,6 +367,7 @@ export function ReservationSetupCard({ service }: ReservationSetupCardProps) {
 
   return (
     <div
+      id="reservas"
       data-testid="reservation-setup-card"
       style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
     >
@@ -463,7 +476,7 @@ export function ReservationSetupCard({ service }: ReservationSetupCardProps) {
             variant="warn"
             title="Mercado Pago sin vincular."
             description="Sin Mercado Pago no se pueden activar las reservas: es la cuenta donde cobrás."
-            action={<Link to="../integraciones">Ir a Integraciones</Link>}
+            action={<Link to="../../integraciones">Ir a Integraciones</Link>}
           />
         )}
       </Block>
@@ -558,7 +571,7 @@ export function ReservationSetupCard({ service }: ReservationSetupCardProps) {
                   . Los conductores van a poder reservar, pero el operador no va
                   a poder registrar su ingreso hasta que aceptes un tipo de esa
                   categoría.{' '}
-                  <Link to="../tipos-de-vehiculo">
+                  <Link to="../../tipos-de-vehiculo">
                     Administrar tipos de vehículo
                   </Link>
                 </>
@@ -649,7 +662,7 @@ export function ReservationSetupCard({ service }: ReservationSetupCardProps) {
             {rates.length === 0 && !ratesQuery.isLoading && (
               <p style={helpText}>
                 No tenés tarifas activas.{' '}
-                <Link to="../tasas">Crear una tarifa</Link>
+                <Link to="../../tarifas">Crear una tarifa</Link>
               </p>
             )}
           </div>
@@ -684,70 +697,113 @@ export function ReservationSetupCard({ service }: ReservationSetupCardProps) {
         </p>
       </Block>
 
-      {/* 7. Reglas */}
+      {/* 7. Reglas: oraciones con los valores editables adentro. */}
       <Block
         id="reservas-reglas"
         title="Reglas"
         pill={<Badge variant="ok">Listo</Badge>}
       >
-        <div style={grid2}>
-          <fieldset style={fieldsetStyle}>
-            <legend className="pk-label">Cómo se confirman</legend>
-            <RadioOption
-              name="reservation-acceptance"
-              testId="reservation-acceptance-auto"
-              checked={form.acceptanceMode === 'auto'}
-              disabled={disabled}
-              onSelect={() => setField('acceptanceMode', 'auto')}
-              title="Automáticamente"
-              description="Al aprobarse el pago"
-            />
-            <RadioOption
-              name="reservation-acceptance"
-              testId="reservation-acceptance-manual"
-              checked={form.acceptanceMode === 'manual'}
-              disabled={disabled}
-              onSelect={() => setField('acceptanceMode', 'manual')}
-              title="Las acepto yo"
-              description={`Tenés ${form.approvalWindowMinutes || '15'} min; si no, se reembolsa`}
-            />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div>
+            <p style={ruleLine}>
+              <span>Las reservas se confirman</span>
+              <select
+                id="reservation-acceptance"
+                data-testid="reservation-acceptance"
+                aria-label="Cómo se confirman las reservas"
+                className="pk-input"
+                style={inlineSelect}
+                value={form.acceptanceMode}
+                onChange={(e) =>
+                  setField(
+                    'acceptanceMode',
+                    e.target.value === 'manual' ? 'manual' : 'auto',
+                  )
+                }
+                disabled={disabled}
+              >
+                <option value="auto">automáticamente</option>
+                <option value="manual">cuando las acepto yo</option>
+              </select>
+              <span>.</span>
+            </p>
             {form.acceptanceMode === 'manual' && (
-              <div style={{ width: 200 }}>
-                <Input
-                  id="reservation-approval-window"
-                  label="Minutos para aceptar"
-                  type="number"
-                  inputMode="numeric"
-                  value={form.approvalWindowMinutes}
-                  onChange={(e) =>
-                    setField('approvalWindowMinutes', e.target.value)
-                  }
-                  error={errors.approvalWindowMinutes}
-                  hint="Entre 5 y 120."
-                  disabled={disabled}
+              <>
+                <p style={{ ...ruleLine, marginTop: 8 }}>
+                  <span>Tengo</span>
+                  <input
+                    id="reservation-approval-window"
+                    data-testid="reservation-approval-window"
+                    aria-label="Minutos para aceptar la reserva"
+                    className="pk-input"
+                    type="number"
+                    inputMode="numeric"
+                    min={5}
+                    max={120}
+                    style={inlineNumber(Boolean(errors.approvalWindowMinutes))}
+                    value={form.approvalWindowMinutes}
+                    onChange={(e) =>
+                      setField('approvalWindowMinutes', e.target.value)
+                    }
+                    aria-invalid={
+                      errors.approvalWindowMinutes ? true : undefined
+                    }
+                    disabled={disabled}
+                  />
+                  <span>
+                    minutos para aceptarla; si no respondo, se rechaza y se le
+                    devuelve todo al conductor.
+                  </span>
+                </p>
+                <RuleError
+                  message={errors.approvalWindowMinutes}
+                  hint="Entre 5 y 120 minutos."
                 />
-              </div>
+                <div style={{ marginTop: 8 }}>
+                  <Alert
+                    variant="warn"
+                    title="Cada rechazo devuelve el total al conductor."
+                    description="La comisión de Mercado Pago de ese pago podría no devolverse."
+                  />
+                </div>
+              </>
             )}
-          </fieldset>
+          </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <Input
-              id="reservation-free-cancel"
-              label="Cancelación gratis hasta (min antes)"
-              type="number"
-              inputMode="numeric"
-              value={form.freeCancelMinutes}
-              onChange={(e) => setField('freeCancelMinutes', e.target.value)}
-              error={errors.freeCancelMinutes}
-              disabled={disabled}
-            />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label htmlFor="reservation-late-refund" className="pk-label">
-                Después devolvés
-              </label>
+          <div>
+            <p style={ruleLine}>
+              <span>El conductor puede cancelar gratis hasta</span>
+              <DurationInline
+                idPrefix="reservation-free-cancel"
+                label="Cancelación gratis"
+                value={form.freeCancelValue}
+                unit={form.freeCancelUnit}
+                invalid={Boolean(errors.freeCancelMinutes)}
+                disabled={disabled}
+                onValue={(v) => {
+                  setField('freeCancelValue', v);
+                  setErrors((prev) => ({
+                    ...prev,
+                    freeCancelMinutes: undefined,
+                  }));
+                }}
+                onUnit={(u) => {
+                  setField('freeCancelUnit', u);
+                  setErrors((prev) => ({
+                    ...prev,
+                    freeCancelMinutes: undefined,
+                  }));
+                }}
+              />
+              <span>
+                antes del horario reservado. Si cancela después, se le devuelve
+                el
+              </span>
               <select
                 id="reservation-late-refund"
+                aria-label="Porcentaje que se devuelve si cancela tarde"
                 className="pk-input"
+                style={inlineSelect}
                 value={form.lateCancelRefundPct}
                 onChange={(e) =>
                   setField('lateCancelRefundPct', e.target.value)
@@ -760,123 +816,86 @@ export function ReservationSetupCard({ service }: ReservationSetupCardProps) {
                   </option>
                 ))}
               </select>
-            </div>
-            <Input
-              id="reservation-early-arrival"
-              label="Llegada desde (min antes)"
-              type="number"
-              inputMode="numeric"
-              value={form.earlyArrivalMinutes}
-              onChange={(e) => setField('earlyArrivalMinutes', e.target.value)}
-              error={errors.earlyArrivalMinutes}
-              disabled={disabled}
-            />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <label htmlFor="reservation-early-max" className="pk-label">
-                Llegada anticipada: hasta
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input
-                  id="reservation-early-max"
-                  data-testid="reservation-early-max-value"
-                  className="pk-input"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="any"
-                  style={{
-                    width: 96,
-                    borderColor: errors.earlyArrivalMax
-                      ? 'var(--err-text, #b42318)'
-                      : undefined,
-                  }}
-                  value={form.earlyArrivalMaxValue}
-                  onChange={(e) => {
-                    setField('earlyArrivalMaxValue', e.target.value);
-                    setErrors((prev) => ({
-                      ...prev,
-                      earlyArrivalMax: undefined,
-                    }));
-                  }}
-                  aria-invalid={errors.earlyArrivalMax ? true : undefined}
-                  aria-describedby={
-                    errors.earlyArrivalMax
-                      ? 'reservation-early-max-error'
-                      : 'reservation-early-max-hint'
-                  }
-                  disabled={disabled}
-                />
-                <select
-                  id="reservation-early-max-unit"
-                  data-testid="reservation-early-max-unit"
-                  aria-label="Unidad de la llegada anticipada"
-                  className="pk-input"
-                  style={{ width: 'auto' }}
-                  value={form.earlyArrivalMaxUnit}
-                  onChange={(e) => {
-                    setField(
-                      'earlyArrivalMaxUnit',
-                      e.target.value === 'hours' ? 'hours' : 'minutes',
-                    );
-                    setErrors((prev) => ({
-                      ...prev,
-                      earlyArrivalMax: undefined,
-                    }));
-                  }}
-                  disabled={disabled}
-                >
-                  <option value="minutes">minutos</option>
-                  <option value="hours">horas</option>
-                </select>
-                <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
-                  antes
-                </span>
-              </div>
-              {errors.earlyArrivalMax ? (
-                <span
-                  id="reservation-early-max-error"
-                  role="alert"
-                  style={{ fontSize: 12, color: 'var(--err-text, #b42318)' }}
-                >
-                  {errors.earlyArrivalMax}
-                </span>
-              ) : (
-                <span
-                  id="reservation-early-max-hint"
-                  style={{ fontSize: 12, color: 'var(--text-3)' }}
-                >
-                  En ese margen entra con su reserva y el tiempo extra se cobra
-                  al salir. Antes, entra como estadía común.
-                </span>
-              )}
-            </div>
-            <Input
-              id="reservation-grace"
-              label="Tolerancia (min)"
-              type="number"
-              inputMode="numeric"
-              value={form.graceMinutes}
-              onChange={(e) => setField('graceMinutes', e.target.value)}
-              error={errors.graceMinutes}
-              disabled={disabled}
-            />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              <span className="pk-label">Anticipación</span>
-              <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
-                Hasta 7 días · duración máx. 24 h
+              <span>
+                de lo que pagó. Una vez empezada la reserva, ya no puede
+                cancelar.
               </span>
-            </div>
-          </div>
-        </div>
-        {form.acceptanceMode === 'manual' && (
-          <div style={{ marginTop: 10 }}>
-            <Alert
-              variant="warn"
-              title="Cada rechazo devuelve el total al conductor."
-              description="La comisión de Mercado Pago de ese pago podría no devolverse."
+            </p>
+            <RuleError
+              message={errors.freeCancelMinutes ?? errors.lateCancelRefundPct}
+              hint="Hasta 24 horas."
             />
           </div>
-        )}
+
+          <div>
+            <p style={ruleLine}>
+              <span>El conductor puede entrar con su reserva hasta</span>
+              <DurationInline
+                idPrefix="reservation-early-max"
+                label="Llegada anticipada"
+                value={form.earlyArrivalMaxValue}
+                unit={form.earlyArrivalMaxUnit}
+                invalid={Boolean(errors.earlyArrivalMax)}
+                disabled={disabled}
+                onValue={(v) => {
+                  setField('earlyArrivalMaxValue', v);
+                  setErrors((prev) => ({
+                    ...prev,
+                    earlyArrivalMax: undefined,
+                  }));
+                }}
+                onUnit={(u) => {
+                  setField('earlyArrivalMaxUnit', u);
+                  setErrors((prev) => ({
+                    ...prev,
+                    earlyArrivalMax: undefined,
+                  }));
+                }}
+              />
+              <span>
+                antes del horario reservado. Ese tiempo extra se cobra al salir.
+                Si llega antes, entra como estadía común.
+              </span>
+            </p>
+            <RuleError
+              id="reservation-early-max-error"
+              message={errors.earlyArrivalMax}
+              hint="Hasta 24 horas."
+            />
+          </div>
+
+          <div>
+            <p style={ruleLine}>
+              <span>Si se atrasa, le guardamos el lugar hasta</span>
+              <DurationInline
+                idPrefix="reservation-grace"
+                label="Tolerancia"
+                value={form.graceValue}
+                unit={form.graceUnit}
+                invalid={Boolean(errors.graceMinutes)}
+                disabled={disabled}
+                onValue={(v) => {
+                  setField('graceValue', v);
+                  setErrors((prev) => ({ ...prev, graceMinutes: undefined }));
+                }}
+                onUnit={(u) => {
+                  setField('graceUnit', u);
+                  setErrors((prev) => ({ ...prev, graceMinutes: undefined }));
+                }}
+              />
+              <span>
+                después del horario reservado. Pasado ese tiempo la reserva
+                queda como «No se presentó», el lugar se libera y no se devuelve
+                la plata.
+              </span>
+            </p>
+            <RuleError message={errors.graceMinutes} hint="Hasta 3 horas." />
+          </div>
+
+          <p style={helpText}>
+            Anticipación hasta 7 días · duración máx. 24 h.
+          </p>
+        </div>
       </Block>
 
       {canEdit && (
@@ -926,6 +945,122 @@ export function ReservationSetupCard({ service }: ReservationSetupCardProps) {
         }
       />
     </div>
+  );
+}
+
+const ruleLine: CSSProperties = {
+  display: 'flex',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: 6,
+  margin: 0,
+  fontSize: 14,
+  lineHeight: 1.6,
+  color: 'var(--text-1)',
+};
+
+const inlineSelect: CSSProperties = { width: 'auto', minWidth: 0 };
+
+function inlineNumber(invalid: boolean): CSSProperties {
+  return {
+    width: 72,
+    borderColor: invalid ? 'var(--err-text, #b42318)' : undefined,
+  };
+}
+
+function RuleError({
+  message,
+  hint,
+  id,
+}: {
+  message?: string;
+  hint?: string;
+  id?: string;
+}) {
+  if (message) {
+    return (
+      <span
+        id={id}
+        role="alert"
+        style={{
+          display: 'block',
+          marginTop: 4,
+          fontSize: 12,
+          color: 'var(--err-text, #b42318)',
+        }}
+      >
+        {message}
+      </span>
+    );
+  }
+  if (!hint) return null;
+  return (
+    <span
+      style={{
+        display: 'block',
+        marginTop: 2,
+        fontSize: 12,
+        color: 'var(--text-3)',
+      }}
+    >
+      {hint}
+    </span>
+  );
+}
+
+/** Número + selector minutos/horas, para insertar dentro de una oración. */
+function DurationInline({
+  idPrefix,
+  label,
+  value,
+  unit,
+  invalid,
+  disabled,
+  onValue,
+  onUnit,
+}: {
+  idPrefix: string;
+  label: string;
+  value: string;
+  unit: DurationUnit;
+  invalid: boolean;
+  disabled: boolean;
+  onValue: (value: string) => void;
+  onUnit: (unit: DurationUnit) => void;
+}) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <input
+        id={idPrefix}
+        data-testid={`${idPrefix}-value`}
+        aria-label={label}
+        className="pk-input"
+        type="number"
+        inputMode="decimal"
+        min={0}
+        step="any"
+        style={inlineNumber(invalid)}
+        value={value}
+        onChange={(e) => onValue(e.target.value)}
+        aria-invalid={invalid ? true : undefined}
+        disabled={disabled}
+      />
+      <select
+        id={`${idPrefix}-unit`}
+        data-testid={`${idPrefix}-unit`}
+        aria-label={`Unidad: ${label}`}
+        className="pk-input"
+        style={inlineSelect}
+        value={unit}
+        onChange={(e) =>
+          onUnit(e.target.value === 'hours' ? 'hours' : 'minutes')
+        }
+        disabled={disabled}
+      >
+        <option value="minutes">minutos</option>
+        <option value="hours">horas</option>
+      </select>
+    </span>
   );
 }
 
@@ -1030,15 +1165,6 @@ const grid2: CSSProperties = {
   gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
   gap: 12,
 };
-const fieldsetStyle: CSSProperties = {
-  border: 'none',
-  margin: 0,
-  padding: 0,
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 8,
-};
-
 function chipStyle(on: boolean, disabled: boolean): CSSProperties {
   return {
     padding: '6px 14px',

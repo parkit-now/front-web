@@ -97,7 +97,7 @@ export function TiposVehiculoPage() {
   /**
    * Acá hay TRES 409 distintos, y el 409 de optimistic locking no tiene código
    * propio (sale con `CONFLICT` genérico). Ramificar por `status === 409` a
-   * secas —como hacen Tasas y Vehículos, que solo tienen uno— metería el
+   * secas —como hacen Tarifas y Vehículos, que solo tienen uno— metería el
    * duplicado y el "tipo en uso" dentro del toast equivocado.
    */
   function onError(error: unknown, ctx?: { type: VehicleType }) {
