@@ -36,6 +36,72 @@ export interface ReservationForm {
   lateCancelRefundPct: string;
   earlyArrivalMinutes: string;
   graceMinutes: string;
+  /**
+   * Tope de la llegada anticipada (fase 6c): "Llegada anticipada: hasta
+   * [número] [minutos|horas] antes". Se guarda en minutos; acá queda el número
+   * y la unidad tal cual los eligió el dueño.
+   */
+  earlyArrivalMaxValue: string;
+  earlyArrivalMaxUnit: DurationUnit;
+}
+
+export type DurationUnit = 'minutes' | 'hours';
+
+/** Topes de `earlyArrivalMaxMinutes` (CHECK de la migración 20261007120000). */
+export const EARLY_ARRIVAL_MAX_LIMIT_MINUTES = 1440;
+
+/**
+ * Minutos → número + unidad para mostrar: horas si son horas justas (60 →
+ * "1 hora"), si no minutos (45 → "45 minutos"; 90 → "90 minutos").
+ */
+export function splitDuration(minutes: number): {
+  value: string;
+  unit: DurationUnit;
+} {
+  if (minutes > 0 && minutes % 60 === 0) {
+    return { value: String(minutes / 60), unit: 'hours' };
+  }
+  return { value: String(minutes), unit: 'minutes' };
+}
+
+/**
+ * Número + unidad → minutos enteros, o el error para mostrar. Las horas
+ * aceptan medias y cuartos ("1,5" horas = 90 min) mientras den minutos
+ * enteros.
+ */
+export function durationToMinutes(
+  raw: string,
+  unit: DurationUnit,
+): number | { error: string } {
+  const trimmed = raw.trim().replace(',', '.');
+  if (trimmed === '') return { error: 'Completá este valor.' };
+  const value = Number(trimmed);
+  if (!Number.isFinite(value) || value < 0) {
+    return { error: 'Tiene que ser un número positivo.' };
+  }
+  const minutes = unit === 'hours' ? value * 60 : value;
+  if (!Number.isInteger(minutes)) {
+    return {
+      error:
+        unit === 'hours'
+          ? 'Usá horas enteras o en minutos.'
+          : 'Tiene que ser un número entero.',
+    };
+  }
+  if (minutes > EARLY_ARRIVAL_MAX_LIMIT_MINUTES) {
+    return { error: 'Hasta 24 horas.' };
+  }
+  return minutes;
+}
+
+/** "1 hora", "2 horas", "45 minutos", "1 h 30 min" para el resumen. */
+export function formatDuration(minutes: number): string {
+  if (minutes === 0) return '0 minutos';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return m === 1 ? '1 minuto' : `${m} minutos`;
+  if (m === 0) return h === 1 ? '1 hora' : `${h} horas`;
+  return `${h} h ${m} min`;
 }
 
 export const LATE_REFUND_OPTIONS = [0, 50, 100] as const;
@@ -72,13 +138,27 @@ export function toReservationForm(
     lateCancelRefundPct: String(service.lateCancelRefundPct),
     earlyArrivalMinutes: String(service.earlyArrivalMinutes),
     graceMinutes: String(service.graceMinutes),
+    ...(() => {
+      const { value, unit } = splitDuration(service.earlyArrivalMaxMinutes);
+      return { earlyArrivalMaxValue: value, earlyArrivalMaxUnit: unit };
+    })(),
   };
 }
 
 /** En modo `opening` los rangos no cuentan: el backend los borra. */
 function canonical(form: ReservationForm) {
+  // "1 hora" y "60 minutos" son lo mismo: se compara en minutos.
+  const maxMinutes = durationToMinutes(
+    form.earlyArrivalMaxValue,
+    form.earlyArrivalMaxUnit,
+  );
+  const { earlyArrivalMaxValue, earlyArrivalMaxUnit, ...rest } = form;
   return {
-    ...form,
+    ...rest,
+    earlyArrivalMax:
+      typeof maxMinutes === 'number'
+        ? maxMinutes
+        : `${earlyArrivalMaxValue} ${earlyArrivalMaxUnit}`,
     categories: [...form.categories].sort(),
     ranges: form.hoursMode === 'custom' ? sortRanges(form.ranges) : [],
     reservableSpots: form.reservableSpots.trim(),
@@ -110,7 +190,8 @@ export type ReservationFormField =
   | 'freeCancelMinutes'
   | 'lateCancelRefundPct'
   | 'earlyArrivalMinutes'
-  | 'graceMinutes';
+  | 'graceMinutes'
+  | 'earlyArrivalMax';
 
 export type FormErrors = Partial<Record<ReservationFormField, string>>;
 
@@ -150,7 +231,7 @@ export function buildServicePatch(
   }
 
   const numeric: {
-    field: Exclude<ReservationFormField, 'reservableSpots'>;
+    field: Exclude<ReservationFormField, 'reservableSpots' | 'earlyArrivalMax'>;
     min: number;
     max: number;
   }[] = [
@@ -165,6 +246,35 @@ export function buildServicePatch(
     const value = parseIntInRange(form[field], min, max);
     if (typeof value === 'string') errors[field] = value;
     else patch[field] = value;
+  }
+
+  // Tope de la llegada anticipada: se manda en minutos si cambió (en minutos;
+  // cambiar sólo la unidad no es un cambio). No puede ser menor que la
+  // llegada anticipada normal, igual que valida el backend.
+  const maxMinutes = durationToMinutes(
+    form.earlyArrivalMaxValue,
+    form.earlyArrivalMaxUnit,
+  );
+  const initialMaxMinutes = durationToMinutes(
+    initial.earlyArrivalMaxValue,
+    initial.earlyArrivalMaxUnit,
+  );
+  const earlyChanged =
+    form.earlyArrivalMinutes.trim() !== initial.earlyArrivalMinutes.trim();
+  if (typeof maxMinutes !== 'number') {
+    errors.earlyArrivalMax = maxMinutes.error;
+  } else {
+    const maxChanged = maxMinutes !== initialMaxMinutes;
+    const early = Number(form.earlyArrivalMinutes.trim());
+    if (
+      (maxChanged || earlyChanged) &&
+      Number.isInteger(early) &&
+      maxMinutes < early
+    ) {
+      errors.earlyArrivalMax = `Tiene que ser al menos la llegada normal (${early} min).`;
+    } else if (maxChanged) {
+      patch.earlyArrivalMaxMinutes = maxMinutes;
+    }
   }
 
   if (form.rateId !== initial.rateId) {

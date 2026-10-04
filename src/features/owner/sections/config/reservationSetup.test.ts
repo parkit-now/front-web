@@ -12,6 +12,9 @@ import {
   needsAttention,
   planSaveSteps,
   readMissingFromProblem,
+  splitDuration,
+  durationToMinutes,
+  formatDuration,
   toReservationForm,
   unreservedSpotsText,
 } from './reservationSetup';
@@ -138,6 +141,112 @@ describe('buildServicePatch', () => {
       'graceMinutes',
       'reservableSpots',
     ]);
+  });
+});
+
+describe('llegada anticipada: minutos ↔ horas (6c)', () => {
+  it('splitDuration muestra horas justas en horas y el resto en minutos', () => {
+    expect(splitDuration(60)).toEqual({ value: '1', unit: 'hours' });
+    expect(splitDuration(120)).toEqual({ value: '2', unit: 'hours' });
+    expect(splitDuration(45)).toEqual({ value: '45', unit: 'minutes' });
+    expect(splitDuration(90)).toEqual({ value: '90', unit: 'minutes' });
+    expect(splitDuration(0)).toEqual({ value: '0', unit: 'minutes' });
+  });
+
+  it('durationToMinutes convierte y valida', () => {
+    expect(durationToMinutes('1', 'hours')).toBe(60);
+    expect(durationToMinutes('1,5', 'hours')).toBe(90);
+    expect(durationToMinutes('45', 'minutes')).toBe(45);
+    expect(durationToMinutes('24', 'hours')).toBe(1440);
+    expect(durationToMinutes('0', 'minutes')).toBe(0);
+    expect(durationToMinutes('', 'minutes')).toEqual({
+      error: 'Completá este valor.',
+    });
+    expect(durationToMinutes('-5', 'minutes')).toEqual({
+      error: 'Tiene que ser un número positivo.',
+    });
+    expect(durationToMinutes('25', 'hours')).toEqual({
+      error: 'Hasta 24 horas.',
+    });
+    expect(durationToMinutes('1441', 'minutes')).toEqual({
+      error: 'Hasta 24 horas.',
+    });
+    expect(durationToMinutes('10.5', 'minutes')).toEqual({
+      error: 'Tiene que ser un número entero.',
+    });
+    expect(durationToMinutes('0.01', 'hours')).toEqual({
+      error: 'Usá horas enteras o en minutos.',
+    });
+  });
+
+  it('formatDuration para el resumen', () => {
+    expect(formatDuration(60)).toBe('1 hora');
+    expect(formatDuration(120)).toBe('2 horas');
+    expect(formatDuration(45)).toBe('45 minutos');
+    expect(formatDuration(90)).toBe('1 h 30 min');
+    expect(formatDuration(1)).toBe('1 minuto');
+  });
+
+  it('el form arranca con el default de 1 hora', () => {
+    const form = toReservationForm(service, hours);
+    expect(form.earlyArrivalMaxValue).toBe('1');
+    expect(form.earlyArrivalMaxUnit).toBe('hours');
+  });
+
+  it('cambiar sólo la unidad (1 hora → 60 minutos) no ensucia ni manda nada', () => {
+    const initial = toReservationForm(service, hours);
+    const same = {
+      ...initial,
+      earlyArrivalMaxValue: '60',
+      earlyArrivalMaxUnit: 'minutes' as const,
+    };
+    expect(isDirty(same, initial)).toBe(false);
+    expect(buildServicePatch(same, initial)).toEqual({ patch: {} });
+  });
+
+  it('manda el tope en minutos', () => {
+    const initial = toReservationForm(service, hours);
+    expect(
+      buildServicePatch(
+        {
+          ...initial,
+          earlyArrivalMaxValue: '45',
+          earlyArrivalMaxUnit: 'minutes',
+        },
+        initial,
+      ),
+    ).toEqual({ patch: { earlyArrivalMaxMinutes: 45 } });
+    expect(
+      buildServicePatch({ ...initial, earlyArrivalMaxValue: '2' }, initial),
+    ).toEqual({ patch: { earlyArrivalMaxMinutes: 120 } });
+  });
+
+  it('no puede ser menor que la llegada normal', () => {
+    const initial = toReservationForm(service, hours);
+    const result = buildServicePatch(
+      {
+        ...initial,
+        earlyArrivalMaxValue: '10',
+        earlyArrivalMaxUnit: 'minutes',
+      },
+      initial,
+    );
+    expect(result).toEqual({
+      errors: {
+        earlyArrivalMax: 'Tiene que ser al menos la llegada normal (15 min).',
+      },
+    });
+    // También si lo que cambia es la llegada normal.
+    expect(
+      buildServicePatch({ ...initial, earlyArrivalMinutes: '90' }, initial),
+    ).toHaveProperty('errors.earlyArrivalMax');
+  });
+
+  it('un valor inválido es un error del campo', () => {
+    const initial = toReservationForm(service, hours);
+    expect(
+      buildServicePatch({ ...initial, earlyArrivalMaxValue: '' }, initial),
+    ).toEqual({ errors: { earlyArrivalMax: 'Completá este valor.' } });
   });
 });
 

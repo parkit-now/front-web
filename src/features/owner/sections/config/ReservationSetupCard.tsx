@@ -771,6 +771,85 @@ export function ReservationSetupCard({ service }: ReservationSetupCardProps) {
               error={errors.earlyArrivalMinutes}
               disabled={disabled}
             />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <label htmlFor="reservation-early-max" className="pk-label">
+                Llegada anticipada: hasta
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  id="reservation-early-max"
+                  data-testid="reservation-early-max-value"
+                  className="pk-input"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="any"
+                  style={{
+                    width: 96,
+                    borderColor: errors.earlyArrivalMax
+                      ? 'var(--err-text, #b42318)'
+                      : undefined,
+                  }}
+                  value={form.earlyArrivalMaxValue}
+                  onChange={(e) => {
+                    setField('earlyArrivalMaxValue', e.target.value);
+                    setErrors((prev) => ({
+                      ...prev,
+                      earlyArrivalMax: undefined,
+                    }));
+                  }}
+                  aria-invalid={errors.earlyArrivalMax ? true : undefined}
+                  aria-describedby={
+                    errors.earlyArrivalMax
+                      ? 'reservation-early-max-error'
+                      : 'reservation-early-max-hint'
+                  }
+                  disabled={disabled}
+                />
+                <select
+                  id="reservation-early-max-unit"
+                  data-testid="reservation-early-max-unit"
+                  aria-label="Unidad de la llegada anticipada"
+                  className="pk-input"
+                  style={{ width: 'auto' }}
+                  value={form.earlyArrivalMaxUnit}
+                  onChange={(e) => {
+                    setField(
+                      'earlyArrivalMaxUnit',
+                      e.target.value === 'hours' ? 'hours' : 'minutes',
+                    );
+                    setErrors((prev) => ({
+                      ...prev,
+                      earlyArrivalMax: undefined,
+                    }));
+                  }}
+                  disabled={disabled}
+                >
+                  <option value="minutes">minutos</option>
+                  <option value="hours">horas</option>
+                </select>
+                <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
+                  antes
+                </span>
+              </div>
+              {errors.earlyArrivalMax ? (
+                <span
+                  id="reservation-early-max-error"
+                  role="alert"
+                  style={{ fontSize: 12, color: 'var(--err-text, #b42318)' }}
+                >
+                  {errors.earlyArrivalMax}
+                </span>
+              ) : (
+                <span
+                  id="reservation-early-max-hint"
+                  style={{ fontSize: 12, color: 'var(--text-3)' }}
+                >
+                  En ese margen entra con su reserva y el tiempo extra se cobra
+                  al salir. Antes, entra como estadía común.
+                </span>
+              )}
+            </div>
             <Input
               id="reservation-grace"
               label="Tolerancia (min)"
