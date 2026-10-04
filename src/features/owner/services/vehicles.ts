@@ -33,7 +33,7 @@ export async function listVehicles(tenantId: string): Promise<Vehicle[]> {
 
 /**
  * POST /tenants/:tenantId/vehicles — solo owner. Responde 201 (a diferencia de
- * las tasas, que responden 200) y el `id` (UUIDv7) lo genera el cliente.
+ * las tarifas, que responden 200) y el `id` (UUIDv7) lo genera el cliente.
  */
 export async function createVehicle(
   tenantId: string,

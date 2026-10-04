@@ -126,9 +126,10 @@ describe('buildServicePatch', () => {
         ...initial,
         reservableSpots: '-1',
         approvalWindowMinutes: '3',
-        freeCancelMinutes: '1441',
-        earlyArrivalMinutes: '',
-        graceMinutes: '1.5',
+        freeCancelValue: '1441',
+        freeCancelUnit: 'minutes' as const,
+        graceValue: '181',
+        graceUnit: 'minutes' as const,
       },
       initial,
     );
@@ -136,7 +137,6 @@ describe('buildServicePatch', () => {
     const errors = (result as { errors: Record<string, string> }).errors;
     expect(Object.keys(errors).sort()).toEqual([
       'approvalWindowMinutes',
-      'earlyArrivalMinutes',
       'freeCancelMinutes',
       'graceMinutes',
       'reservableSpots',
@@ -221,25 +221,57 @@ describe('llegada anticipada: minutos ↔ horas (6c)', () => {
     ).toEqual({ patch: { earlyArrivalMaxMinutes: 120 } });
   });
 
-  it('no puede ser menor que la llegada normal', () => {
+  it('si el tope baja de la llegada normal, se manda min(actual, tope)', () => {
     const initial = toReservationForm(service, hours);
-    const result = buildServicePatch(
-      {
-        ...initial,
-        earlyArrivalMaxValue: '10',
-        earlyArrivalMaxUnit: 'minutes',
-      },
-      initial,
-    );
-    expect(result).toEqual({
-      errors: {
-        earlyArrivalMax: 'Tiene que ser al menos la llegada normal (15 min).',
-      },
-    });
-    // También si lo que cambia es la llegada normal.
+    expect(initial.earlyArrivalMinutes).toBe('15');
     expect(
-      buildServicePatch({ ...initial, earlyArrivalMinutes: '90' }, initial),
-    ).toHaveProperty('errors.earlyArrivalMax');
+      buildServicePatch(
+        {
+          ...initial,
+          earlyArrivalMaxValue: '10',
+          earlyArrivalMaxUnit: 'minutes',
+        },
+        initial,
+      ),
+    ).toEqual({
+      patch: { earlyArrivalMaxMinutes: 10, earlyArrivalMinutes: 10 },
+    });
+    // Si el tope sigue siendo >= la llegada normal, ésta no se toca.
+    expect(
+      buildServicePatch(
+        {
+          ...initial,
+          earlyArrivalMaxValue: '20',
+          earlyArrivalMaxUnit: 'minutes',
+        },
+        initial,
+      ),
+    ).toEqual({ patch: { earlyArrivalMaxMinutes: 20 } });
+  });
+
+  it('cancelación gratis y tolerancia aceptan horas y se mandan en minutos', () => {
+    const initial = toReservationForm(service, hours);
+    expect(initial.freeCancelValue).toBe('1');
+    expect(initial.freeCancelUnit).toBe('hours');
+    expect(initial.graceValue).toBe('30');
+    expect(initial.graceUnit).toBe('minutes');
+    expect(
+      buildServicePatch(
+        {
+          ...initial,
+          freeCancelValue: '2',
+          graceValue: '1',
+          graceUnit: 'hours',
+        },
+        initial,
+      ),
+    ).toEqual({ patch: { freeCancelMinutes: 120, graceMinutes: 60 } });
+    expect(
+      buildServicePatch(
+        { ...initial, graceValue: '4', graceUnit: 'hours' },
+        initial,
+      ),
+    ).toEqual({ errors: { graceMinutes: 'Hasta 3 horas.' } });
   });
 
   it('un valor inválido es un error del campo', () => {
@@ -292,8 +324,11 @@ describe('buildChecklist', () => {
 
   it('mp_account lleva a Integraciones y rate sin tarifas a Tarifas', () => {
     const items = buildChecklist(['mp_account', 'rate'], [], false);
-    expect(items[0].target).toEqual({ kind: 'route', to: '../integraciones' });
-    expect(items[4].target).toEqual({ kind: 'route', to: '../tasas' });
+    expect(items[0].target).toEqual({
+      kind: 'route',
+      to: '../../integraciones',
+    });
+    expect(items[4].target).toEqual({ kind: 'route', to: '../../tarifas' });
   });
 
   it('un requisito cumplido nunca figura como fallido', () => {

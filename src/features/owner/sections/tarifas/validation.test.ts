@@ -65,7 +65,7 @@ describe('toMoneyInputString', () => {
 });
 
 describe('nextFreeShortcut', () => {
-  it('arranca en 1 cuando no hay tasas', () => {
+  it('arranca en 1 cuando no hay tarifas', () => {
     expect(nextFreeShortcut([])).toBe(1);
   });
 
@@ -77,7 +77,7 @@ describe('nextFreeShortcut', () => {
     expect(nextFreeShortcut(rates)).toBe(2);
   });
 
-  it('ignora las tasas sin atajo asignado', () => {
+  it('ignora las tarifas sin atajo asignado', () => {
     const rates = [
       makeRate({ id: 'a', shortcutNumber: 1 }),
       makeRate({ id: 'b', shortcutNumber: null }),
@@ -193,7 +193,7 @@ describe('validateRateForm', () => {
     }
   });
 
-  it('avisa qué tasa ocupa el atajo', () => {
+  it('avisa qué tarifa ocupa el atajo', () => {
     const { errors, payload } = validateRateForm(
       { ...validForm, shortcutNumber: '1' },
       { rates: [makeRate()], editingId: null },

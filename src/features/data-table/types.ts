@@ -57,6 +57,11 @@ export type DataTableProps<TData> = {
   onRefresh?: () => void;
   refreshDisabled?: boolean;
   serverState?: DataTableServerState;
+  /**
+   * Cantidad de filas visibles con TODOS los filtros activos (búsqueda y
+   * filtros de columna), antes de paginar. En modo servidor es `rowCount`.
+   */
+  onFilteredCountChange?: (count: number) => void;
   onRowClick?: (row: TData) => void;
   /** Requiere `getRowId`: la selección se guarda por id. */
   rowSelection?: DataTableRowSelection<TData>;

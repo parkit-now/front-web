@@ -11,7 +11,7 @@ import type { ArcaAccount } from '../../services/arca';
  * estado que la UI tiene que pintar.
  *
  * Vive separada del componente (y con tests colocalizados) por la misma razón
- * que `sections/tasas/validation.ts`: la precedencia entre "rota", "sin
+ * que `sections/tarifas/validation.ts`: la precedencia entre "rota", "sin
  * dirección" y "por vencer" se rompe en silencio, y probarla no necesita ni
  * DOM ni red.
  */

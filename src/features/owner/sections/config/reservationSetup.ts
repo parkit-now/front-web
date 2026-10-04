@@ -32,10 +32,20 @@ export interface ReservationForm {
   rateId: string;
   acceptanceMode: AcceptanceMode;
   approvalWindowMinutes: string;
-  freeCancelMinutes: string;
+  /** Cancelación gratis hasta [n] [minutos|horas] antes (0–1440 min). */
+  freeCancelValue: string;
+  freeCancelUnit: DurationUnit;
   lateCancelRefundPct: string;
+  /**
+   * "Llegada desde" del backend. Ya no se edita en la UI (se unificó con el
+   * tope de llegada anticipada): se conserva el valor actual y al guardar se
+   * manda `min(actual, earlyArrivalMaxMinutes)` para no violar la regla
+   * `earlyArrivalMax >= earlyArrival`.
+   */
   earlyArrivalMinutes: string;
-  graceMinutes: string;
+  /** Tolerancia: guardamos el lugar hasta [n] [minutos|horas] después (0–180 min). */
+  graceValue: string;
+  graceUnit: DurationUnit;
   /**
    * Tope de la llegada anticipada (fase 6c): "Llegada anticipada: hasta
    * [número] [minutos|horas] antes". Se guarda en minutos; acá queda el número
@@ -46,6 +56,9 @@ export interface ReservationForm {
 }
 
 export type DurationUnit = 'minutes' | 'hours';
+
+/** Tope de la tolerancia (`graceMinutes`): 180 min. */
+export const GRACE_LIMIT = { max: 180, message: 'Hasta 3 horas.' } as const;
 
 /** Topes de `earlyArrivalMaxMinutes` (CHECK de la migración 20261007120000). */
 export const EARLY_ARRIVAL_MAX_LIMIT_MINUTES = 1440;
@@ -72,6 +85,10 @@ export function splitDuration(minutes: number): {
 export function durationToMinutes(
   raw: string,
   unit: DurationUnit,
+  limit: { max: number; message: string } = {
+    max: EARLY_ARRIVAL_MAX_LIMIT_MINUTES,
+    message: 'Hasta 24 horas.',
+  },
 ): number | { error: string } {
   const trimmed = raw.trim().replace(',', '.');
   if (trimmed === '') return { error: 'Completá este valor.' };
@@ -88,8 +105,8 @@ export function durationToMinutes(
           : 'Tiene que ser un número entero.',
     };
   }
-  if (minutes > EARLY_ARRIVAL_MAX_LIMIT_MINUTES) {
-    return { error: 'Hasta 24 horas.' };
+  if (minutes > limit.max) {
+    return { error: limit.message };
   }
   return minutes;
 }
@@ -134,10 +151,16 @@ export function toReservationForm(
     rateId: service.reservationRateId ?? '',
     acceptanceMode: service.acceptanceMode,
     approvalWindowMinutes: String(service.approvalWindowMinutes),
-    freeCancelMinutes: String(service.freeCancelMinutes),
+    ...(() => {
+      const { value, unit } = splitDuration(service.freeCancelMinutes);
+      return { freeCancelValue: value, freeCancelUnit: unit };
+    })(),
     lateCancelRefundPct: String(service.lateCancelRefundPct),
     earlyArrivalMinutes: String(service.earlyArrivalMinutes),
-    graceMinutes: String(service.graceMinutes),
+    ...(() => {
+      const { value, unit } = splitDuration(service.graceMinutes);
+      return { graceValue: value, graceUnit: unit };
+    })(),
     ...(() => {
       const { value, unit } = splitDuration(service.earlyArrivalMaxMinutes);
       return { earlyArrivalMaxValue: value, earlyArrivalMaxUnit: unit };
@@ -148,17 +171,28 @@ export function toReservationForm(
 /** En modo `opening` los rangos no cuentan: el backend los borra. */
 function canonical(form: ReservationForm) {
   // "1 hora" y "60 minutos" son lo mismo: se compara en minutos.
-  const maxMinutes = durationToMinutes(
-    form.earlyArrivalMaxValue,
-    form.earlyArrivalMaxUnit,
-  );
-  const { earlyArrivalMaxValue, earlyArrivalMaxUnit, ...rest } = form;
+  const key = (
+    value: string,
+    unit: DurationUnit,
+    limit?: typeof GRACE_LIMIT,
+  ) => {
+    const minutes = durationToMinutes(value, unit, limit);
+    return typeof minutes === 'number' ? minutes : `${value} ${unit}`;
+  };
+  const {
+    earlyArrivalMaxValue,
+    earlyArrivalMaxUnit,
+    freeCancelValue,
+    freeCancelUnit,
+    graceValue,
+    graceUnit,
+    ...rest
+  } = form;
   return {
     ...rest,
-    earlyArrivalMax:
-      typeof maxMinutes === 'number'
-        ? maxMinutes
-        : `${earlyArrivalMaxValue} ${earlyArrivalMaxUnit}`,
+    earlyArrivalMax: key(earlyArrivalMaxValue, earlyArrivalMaxUnit),
+    freeCancel: key(freeCancelValue, freeCancelUnit),
+    grace: key(graceValue, graceUnit, GRACE_LIMIT),
     categories: [...form.categories].sort(),
     ranges: form.hoursMode === 'custom' ? sortRanges(form.ranges) : [],
     reservableSpots: form.reservableSpots.trim(),
@@ -189,7 +223,6 @@ export type ReservationFormField =
   | 'approvalWindowMinutes'
   | 'freeCancelMinutes'
   | 'lateCancelRefundPct'
-  | 'earlyArrivalMinutes'
   | 'graceMinutes'
   | 'earlyArrivalMax';
 
@@ -231,15 +264,12 @@ export function buildServicePatch(
   }
 
   const numeric: {
-    field: Exclude<ReservationFormField, 'reservableSpots' | 'earlyArrivalMax'>;
+    field: 'approvalWindowMinutes' | 'lateCancelRefundPct';
     min: number;
     max: number;
   }[] = [
     { field: 'approvalWindowMinutes', min: 5, max: 120 },
-    { field: 'freeCancelMinutes', min: 0, max: 1440 },
     { field: 'lateCancelRefundPct', min: 0, max: 100 },
-    { field: 'earlyArrivalMinutes', min: 0, max: 120 },
-    { field: 'graceMinutes', min: 0, max: 180 },
   ];
   for (const { field, min, max } of numeric) {
     if (form[field].trim() === initial[field].trim()) continue;
@@ -248,9 +278,35 @@ export function buildServicePatch(
     else patch[field] = value;
   }
 
-  // Tope de la llegada anticipada: se manda en minutos si cambió (en minutos;
-  // cambiar sólo la unidad no es un cambio). No puede ser menor que la
-  // llegada anticipada normal, igual que valida el backend.
+  // Duraciones con unidad (minutos|horas): se comparan y se mandan en minutos;
+  // cambiar solo la unidad ("1 hora" → "60 minutos") no es un cambio.
+  const freeCancel = durationToMinutes(
+    form.freeCancelValue,
+    form.freeCancelUnit,
+  );
+  if (typeof freeCancel !== 'number') {
+    errors.freeCancelMinutes = freeCancel.error;
+  } else if (
+    freeCancel !==
+    durationToMinutes(initial.freeCancelValue, initial.freeCancelUnit)
+  ) {
+    patch.freeCancelMinutes = freeCancel;
+  }
+
+  const grace = durationToMinutes(form.graceValue, form.graceUnit, GRACE_LIMIT);
+  if (typeof grace !== 'number') {
+    errors.graceMinutes = grace.error;
+  } else if (
+    grace !==
+    durationToMinutes(initial.graceValue, initial.graceUnit, GRACE_LIMIT)
+  ) {
+    patch.graceMinutes = grace;
+  }
+
+  // Tope de la llegada anticipada: ya no hay "Llegada desde" editable. Si el
+  // tope baja por debajo de la llegada normal actual, se baja ésta también
+  // (`min(actual, tope)`) para que el backend no rechace por
+  // SERVICE_EARLY_ARRIVAL_MAX_BELOW_EARLY.
   const maxMinutes = durationToMinutes(
     form.earlyArrivalMaxValue,
     form.earlyArrivalMaxUnit,
@@ -259,21 +315,15 @@ export function buildServicePatch(
     initial.earlyArrivalMaxValue,
     initial.earlyArrivalMaxUnit,
   );
-  const earlyChanged =
-    form.earlyArrivalMinutes.trim() !== initial.earlyArrivalMinutes.trim();
   if (typeof maxMinutes !== 'number') {
     errors.earlyArrivalMax = maxMinutes.error;
   } else {
-    const maxChanged = maxMinutes !== initialMaxMinutes;
-    const early = Number(form.earlyArrivalMinutes.trim());
-    if (
-      (maxChanged || earlyChanged) &&
-      Number.isInteger(early) &&
-      maxMinutes < early
-    ) {
-      errors.earlyArrivalMax = `Tiene que ser al menos la llegada normal (${early} min).`;
-    } else if (maxChanged) {
+    if (maxMinutes !== initialMaxMinutes) {
       patch.earlyArrivalMaxMinutes = maxMinutes;
+    }
+    const currentEarly = Number(form.earlyArrivalMinutes.trim());
+    if (Number.isInteger(currentEarly) && maxMinutes < currentEarly) {
+      patch.earlyArrivalMinutes = maxMinutes;
     }
   }
 
@@ -372,9 +422,9 @@ export function buildChecklist(
     const ok = !missing.includes(key);
     let target: ChecklistTarget = { kind: 'section', id: SECTION_IDS[key] };
     if (key === 'mp_account')
-      target = { kind: 'route', to: '../integraciones' };
+      target = { kind: 'route', to: '../../integraciones' };
     if (key === 'rate' && !hasActiveRates) {
-      target = { kind: 'route', to: '../tasas' };
+      target = { kind: 'route', to: '../../tarifas' };
     }
     const isFailed = !ok && (markAllMissingFailed || failed.includes(key));
     return { key, label, ok, failed: isFailed, target };

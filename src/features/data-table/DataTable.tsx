@@ -176,6 +176,7 @@ export function DataTable<TData>({
   refreshDisabled,
   serverState,
   onRowClick,
+  onFilteredCountChange,
   rowSelection,
 }: DataTableProps<TData>) {
   const [globalFilter, setGlobalFilter] = useState('');
@@ -416,6 +417,11 @@ export function DataTable<TData>({
 
   const totalRows =
     serverState?.rowCount ?? table.getFilteredRowModel().rows.length;
+  const onFilteredCountChangeRef = useRef(onFilteredCountChange);
+  onFilteredCountChangeRef.current = onFilteredCountChange;
+  useEffect(() => {
+    onFilteredCountChangeRef.current?.(totalRows);
+  }, [totalRows]);
   const pageCount = getPaginationPageCount(totalRows, pagination.pageSize);
   const safePageIndex = Math.min(
     pagination.pageIndex,

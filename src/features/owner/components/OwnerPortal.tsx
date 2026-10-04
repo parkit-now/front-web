@@ -13,7 +13,10 @@ import { Button } from '../../../shared/components/ui/Button';
 import { IconBuilding } from '../../../shared/components/icons';
 import { MobileBottomNav } from '../../../shared/components/MobileBottomNav';
 import { OWNER_NAV_ITEMS, OwnerSidebar } from './OwnerSidebar';
-import { usePendingApprovalCount } from '../hooks/useReservations';
+import {
+  usePendingApprovalCount,
+  useReservationService,
+} from '../hooks/useReservations';
 import { OwnerTopBar } from './OwnerTopBar';
 import {
   AdminImpersonationBar,
@@ -103,7 +106,13 @@ function OwnerShell({
   const isAdmin = mode === 'admin';
   const { sucursalId } = useSucursal();
   const pendingReservations = usePendingApprovalCount(sucursalId);
+  const reservationService = useReservationService(sucursalId);
   const badges = { reservas: pendingReservations };
+  // `enabled === undefined` mientras carga: sin aviso hasta saberlo.
+  const alerts: Record<string, string> =
+    reservationService.enabled === false
+      ? { reservas: 'Las reservas están desactivadas' }
+      : {};
   const sidebarOffset = isAdmin ? ADMIN_BAR_HEIGHT : 0;
   const mobileNavItems = OWNER_NAV_ITEMS.map((item) => ({
     to: `${basePath}/${item.segment}`,
@@ -123,6 +132,7 @@ function OwnerShell({
           basePath={basePath}
           topOffset={sidebarOffset}
           badges={badges}
+          alerts={alerts}
         />
         <div className="portal-content">
           <OwnerTopBar />

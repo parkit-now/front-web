@@ -233,6 +233,14 @@ export function formatMinutes(totalMinutes: number): string {
 export const NO_CATEGORY_LABEL = 'Sin dato';
 
 /**
+ * Clave y rótulo de la plata de reservas sin estadía (no se presentó o
+ * cancelación con retención): el backend la manda como una porción más para que
+ * el total coincida con el de «por medio de pago».
+ */
+export const RESERVATION_UNUSED_KEY = 'reservation_unused';
+export const RESERVATION_UNUSED_LABEL = 'Reservas sin uso';
+
+/**
  * Porciones de la torta por categoría. La recaudación manda (es lo que dice el
  * centro del gráfico); la cantidad de estadías va como detalle. "Sin dato"
  * (`category: null`) se pinta en gris y queda última, igual que "Sin detalle".
@@ -246,13 +254,22 @@ export function buildCategorySlices(
       breakdown.totalRevenue > 0
         ? slice.revenue / breakdown.totalRevenue
         : (slice.share ?? 0);
+    const isReservationUnused = slice.category === RESERVATION_UNUSED_KEY;
     return {
       name:
-        slice.category === null ? NO_CATEGORY_LABEL : labelOf(slice.category),
+        slice.category === null
+          ? NO_CATEGORY_LABEL
+          : isReservationUnused
+            ? RESERVATION_UNUSED_LABEL
+            : labelOf(slice.category),
       amount: slice.revenue,
       share,
       isUnallocated: slice.category === null,
-      detail: slice.stays === 1 ? '1 estadía' : `${slice.stays} estadías`,
+      detail: isReservationUnused
+        ? 'Sin estadía'
+        : slice.stays === 1
+          ? '1 estadía'
+          : `${slice.stays} estadías`,
     };
   });
   // Sin dato siempre al final, aunque el backend ya lo mande así.
