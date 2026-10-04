@@ -29,6 +29,7 @@ const service: ServiceItem = {
   lateCancelRefundPct: 0,
   earlyArrivalMinutes: 15,
   graceMinutes: 30,
+  earlyArrivalMaxMinutes: 60,
   readiness: { ready: true, missing: [] },
   upcomingPaidReservations: 0,
 };

@@ -1245,6 +1245,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/tenants/{tenantId}/entries/{entryId}/reservation/unlink": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unlink the reservation from an open entry (it becomes a regular stay; the reservation goes back to confirmed, or no_show past its window). Idempotent; optimistic locking like the exit. */
+        post: operations["EntriesController_unlinkReservation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/tenants/{tenantId}/entries/changes": {
         parameters: {
             query?: never;
@@ -2035,6 +2052,23 @@ export interface paths {
         put?: never;
         /** Reject a reservation waiting for approval (full refund) */
         post: operations["OwnerReservationsController_reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tenants/{tenantId}/reservations/match": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Confirmed reservation for a plate arriving now (desktop banner), or null */
+        get: operations["OwnerReservationsController_match"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2837,6 +2871,11 @@ export interface components {
             notes?: string;
             /** @example ABC123 */
             plate: string;
+            /**
+             * @description Lo que el conductor pagó por adelantado con la reserva (snapshot al vincular). La caja cobra `max(estadía − prepagado, 0)`. null sin reserva.
+             * @example 4500
+             */
+            prepaidAmountArs?: number | null;
             /** Format: uuid */
             rateId?: string;
             rateSnapshotFractionPriceArs?: number;
@@ -2844,6 +2883,11 @@ export interface components {
             rateSnapshotMediaEstadiaPriceArs?: number;
             rateSnapshotName?: string;
             rateSnapshotStayPriceArs?: number;
+            /**
+             * Format: uuid
+             * @description Reserva con la que entró el auto. La vincula el backend al crear el ingreso (por `reservationId` o por patente dentro de la ventana de llegada). null en los ingresos sin reserva y en los anteriores. Opcional en el contrato: un backend anterior a la fase 6 no lo manda.
+             */
+            reservationId?: string | null;
             /**
              * @description auto = created by LPR; manual = operator-typed
              * @example manual
@@ -3040,6 +3084,11 @@ export interface components {
             /** @example Tarifa Día Auto */
             rateSnapshotName?: string;
             rateSnapshotStayPriceArs?: number;
+            /**
+             * Format: uuid
+             * @description Reserva que mostró el banner de la caja (`GET /reservations/match`). Opcional: sin ella el backend busca igual por patente (ingresos sin conexión, LPR). Si ya no es válida (otra patente, fuera de la ventana, ya usada) se ignora y se busca por patente: el ingreso NUNCA se rechaza por esto.
+             */
+            reservationId?: string;
             /** @description Sequential ticket number within the cash session. */
             ticketNumber?: number;
             /** @example Volkswagen */
@@ -3193,7 +3242,7 @@ export interface components {
             id: string;
             /** Format: uuid */
             parkingId: string;
-            /** @description A dónde vuelve el conductor después de pagar. Con él la reserva nace en pending_payment y la respuesta trae el checkout. Sin él: en producción 422 RESERVATION_CLIENT_OUTDATED; fuera de producción se mantiene el camino viejo (confirmada, sin pago, respuesta plana). */
+            /** @description A dónde vuelve el conductor después de pagar (parkit://, exp:// o http://localhost:8081/). Con él la reserva nace en pending_payment y la respuesta trae el checkout. Sin él: 422 RESERVATION_CLIENT_OUTDATED (una app vieja no sabe pagar). */
             returnUrl?: string;
             /**
              * @description Se normaliza (mayúsculas, sin espacios ni guiones).
@@ -3734,6 +3783,11 @@ export interface components {
             notes?: string;
             /** @example ABC123 */
             plate: string;
+            /**
+             * @description Lo que el conductor pagó por adelantado con la reserva (snapshot al vincular). La caja cobra `max(estadía − prepagado, 0)`. null sin reserva.
+             * @example 4500
+             */
+            prepaidAmountArs?: number | null;
             /** Format: uuid */
             rateId?: string;
             rateSnapshotFractionPriceArs?: number;
@@ -3741,6 +3795,11 @@ export interface components {
             rateSnapshotMediaEstadiaPriceArs?: number;
             rateSnapshotName?: string;
             rateSnapshotStayPriceArs?: number;
+            /**
+             * Format: uuid
+             * @description Reserva con la que entró el auto. La vincula el backend al crear el ingreso (por `reservationId` o por patente dentro de la ventana de llegada). null en los ingresos sin reserva y en los anteriores. Opcional en el contrato: un backend anterior a la fase 6 no lo manda.
+             */
+            reservationId?: string | null;
             /**
              * @description auto = created by LPR; manual = operator-typed
              * @example manual
@@ -4352,8 +4411,8 @@ export interface components {
              */
             capacity: number;
             /**
-             * @description Free spots, or `null` when capacity is unknown. Floored at 0 — a lot can be overbooked past its configured capacity.
-             * @example 37
+             * @description Free spots right now: `capacity − occupied − reservedHeld` ("Libres ahora", the same number the driver app shows), or `null` when capacity is unknown. Floored at 0 — a lot can be overbooked past its configured capacity.
+             * @example 35
              */
             free: number | null;
             /**
@@ -4366,6 +4425,11 @@ export interface components {
              * @example 63
              */
             occupied: number;
+            /**
+             * @description Spots held right now by today’s reservations whose car has not entered yet (pending payment with a live hold, pending approval, confirmed and still within its grace). Once the car enters (`checked_in`) the reservation stops holding: its entry counts it in `occupied`, so a reserved arrival lowers `free` by 1, not 2. Same rule as the driver app.
+             * @example 2
+             */
+            reservedHeld: number;
         };
         OccupancyResponseDto: {
             /**
@@ -4391,8 +4455,8 @@ export interface components {
              */
             capacity: number;
             /**
-             * @description Free spots, or `null` when capacity is unknown. Floored at 0 — a lot can be overbooked past its configured capacity.
-             * @example 37
+             * @description Free spots right now: `capacity − occupied − reservedHeld` ("Libres ahora", the same number the driver app shows), or `null` when capacity is unknown. Floored at 0 — a lot can be overbooked past its configured capacity.
+             * @example 35
              */
             free: number | null;
             /**
@@ -4405,6 +4469,11 @@ export interface components {
              * @example 63
              */
             occupied: number;
+            /**
+             * @description Spots held right now by today’s reservations whose car has not entered yet (pending payment with a live hold, pending approval, confirmed and still within its grace). Once the car enters (`checked_in`) the reservation stops holding: its entry counts it in `occupied`, so a reserved arrival lowers `free` by 1, not 2. Same rule as the driver app.
+             * @example 2
+             */
+            reservedHeld: number;
         };
         OnboardingApplicationDto: {
             /**
@@ -4506,6 +4575,8 @@ export interface components {
             /** @enum {string} */
             refundStatus: "none" | "pending" | "refunded" | "partial" | "failed";
             status: components["schemas"]["ReservationStatus"];
+            /** @description Ingreso de la caja vinculado (checked_in / completed). null si el auto todavía no entró o la reserva no llegó a usarse. */
+            stay: components["schemas"]["OwnerReservationStayDto"] | null;
             totalArs: number;
             /** @description Categoría del vehículo del conductor al reservar (snapshot). null en las reservas anteriores a las categorías. */
             vehicleCategory: components["schemas"]["VehicleCategory"] | null;
@@ -4545,6 +4616,8 @@ export interface components {
             /** @enum {string} */
             refundStatus: "none" | "pending" | "refunded" | "partial" | "failed";
             status: components["schemas"]["ReservationStatus"];
+            /** @description Ingreso de la caja vinculado (checked_in / completed). null si el auto todavía no entró o la reserva no llegó a usarse. */
+            stay: components["schemas"]["OwnerReservationStayDto"] | null;
             totalArs: number;
             /** @description Categoría del vehículo del conductor al reservar (snapshot). null en las reservas anteriores a las categorías. */
             vehicleCategory: components["schemas"]["VehicleCategory"] | null;
@@ -4569,10 +4642,39 @@ export interface components {
             /** @enum {string} */
             acceptanceMode: "auto" | "manual";
             approvalWindowMinutes: number;
+            /** @description Tope de la llegada anticipada al reservar: hasta cuántos minutos antes de la hora de ingreso el auto se vincula ("llegó antes"). Las reservas anteriores al tope muestran el default (60). */
+            earlyArrivalMaxMinutes: number;
             earlyArrivalMinutes: number;
             freeCancelMinutes: number;
             graceMinutes: number;
             lateCancelRefundPct: number;
+        };
+        OwnerReservationStayDto: {
+            /**
+             * @description Cómo llegó respecto de su ventana: early = antes de la llegada anticipada (dentro del tope; el extra se cobra como excedente), late = pasada la tolerancia.
+             * @enum {string}
+             */
+            arrival: "early" | "on_time" | "late";
+            /**
+             * Format: date-time
+             * @description Cuándo entró el auto.
+             */
+            enteredAt: string;
+            /** Format: uuid */
+            entryId: string;
+            /** @description Lo cobrado en la caja al salir: el excedente sobre el prepago. null mientras sigue adentro. */
+            excessChargedArs: number | null;
+            /**
+             * Format: date-time
+             * @description Cuándo salió; null mientras sigue adentro.
+             */
+            leftAt: string | null;
+            /** @description Minutos antes de la hora de ingreso (o 0). */
+            minutesEarly: number;
+            /** @description Minutos después de la hora de ingreso (o 0). */
+            minutesLate: number;
+            /** @description Prepago descontado en la caja (snapshot del ingreso). */
+            prepaidAmountArs: number | null;
         };
         PaginatedAuditDto: {
             /** @description Events on this page, most recent first. */
@@ -5139,6 +5241,61 @@ export interface components {
          * @enum {string}
          */
         ReservationHoursMode: "opening" | "custom";
+        ReservationMatchDto: {
+            /**
+             * @description Cómo llega el auto AHORA: early (antes de la ventana, dentro del tope: se vincula y el extra se cobra al salir), on_time, late (pasada la tolerancia, antes de exitAt: se vincula) o too_early (sólo en `upcomingToday`: no se vincula).
+             * @enum {string}
+             */
+            arrival: "early" | "on_time" | "late" | "too_early";
+            /**
+             * Format: date-time
+             * @description Desde cuándo puede entrar (entryAt − llegada anticipada).
+             */
+            arrivalFrom: string;
+            /**
+             * Format: date-time
+             * @description Hasta cuándo puede entrar (entryAt + tolerancia).
+             */
+            arrivalUntil: string;
+            /** @description Código corto (R-XXXXXX). */
+            code: string;
+            driverName: string | null;
+            /** Format: date-time */
+            entryAt: string;
+            /** Format: date-time */
+            exitAt: string;
+            /** Format: uuid */
+            id: string;
+            /** @description Si el ingreso de ahora se vincularía a esta reserva. */
+            linkable: boolean;
+            /**
+             * Format: date-time
+             * @description Desde cuándo el ingreso se vincula (entryAt − tope de llegada anticipada). Entre esto y arrivalFrom es "llegó antes".
+             */
+            linkableFrom: string;
+            /**
+             * Format: date-time
+             * @description Hasta cuándo el ingreso se vincula (exitAt). Entre arrivalUntil y esto es "llegó tarde".
+             */
+            linkableUntil: string;
+            /** @description Minutos antes de la hora de ingreso (o 0). */
+            minutesEarly: number;
+            /** @description Minutos después de la hora de ingreso (o 0). */
+            minutesLate: number;
+            /** @description Lo que el conductor ya pagó por Mercado Pago; la caja lo descuenta. 0 si no hay pago registrado (camino viejo, sólo fuera de producción). */
+            prepaidAmountArs: number;
+            status: components["schemas"]["ReservationStatus"];
+            /** @description Precio total de la reserva. */
+            totalArs: number;
+            vehicleCategory: components["schemas"]["VehicleCategory"] | null;
+            vehiclePlate: string;
+        };
+        ReservationMatchResponseDto: {
+            /** @description La reserva de esa patente a la que se vincularía un ingreso ahora (antes, a tiempo o tarde; ver `arrival`), o null. */
+            reservation: components["schemas"]["ReservationMatchDto"] | null;
+            /** @description Sólo si `reservation` es null: la próxima reserva confirmada de HOY de esa patente a la que todavía es muy temprano para vincular (`arrival: too_early`, `linkable: false`). La caja avisa "tiene una reserva hoy a las HH:MM"; el ingreso queda como estadía común. */
+            upcomingToday: components["schemas"]["ReservationMatchDto"] | null;
+        };
         ReservationNotReadyProblemDto: {
             /**
              * @description Stable, machine-readable identifier of the error class (SCREAMING_SNAKE_CASE). Independent of HTTP status and wording. Clients map this to a localized user-facing message.
@@ -5187,6 +5344,8 @@ export interface components {
             acceptanceMode: "auto" | "manual";
             /** @description Minutos que tiene el dueño para aceptar. */
             approvalWindowMinutes: number;
+            /** @description Hasta cuántos minutos antes de la hora de ingreso se puede llegar con la reserva (el tiempo extra se cobra en la caja). */
+            earlyArrivalMaxMinutes: number;
             earlyArrivalMinutes: number;
             /** @description Minutos antes del ingreso con reembolso total. */
             freeCancelMinutes: number;
@@ -5363,6 +5522,8 @@ export interface components {
             approvalWindowMinutes: number;
             /** @enum {string} */
             code: "ADVANCE_RESERVATION";
+            /** @description Tope de la llegada anticipada: hasta cuántos minutos antes de la hora de ingreso el auto se vincula a su reserva ("llegó antes"). Antes de eso entra como estadía común. */
+            earlyArrivalMaxMinutes: number;
             /** @description Minutos antes del ingreso desde los que se puede llegar. */
             earlyArrivalMinutes: number;
             enabled: boolean;
@@ -5401,6 +5562,7 @@ export interface components {
             code: "ADVANCE_RESERVATION";
             /** Format: date-time */
             createdAt: string;
+            earlyArrivalMaxMinutes: number;
             earlyArrivalMinutes: number;
             enabled: boolean;
             freeCancelMinutes: number;
@@ -6069,6 +6231,8 @@ export interface components {
             acceptanceMode?: components["schemas"]["ReservationAcceptanceMode"];
             /** @description Sólo ADVANCE_RESERVATION: minutos para aceptar (modo manual). */
             approvalWindowMinutes?: number;
+            /** @description Sólo ADVANCE_RESERVATION: hasta cuántos minutos antes de la hora de ingreso un auto que llega se vincula a su reserva ("llegó antes"; el extra se cobra como excedente). No puede ser menor que `earlyArrivalMinutes` (SERVICE_EARLY_ARRIVAL_MAX_BELOW_EARLY). */
+            earlyArrivalMaxMinutes?: number;
             /** @description Sólo ADVANCE_RESERVATION: llegada anticipada, en minutos. */
             earlyArrivalMinutes?: number;
             /** @description Whether the amenity is offered by the tenant. */
@@ -7681,7 +7845,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Con returnUrl: { reservation, payment }. Sin returnUrl (sólo fuera de producción, TODO fase 4): la reserva plana, como antes. */
+            /** @description { reservation, payment }: la reserva nace pending_payment y payment trae el checkout. Sin returnUrl: 422 RESERVATION_CLIENT_OUTDATED. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -9214,7 +9378,7 @@ export interface operations {
         parameters: {
             query?: {
                 /** @description Filter by a single action from the catalog (`<entity>.<verb>`). Validated against the catalog, so a typo fails loudly instead of silently returning nothing. */
-                action?: "application.created" | "application.updated" | "application.submitted" | "application.document_added" | "application.rejected" | "user.promoted_to_owner" | "entity.approved" | "entity.rejected" | "entity.profile_updated" | "payment_method.toggled" | "entry.corrected" | "rate.prices_propagated" | "entry.undercharged" | "lpr_event.registered" | "lpr_event.dismissed" | "lpr_event.suppressed" | "lpr_event.archived" | "lpr_event.unarchived" | "lpr_event.image_purged" | "parking.created" | "parking.updated" | "parking.deleted" | "user.role_updated" | "user.deleted" | "membership.created" | "membership.updated" | "membership.deleted" | "mp_account.linked" | "mp_account.unlinked" | "mp_account.link_failed" | "arca_account.linked" | "arca_account.unlinked" | "arca_account.renewal_prepared" | "arca_account.certificate_renewed" | "arca_account.certificate_expired" | "invoice.cert_expired" | "mp_account.token_refreshed" | "mp_account.token_expired" | "payment_intent.cancel_mp_failed" | "payment_intent.refunded" | "reservation.accepted" | "reservation.rejected" | "reservation.cancelled" | "reservation.refund_retried" | "reservation.refund_confirmed" | "reservation.refund_failed" | "reservation.late_payment_refunded";
+                action?: "application.created" | "application.updated" | "application.submitted" | "application.document_added" | "application.rejected" | "user.promoted_to_owner" | "entity.approved" | "entity.rejected" | "entity.profile_updated" | "payment_method.toggled" | "entry.corrected" | "rate.prices_propagated" | "entry.undercharged" | "entry.reservation_unlinked" | "lpr_event.registered" | "lpr_event.dismissed" | "lpr_event.suppressed" | "lpr_event.archived" | "lpr_event.unarchived" | "lpr_event.image_purged" | "parking.created" | "parking.updated" | "parking.deleted" | "user.role_updated" | "user.deleted" | "membership.created" | "membership.updated" | "membership.deleted" | "mp_account.linked" | "mp_account.unlinked" | "mp_account.link_failed" | "arca_account.linked" | "arca_account.unlinked" | "arca_account.renewal_prepared" | "arca_account.certificate_renewed" | "arca_account.certificate_expired" | "invoice.cert_expired" | "mp_account.token_refreshed" | "mp_account.token_expired" | "payment_intent.cancel_mp_failed" | "payment_intent.refunded" | "reservation.accepted" | "reservation.rejected" | "reservation.cancelled" | "reservation.refund_retried" | "reservation.refund_confirmed" | "reservation.refund_failed" | "reservation.late_payment_refunded";
                 /** @description Only events at or after this instant. ISO-8601 **with an explicit offset** (e.g. `-03:00`), matching the metrics endpoints. */
                 from?: string;
                 /** @description 1-based page number. */
@@ -9573,6 +9737,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InvoiceSummaryDto"];
+                };
+            };
+        };
+    };
+    EntriesController_unlinkReservation: {
+        parameters: {
+            query: {
+                /** @description Expected current version of the row. Used for optimistic locking. */
+                expectedVersion: number;
+            };
+            header?: never;
+            path: {
+                entryId: string;
+                /** @description Parking lot tenant ID */
+                tenantId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntryDto"];
+                };
+            };
+            /** @description CONFLICT: la versión no coincide (otra caja lo cambió). ENTRY_RESERVATION_UNLINK_CLOSED: el auto ya salió. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetailsDto"];
                 };
             };
         };
@@ -11464,6 +11663,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OwnerReservationDetailDto"];
+                };
+            };
+        };
+    };
+    OwnerReservationsController_match: {
+        parameters: {
+            query: {
+                /** @description Patente tal como la tipea el operador; se normaliza. */
+                plate: string;
+            };
+            header?: never;
+            path: {
+                /** @description The ID of the tenant (parking lot) */
+                tenantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReservationMatchResponseDto"];
                 };
             };
         };

@@ -46,7 +46,9 @@ function res(patch: Partial<OwnerReservation> = {}): OwnerReservation {
       graceMinutes: 30,
       acceptanceMode: 'auto',
       approvalWindowMinutes: 15,
+      earlyArrivalMaxMinutes: 60,
     },
+    stay: null,
     ...patch,
   };
 }
