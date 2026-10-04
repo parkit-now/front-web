@@ -1,4 +1,5 @@
 import { fmtMoney0 } from '../../../../shared/utils/fmt';
+import { formatDuration } from '../config/reservationSetup';
 import {
   AR_TZ,
   arDayKey,
@@ -76,7 +77,8 @@ export function reasonLabel(
 }
 
 export function statusChip(
-  r: Pick<OwnerReservation, 'status' | 'cancelledBy' | 'reason'>,
+  r: Pick<OwnerReservation, 'status' | 'cancelledBy' | 'reason'> &
+    Partial<Pick<OwnerReservation, 'stay'>>,
 ): Chip {
   switch (r.status) {
     case 'pending_approval':
@@ -84,7 +86,16 @@ export function statusChip(
     case 'confirmed':
       return { label: 'Confirmada', variant: 'ok' };
     case 'checked_in':
-      return { label: 'En curso', variant: 'brand' };
+      // Fase 6c: cómo llegó el auto vinculado.
+      return {
+        label:
+          r.stay?.arrival === 'early'
+            ? 'En curso · llegó antes'
+            : r.stay?.arrival === 'late'
+              ? 'En curso · llegó tarde'
+              : 'En curso',
+        variant: 'brand',
+      };
     case 'completed':
       return { label: 'Completada', variant: 'default' };
     case 'no_show':
@@ -324,6 +335,13 @@ export function policyLines(policy: OwnerReservationPolicy): string[] {
   return [
     `Cancelación gratis hasta ${policy.freeCancelMinutes} min antes; ${late}.`,
     `Puede llegar hasta ${policy.earlyArrivalMinutes} min antes y tiene ${policy.graceMinutes} min de tolerancia.`,
+    // Fase 6c. Un backend anterior no lo manda.
+    ...(typeof policy.earlyArrivalMaxMinutes === 'number' &&
+    policy.earlyArrivalMaxMinutes > policy.earlyArrivalMinutes
+      ? [
+          `Si llega antes, hasta ${formatDuration(policy.earlyArrivalMaxMinutes)} antes entra con la reserva y el tiempo extra se cobra al salir.`,
+        ]
+      : []),
     policy.acceptanceMode === 'manual'
       ? `Aceptación manual: ${policy.approvalWindowMinutes} min para responder.`
       : 'Aceptación automática.',

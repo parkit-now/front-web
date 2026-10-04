@@ -189,6 +189,8 @@ const CODE_MESSAGES: Record<string, string> = {
   // Reservas (setup del dueño y validación de la ventana de reservas).
   SERVICE_RESERVATION_NOT_READY:
     'Completá la configuración de reservas antes de activarlas.',
+  SERVICE_EARLY_ARRIVAL_MAX_BELOW_EARLY:
+    'La llegada anticipada máxima no puede ser menor que la llegada normal.',
   RESERVATION_HOURS_INVALID:
     'Los horarios de reservas no pueden superponerse y la hora de cierre debe ser posterior a la de apertura.',
   RESERVATION_HOURS_OUTSIDE_OPENING:

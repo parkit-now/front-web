@@ -395,6 +395,29 @@ describe('audit utils', () => {
       ).toHaveLength(1);
     });
 
+    it('entry.reservation_unlinked (6c): el dueño ve quién desvinculó y cuánto había pagado', () => {
+      const row = buildAuditRow(
+        event({
+          id: 'unlink',
+          action: 'entry.reservation_unlinked',
+          entityType: 'entry',
+          severity: 'warn',
+          metadata: {
+            actorRole: 'operator',
+            plate: 'AB123CD',
+            reservationCode: 'R-4F2K9A',
+            prepaidAmount: 4500,
+          },
+        }),
+      );
+      expect(row.actionLabel).toBe('Reserva desvinculada en la caja');
+      expect(row.plate).toBe('AB123CD');
+      expect(row.summary).toBe(
+        'Operador desvinculó la reserva R-4F2K9A de AB123CD: se cobra la estadía completa (había pagado $4.500)',
+      );
+      expect(isOwnerAuditVisible('entry.reservation_unlinked')).toBe(true);
+    });
+
     it.each([
       ['owner', 'Dueño'],
       ['operator', 'Operador'],
