@@ -318,13 +318,57 @@ describe('paidAmountArs y policyLines', () => {
     const lines = policyLines(res().policy);
     expect(lines[0]).toContain('gratis hasta 60 min');
     expect(lines[0]).toContain('no se le devuelve nada');
-    expect(lines[2]).toBe('Aceptación automática.');
+    expect(lines[2]).toBe(
+      'Si llega antes, hasta 1 hora antes entra con la reserva y el tiempo extra se cobra al salir.',
+    );
+    expect(lines[3]).toBe('Aceptación automática.');
     const manual = policyLines({
       ...res().policy,
       acceptanceMode: 'manual',
       lateCancelRefundPct: 50,
     });
     expect(manual[0]).toContain('el 50 %');
-    expect(manual[2]).toContain('15 min para responder');
+    expect(manual[3]).toContain('15 min para responder');
+  });
+
+  it('sin tope mayor que la llegada normal (o un backend viejo) no hay línea de llegada anticipada', () => {
+    const same = policyLines({
+      ...res().policy,
+      earlyArrivalMinutes: 15,
+      earlyArrivalMaxMinutes: 15,
+    });
+    expect(same).toHaveLength(3);
+    const old = { ...res().policy } as Partial<OwnerReservation['policy']>;
+    delete old.earlyArrivalMaxMinutes;
+    expect(policyLines(old as OwnerReservation['policy'])).toHaveLength(3);
+    expect(
+      policyLines({ ...res().policy, earlyArrivalMaxMinutes: 45 })[2],
+    ).toContain('hasta 45 minutos antes');
+  });
+
+  it('el chip En curso dice si llegó antes o tarde (6c)', () => {
+    const stay = {
+      entryId: 'e1',
+      enteredAt: '2026-10-03T20:10:00Z',
+      leftAt: null,
+      excessChargedArs: null,
+      prepaidAmountArs: 4500,
+      arrival: 'early' as const,
+      minutesEarly: 50,
+      minutesLate: 0,
+    };
+    expect(statusChip(res({ status: 'checked_in', stay })).label).toBe(
+      'En curso · llegó antes',
+    );
+    expect(
+      statusChip(
+        res({ status: 'checked_in', stay: { ...stay, arrival: 'late' } }),
+      ).label,
+    ).toBe('En curso · llegó tarde');
+    expect(
+      statusChip(
+        res({ status: 'checked_in', stay: { ...stay, arrival: 'on_time' } }),
+      ).label,
+    ).toBe('En curso');
   });
 });
