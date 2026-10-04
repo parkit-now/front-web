@@ -148,6 +148,7 @@ const OWNER_AUDIT_VISIBLE_ACTIONS = new Set<string>([
   'mp_account.token_expired',
   'payment_intent.cancel_mp_failed',
   'payment_intent.refunded',
+  'entry.reservation_unlinked',
   ...RESERVATION_AUDIT_ACTIONS,
 ]);
 
@@ -165,6 +166,7 @@ const KNOWN_AUDIT_ACTIONS = new Set<string>([
   'entry.corrected',
   'rate.prices_propagated',
   'entry.undercharged',
+  'entry.reservation_unlinked',
   'lpr_event.registered',
   'lpr_event.dismissed',
   'lpr_event.suppressed',
@@ -397,6 +399,7 @@ const OTHER_ACTION_LABELS: Record<string, string> = {
   'reservation.refund_confirmed': 'Reembolso confirmado',
   'reservation.refund_failed': 'Reembolso fallido',
   'reservation.late_payment_refunded': 'Pago tardío reembolsado',
+  'entry.reservation_unlinked': 'Reserva desvinculada en la caja',
 };
 
 /** Quién actuó, según `metadata.actorRole`. */
@@ -489,6 +492,14 @@ function actionSummaryFor(
   }
   if (isReservationAction(action)) {
     return reservationSummary(action, metadata);
+  }
+  if (action === 'entry.reservation_unlinked') {
+    // Fase 6c: la caja dejó el ingreso como estadía común; se cobra todo.
+    const who = actorRoleLabel(readString(metadata, 'actorRole') || 'system');
+    const plate = readString(metadata, 'plate');
+    const code = readString(metadata, 'reservationCode');
+    const prepaid = readNumber(metadata, 'prepaidAmount');
+    return `${who} desvinculó la reserva${code ? ` ${code}` : ''}${plate ? ` de ${plate}` : ''}: se cobra la estadía completa${prepaid ? ` (había pagado ${fmtMoney0(prepaid)})` : ''}`;
   }
   if (action === 'payment_intent.refunded') {
     const amount = readNumber(metadata, 'amount');
