@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 import { Logo } from '../../../shared/components/Logo';
+import { ListChecks } from 'lucide-react';
 import { Avatar } from '../../../shared/components/Avatar';
 import {
   IconUsers,
@@ -102,6 +103,11 @@ export const OWNER_NAV: NavEntry[] = [
         // Genérico a propósito: la sección es "Integraciones", no "Mercado
         // Pago". El enchufe comunica "conectar", que es lo que hace la sección.
         icon: <IconPlug size={16} />,
+      },
+      {
+        segment: 'config/lista-blanca',
+        label: 'Lista blanca',
+        icon: <ListChecks size={16} />,
       },
     ],
   },

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { PaymentMethodSummary } from '../../services/entities';
-import { resolvePaymentMethodLock } from './validation';
+import {
+  paymentMethodToggleBlockReason,
+  resolvePaymentMethodLock,
+} from './validation';
 
 function makePaymentMethod(
   overrides: Partial<PaymentMethodSummary> = {},
@@ -20,6 +23,54 @@ function makePaymentMethod(
     ...overrides,
   };
 }
+
+describe('paymentMethodToggleBlockReason', () => {
+  it('permite desactivar y reactivar un medio común no predeterminado', () => {
+    expect(
+      paymentMethodToggleBlockReason(makePaymentMethod(), false),
+    ).toBeNull();
+    expect(
+      paymentMethodToggleBlockReason(
+        makePaymentMethod({ enabled: false }),
+        false,
+      ),
+    ).toBeNull();
+  });
+  it('protege el predeterminado si funciona normalmente', () => {
+    expect(
+      paymentMethodToggleBlockReason(
+        makePaymentMethod({ isDefault: true }),
+        false,
+      ),
+    ).toContain('predeterminado');
+  });
+  it('permite apagar un QR roto incluso si es predeterminado', () => {
+    expect(
+      paymentMethodToggleBlockReason(
+        makePaymentMethod({ isDefault: true }),
+        true,
+      ),
+    ).toBeNull();
+  });
+  it('impide reactivar un QR sin cuenta vinculada, sea o no predeterminado', () => {
+    for (const isDefault of [false, true]) {
+      expect(
+        paymentMethodToggleBlockReason(
+          makePaymentMethod({ enabled: false, isDefault }),
+          true,
+        ),
+      ).toContain('vincular');
+    }
+  });
+  it('permite recuperar un predeterminado inactivo si la integración está disponible', () => {
+    expect(
+      paymentMethodToggleBlockReason(
+        makePaymentMethod({ enabled: false, isDefault: true }),
+        false,
+      ),
+    ).toBeNull();
+  });
+});
 
 describe('resolvePaymentMethodLock', () => {
   it('bloquea el medio integrado cuando no hay cuenta vinculada', () => {

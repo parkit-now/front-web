@@ -4,13 +4,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '../../../../shared/components/ui/Badge';
 import { Button } from '../../../../shared/components/ui/Button';
-import { Switch } from '../../../../shared/components/ui/Switch';
 import { ConfirmDialog } from '../../../../shared/components/ui/ConfirmDialog';
 import {
   IconCheckCircle,
-  IconLock,
   IconPencil,
   IconPlus,
+  IconPower,
   IconTrash,
 } from '../../../../shared/components/icons';
 import { DataTable } from '../../../../features/data-table';
@@ -27,7 +26,10 @@ import {
   type PaymentMethodSummary,
 } from '../../services/entities';
 import { PaymentMethodFormModal } from './PaymentMethodFormModal';
-import { resolvePaymentMethodLock } from './validation';
+import {
+  paymentMethodToggleBlockReason,
+  resolvePaymentMethodLock,
+} from './validation';
 
 function paymentMethodStatus(
   method: PaymentMethodSummary,
@@ -56,6 +58,10 @@ export function PaymentMethodsPage() {
   const [deleteTarget, setDeleteTarget] = useState<PaymentMethodSummary | null>(
     null,
   );
+  const [toggleTarget, setToggleTarget] = useState<{
+    method: PaymentMethodSummary;
+    enabled: boolean;
+  } | null>(null);
 
   // El formulario y el diálogo guardan el medio de pago del estacionamiento
   // activo. Al cambiar de estacionamiento esa referencia queda apuntando a otra
@@ -64,6 +70,7 @@ export function PaymentMethodsPage() {
     setFormOpen(false);
     setEditing(null);
     setDeleteTarget(null);
+    setToggleTarget(null);
   }, [sucursalId]);
 
   const queryKey = ['payment-methods', sucursalId];
@@ -124,7 +131,10 @@ export function PaymentMethodsPage() {
       id: string;
       body: { enabled?: boolean; isDefault?: boolean };
     }) => togglePaymentMethod(sucursalId, id, body),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      setToggleTarget(null);
+      invalidate();
+    },
     onError,
   });
 
@@ -163,7 +173,8 @@ export function PaymentMethodsPage() {
     setFormOpen(true);
   }
 
-  function handleToggleEnabled(m: PaymentMethodSummary) {
+  function handleToggleEnabled(m: PaymentMethodSummary, confirmed = false) {
+    if (toggleMutation.isPending) return;
     const { enableLocked } = resolveRowLock(m);
     // El predeterminado no se apaga: dejaría un medio inactivo preseleccionado
     // en el modal de egreso.
@@ -172,14 +183,19 @@ export function PaymentMethodsPage() {
     // cobra: el estado que la regla quiere evitar YA pasó, y el candado deja
     // de protegerlo para pasar a encerrarlo. Apagarlo es la única salida que
     // le queda al dueño, así que el bloqueo de la integración gana.
-    if (m.isDefault && m.enabled && !enableLocked) {
+    const reason = paymentMethodToggleBlockReason(m, enableLocked);
+    if (reason) {
       showToast({
-        message: 'No podés desactivar el método de pago predeterminado.',
+        message: reason,
         kind: 'error',
       });
       return;
     }
-    toggleMutation.mutate({ id: m.id, body: { enabled: !m.enabled } });
+    if (confirmed) {
+      toggleMutation.mutate({ id: m.id, body: { enabled: !m.enabled } });
+    } else {
+      setToggleTarget({ method: m, enabled: !m.enabled });
+    }
   }
 
   function handleMakeDefault(m: PaymentMethodSummary) {
@@ -272,6 +288,10 @@ export function PaymentMethodsPage() {
         cell: ({ row }) => {
           const m = row.original;
           const { enableLocked, setDefaultLocked } = resolveRowLock(m);
+          const toggleBlockReason = paymentMethodToggleBlockReason(
+            m,
+            enableLocked,
+          );
           return (
             <div
               style={{
@@ -289,6 +309,24 @@ export function PaymentMethodsPage() {
                 onClick={() => openEdit(m)}
               >
                 <IconPencil size={16} />
+              </button>
+              <button
+                type="button"
+                className="pk-btn pk-btn-ghost pk-btn-icon"
+                title={
+                  toggleBlockReason ??
+                  (m.enabled
+                    ? 'Desactivar método de pago'
+                    : 'Reactivar método de pago')
+                }
+                aria-label={`${m.enabled ? 'Desactivar' : 'Reactivar'} ${m.name}`}
+                disabled={
+                  toggleMutation.isPending || Boolean(toggleBlockReason)
+                }
+                style={toggleBlockReason ? { opacity: 0.35 } : undefined}
+                onClick={() => handleToggleEnabled(m)}
+              >
+                <IconPower size={16} />
               </button>
               {m.isSystem ? (
                 <button
@@ -342,43 +380,7 @@ export function PaymentMethodsPage() {
                   <IconCheckCircle size={16} />
                 </button>
               ) : null}
-              {m.isDefault && !enableLocked ? (
-                // The default can't be disabled (it'd leave a disabled method
-                // pre-selected at checkout). Communicate the rule instead of
-                // showing a dead toggle: lock + tooltip on how to unlock it.
-                //
-                // `&& !enableLocked` no es una guarda de más. Un medio
-                // integrado que quedó default y después se le cayó la cuenta
-                // entra por acá y se come el candado: el dueño ve "Siempre
-                // activo" sobre un QR muerto, sin interruptor y sin forma de
-                // apagarlo. El bloqueo de la integración gana y lo manda a la
-                // rama de abajo, que sí lo deja apagar.
-                <span
-                  title="El medio predeterminado siempre está activo. Para desactivarlo, primero marcá otro como predeterminado."
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    marginLeft: 4,
-                    fontSize: 12,
-                    color: 'var(--text-3)',
-                  }}
-                >
-                  <IconLock size={13} />
-                  <span style={{ minWidth: 52 }}>Siempre activo</span>
-                </span>
-              ) : enableLocked ? (
-                // Sin cuenta viva detrás, prender este medio no habilita nada:
-                // el operario lo vería en el modal de egreso, lo elegiría, y
-                // el QR no cobraría con el cliente parado en la ventanilla.
-                // El arreglo no está acá, está en Integraciones, así que al
-                // lado del interruptor va el camino de salida.
-                //
-                // El interruptor se bloquea en UNA sola dirección: no se puede
-                // prender, sí se puede apagar. Apagarlo es la salida de
-                // emergencia del dueño —lo único que todavía tiene efecto real
-                // sobre un QR roto— y el backend lo permite explícitamente
-                // (sólo valida la cuenta cuando `enabled === true`).
+              {enableLocked ? (
                 <span
                   title={
                     m.enabled
@@ -392,16 +394,6 @@ export function PaymentMethodsPage() {
                     marginLeft: 4,
                   }}
                 >
-                  <Switch
-                    checked={m.enabled}
-                    disabled={!m.enabled}
-                    onChange={() => handleToggleEnabled(m)}
-                    aria-label={
-                      m.enabled
-                        ? `Desactivar ${m.name}`
-                        : `${m.name} necesita una cuenta de Mercado Pago vinculada`
-                    }
-                  />
                   {/*
                     Ruta relativa: `metodos-de-pago` e `integraciones` son
                     hermanas, así que el mismo link sirve para el dueño
@@ -422,32 +414,7 @@ export function PaymentMethodsPage() {
                     Volver a vincular
                   </Link>
                 </span>
-              ) : (
-                <span
-                  title={m.enabled ? 'Desactivar' : 'Activar'}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    marginLeft: 4,
-                  }}
-                >
-                  <Switch
-                    checked={m.enabled}
-                    onChange={() => handleToggleEnabled(m)}
-                    aria-label={`Activar/desactivar ${m.name}`}
-                  />
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: 'var(--text-3)',
-                      minWidth: 52,
-                    }}
-                  >
-                    {m.enabled ? 'Activo' : 'Inactivo'}
-                  </span>
-                </span>
-              )}
+              ) : null}
             </div>
           );
         },
@@ -518,6 +485,31 @@ export function PaymentMethodsPage() {
         }}
         onSubmit={(name) =>
           saveMutation.mutate({ id: editing?.id ?? null, name })
+        }
+      />
+
+      <ConfirmDialog
+        open={toggleTarget !== null}
+        title={`${toggleTarget?.enabled ? 'Reactivar' : 'Desactivar'} método de pago`}
+        confirmLabel={toggleTarget?.enabled ? 'Reactivar' : 'Desactivar'}
+        loading={toggleMutation.isPending}
+        onConfirm={() => {
+          if (!toggleTarget || toggleMutation.isPending) return;
+          const current = medios.find((m) => m.id === toggleTarget.method.id);
+          if (!current || current.enabled === toggleTarget.enabled) {
+            setToggleTarget(null);
+            return;
+          }
+          handleToggleEnabled(current, true);
+        }}
+        onClose={() => {
+          if (!toggleMutation.isPending) setToggleTarget(null);
+        }}
+        message={
+          <>
+            ¿{toggleTarget?.enabled ? 'Reactivar' : 'Desactivar'}{' '}
+            <strong>{toggleTarget?.method.name}</strong>?
+          </>
         }
       />
 
