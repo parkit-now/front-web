@@ -43,11 +43,7 @@ import {
   IconTrending,
 } from '../../../../shared/components/icons';
 import { Modal } from '../../../../shared/components/ui/Modal';
-import {
-  isLegacyEvidence,
-  plateCropStyle,
-  plateOverlayStyle,
-} from './lprImage';
+import { isLegacyEvidence, plateOverlayStyle } from './lprImage';
 import { fmtDateTimeAr, fmtMoney0 } from '../../../../shared/utils/fmt';
 import { useSucursal } from '../../context/SucursalContext';
 import {
@@ -700,14 +696,21 @@ function EvidenceImage({
         onClick={() => setZoomed(true)}
         aria-label={`Ver la imagen completa de la detección ${lprPlate(event)}`}
       >
-        {/* Con bbox se acerca a la patente; sin él la imagen YA es el recorte
-            (formato viejo) y recortarla de nuevo dejaría unos pocos píxeles. */}
-        <img
-          className="lpr-review-image"
-          style={bbox ? plateCropStyle(bbox) : undefined}
-          src={imageQuery.data}
-          alt={`Patente detectada ${lprPlate(event)}`}
-        />
+        {/* La card muestra la foto completa en su proporción real: el bbox viene
+            normalizado contra esa imagen, así que recortar con CSS lo desfasaba. */}
+        <span className="lpr-review-image-stage">
+          <img
+            className="lpr-review-image"
+            src={imageQuery.data}
+            alt={`Patente detectada ${lprPlate(event)}`}
+          />
+          {bbox ? (
+            <span
+              className="lpr-review-plate"
+              style={plateOverlayStyle(bbox)}
+            />
+          ) : null}
+        </span>
         <span className="lpr-review-image-expand">
           <IconMaximize size={13} />
           Ver vehículo

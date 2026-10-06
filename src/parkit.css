@@ -497,6 +497,28 @@ a {
   border-bottom: 0;
 }
 
+.lpr-review-image-stage {
+  position: relative;
+  display: block;
+  width: 100%;
+  line-height: 0;
+  background: var(--bg-b);
+}
+
+.lpr-review-image-stage .lpr-review-image {
+  aspect-ratio: auto;
+  height: auto;
+  object-fit: fill;
+}
+
+.lpr-review-plate {
+  position: absolute;
+  border: 2px solid #22c55e;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+}
+
 .lpr-review-image-expand {
   position: absolute;
   right: 8px;
