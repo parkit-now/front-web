@@ -4,6 +4,7 @@ import type { LprDetectionEvent } from '../../services/lpr-events';
 import type { Entry, PaymentTransaction } from '../../services/operations';
 import {
   invoiceLetter,
+  receiverDescription,
   resolveInvoiceState,
   type InvoiceState,
 } from './invoiceUtils';
@@ -24,12 +25,11 @@ export type EntryHistoryRow = Entry & {
   invoiceReceiver: string;
 };
 
-const DOC_TIPO_CUIT = 80;
-
 function receiverLabel(invoice: Invoice | null): string {
-  if (!invoice || invoice.receptorDocTipo !== DOC_TIPO_CUIT) return '';
-  const cuit = invoice.receptorDocNro ?? '';
-  return invoice.receptorNombre ? `${invoice.receptorNombre} · ${cuit}` : cuit;
+  if (!invoice || invoice.receptorDocTipo !== 80 || !invoice.receptorDocNro) {
+    return '';
+  }
+  return receiverDescription(invoice);
 }
 
 export interface PaymentMethodSummary {

@@ -49,6 +49,7 @@ import {
   INVOICE_STATE_LABEL,
   INVOICE_STATE_ORDER,
   INVOICE_STATE_VARIANT,
+  invoiceLetter,
   voucherLabel,
 } from './invoiceUtils';
 import type { EntryHistoryRow } from './operationUtils';
@@ -65,6 +66,7 @@ const SEARCHABLE_KEYS = [
   'plate',
   'vehicleBrand',
   'vehicleModel',
+  'invoiceReceiver',
   'notes',
 ];
 const FILTERABLE_COLUMNS = [
@@ -108,17 +110,30 @@ function MutedDash() {
 
 function InvoiceCell({ row }: { row: EntryHistoryRow }) {
   if (row.invoiceState === 'na') return <MutedDash />;
-  const voucher =
+  const invoice =
     row.invoice &&
     (row.invoiceState === 'issued' || row.invoiceState === 'issuing')
-      ? voucherLabel(row.invoice)
+      ? row.invoice
       : null;
+  const letter = invoiceLetter(invoice?.cbteTipo);
+  const voucherNumber =
+    invoice?.ptoVta != null && invoice.cbteNro != null
+      ? `${String(invoice.ptoVta).padStart(4, '0')}-${String(invoice.cbteNro).padStart(8, '0')}`
+      : null;
+  const voucher = invoice ? voucherLabel(invoice) : null;
   return (
     <div className="operation-invoice-cell">
       <Badge variant={INVOICE_STATE_VARIANT[row.invoiceState]}>
         {INVOICE_STATE_LABEL[row.invoiceState]}
       </Badge>
-      {voucher ? <small>{voucher}</small> : null}
+      {letter ? (
+        <span className="operation-invoice-line">Factura {letter}</span>
+      ) : voucher ? (
+        <span className="operation-invoice-line">{voucher}</span>
+      ) : null}
+      {voucherNumber ? (
+        <span className="operation-invoice-number">{voucherNumber}</span>
+      ) : null}
     </div>
   );
 }

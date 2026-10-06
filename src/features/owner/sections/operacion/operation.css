@@ -513,15 +513,28 @@
 
 .operation-invoice-cell {
   display: grid;
-  gap: 3px;
+  gap: 5px;
   justify-items: start;
+  align-content: start;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
-.operation-invoice-cell small {
+.operation-invoice-line,
+.operation-invoice-number {
+  display: block;
+  max-width: 210px;
+  min-height: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--text-3);
   font-family: var(--mono);
   font-size: 11px;
+  line-height: 1.25;
+}
+
+.operation-invoice-number {
+  max-width: 140px;
 }
 
 .operation-invoice {

@@ -324,6 +324,6 @@ describe('attachPaymentsToEntries — factura', () => {
 
     expect(row.invoiceState).toBe('issued');
     expect(row.invoiceLetterValue).toBe('A');
-    expect(row.invoiceReceiver).toBe('EMPRESA SA · 30712345671');
+    expect(row.invoiceReceiver).toBe('EMPRESA SA · CUIT 30-71234567-1');
   });
 });
