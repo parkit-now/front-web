@@ -15,10 +15,12 @@ import { Badge } from '../../../../shared/components/ui/Badge';
 import { Button } from '../../../../shared/components/ui/Button';
 import { Drawer } from '../../../../shared/components/ui/Drawer';
 import { EmptyState } from '../../../../shared/components/ui/EmptyState';
+import { Modal } from '../../../../shared/components/ui/Modal';
 import { Switch } from '../../../../shared/components/ui/Switch';
 import {
   IconAlert,
   IconChevronLeft,
+  IconEye,
   IconRefresh,
 } from '../../../../shared/components/icons';
 import { fmtDateTimeAr, fmtMoney } from '../../../../shared/utils/fmt';
@@ -32,20 +34,23 @@ import {
   type InvoiceBatchResult,
 } from '../../services/invoices';
 import {
+  getLprDetectionEventImageUrl,
+  listRegisteredLprDetectionEventsForEntries,
+} from '../../services/lpr-events';
+import {
   listEntries,
   listPaymentTransactions,
 } from '../../services/operations';
+import { plateOverlayStyle } from '../auditoria/lprImage';
 import { InvoiceBatchResultModal } from './InvoiceBatchResultModal';
 import { InvoiceDetail, type ArcaInvoicing } from './InvoiceDetail';
 import {
   canIssueInvoice,
-  countInvoiceChips,
   INVOICE_STATE_LABEL,
   INVOICE_STATE_ORDER,
   INVOICE_STATE_VARIANT,
-  matchesInvoiceChip,
+  invoiceLetter,
   voucherLabel,
-  type InvoiceChip,
 } from './invoiceUtils';
 import type { EntryHistoryRow } from './operationUtils';
 import {
@@ -56,7 +61,14 @@ import {
 } from './operationUtils';
 import './operation.css';
 
-const SEARCHABLE_KEYS = ['plate', 'vehicleBrand', 'vehicleModel', 'notes'];
+const SEARCHABLE_KEYS = [
+  'ticketNumber',
+  'plate',
+  'vehicleBrand',
+  'vehicleModel',
+  'invoiceReceiver',
+  'notes',
+];
 const FILTERABLE_COLUMNS = [
   'enteredAtLocalDate',
   'leftAtLocalDate',
@@ -65,7 +77,6 @@ const FILTERABLE_COLUMNS = [
   'invoiceState',
   'invoiceLetterValue',
   'invoiceReceiver',
-  'paidTotal',
   'rateSnapshotName',
   'vehicleBrand',
   'vehicleModel',
@@ -75,7 +86,6 @@ const FILTERABLE_COLUMNS = [
 const INITIAL_COLUMN_VISIBILITY = {
   invoiceLetterValue: false,
   invoiceReceiver: false,
-  paidTotal: false,
 };
 const INVOICE_STATE_OPTIONS = INVOICE_STATE_ORDER.map((state) => ({
   value: state,
@@ -85,11 +95,6 @@ const INVOICE_LETTER_OPTIONS = (['A', 'B', 'C'] as const).map((letter) => ({
   value: letter,
   label: `Factura ${letter}`,
 }));
-const INVOICE_CHIPS: ReadonlyArray<{ id: InvoiceChip; label: string }> = [
-  { id: 'all', label: 'Todas' },
-  { id: 'unbilled', label: 'Sin facturar' },
-];
-
 const moneySorting: SortingFn<EntryHistoryRow> = (left, right) => {
   return (left.original.paidTotal ?? -1) - (right.original.paidTotal ?? -1);
 };
@@ -105,17 +110,30 @@ function MutedDash() {
 
 function InvoiceCell({ row }: { row: EntryHistoryRow }) {
   if (row.invoiceState === 'na') return <MutedDash />;
-  const voucher =
+  const invoice =
     row.invoice &&
     (row.invoiceState === 'issued' || row.invoiceState === 'issuing')
-      ? voucherLabel(row.invoice)
+      ? row.invoice
       : null;
+  const letter = invoiceLetter(invoice?.cbteTipo);
+  const voucherNumber =
+    invoice?.ptoVta != null && invoice.cbteNro != null
+      ? `${String(invoice.ptoVta).padStart(4, '0')}-${String(invoice.cbteNro).padStart(8, '0')}`
+      : null;
+  const voucher = invoice ? voucherLabel(invoice) : null;
   return (
     <div className="operation-invoice-cell">
       <Badge variant={INVOICE_STATE_VARIANT[row.invoiceState]}>
         {INVOICE_STATE_LABEL[row.invoiceState]}
       </Badge>
-      {voucher ? <small>{voucher}</small> : null}
+      {letter ? (
+        <span className="operation-invoice-line">Factura {letter}</span>
+      ) : voucher ? (
+        <span className="operation-invoice-line">{voucher}</span>
+      ) : null}
+      {voucherNumber ? (
+        <span className="operation-invoice-number">{voucherNumber}</span>
+      ) : null}
     </div>
   );
 }
@@ -124,31 +142,35 @@ function paidLabel(row: EntryHistoryRow): string {
   return row.paidTotal != null ? fmtMoney(row.paidTotal) : 'Sin cobro';
 }
 
-function PaymentLines({
-  row,
-  compact = false,
-}: {
-  row: EntryHistoryRow;
-  compact?: boolean;
-}) {
+function compactPaymentMethods(row: EntryHistoryRow): string {
+  if (row.paymentLines.length === 0) return 'Sin medio';
+  return row.paymentLines.map((line) => line.paymentMethodName).join(' + ');
+}
+
+function PaymentSummary({ row }: { row: EntryHistoryRow }) {
+  if (row.paidTotal == null) return <MutedDash />;
+  const methods = compactPaymentMethods(row);
+  const breakdown =
+    row.paymentLines.length > 1
+      ? row.paymentLines
+          .map((line) => `${line.paymentMethodName}: ${fmtMoney(line.amount)}`)
+          .join(' · ')
+      : methods;
+
+  return (
+    <div className="operation-payment-summary" title={breakdown}>
+      <strong>{fmtMoney(row.paidTotal)}</strong>
+      <span>{methods}</span>
+    </div>
+  );
+}
+
+function PaymentLines({ row }: { row: EntryHistoryRow }) {
   if (row.paymentLines.length === 0) {
     return row.paidTotal != null ? (
       <span className="operation-mono">{fmtMoney(row.paidTotal)}</span>
     ) : (
       <MutedDash />
-    );
-  }
-
-  if (compact) {
-    return (
-      <div className="operation-payment-table">
-        {row.paymentLines.map((line) => (
-          <div className="operation-payment-table-line" key={line.id}>
-            <span>{line.paymentMethodName}</span>
-            <strong>{fmtMoney(line.amount)}</strong>
-          </div>
-        ))}
-      </div>
     );
   }
 
@@ -161,6 +183,71 @@ function PaymentLines({
         </div>
       ))}
     </div>
+  );
+}
+
+function HistoryPhotoModal({
+  row,
+  tenantId,
+  onClose,
+}: {
+  row: EntryHistoryRow | null;
+  tenantId: string;
+  onClose: () => void;
+}) {
+  const signedUrlQuery = useQuery({
+    queryKey: [
+      'history-entry-lpr-image-url',
+      tenantId,
+      row?.lprDetection?.id,
+      row?.lprDetection?.imageStoragePath,
+    ],
+    queryFn: () =>
+      getLprDetectionEventImageUrl({
+        tenantId,
+        eventId: row?.lprDetection?.id ?? '',
+      }),
+    enabled: Boolean(
+      row && !row.historyImageUrl && row.lprDetection?.imageStoragePath,
+    ),
+    staleTime: 4 * 60 * 1000,
+    retry: 1,
+  });
+
+  const imageUrl = row?.historyImageUrl ?? signedUrlQuery.data ?? null;
+  const bbox = row?.lprDetection?.plateBbox ?? null;
+
+  return (
+    <Modal
+      open={Boolean(row)}
+      onClose={onClose}
+      title={row ? `Foto de ${row.plate}` : 'Foto del ingreso'}
+      width={960}
+      fitContent
+      bodyScrollable={false}
+      bodyStyle={{ overflow: 'hidden' }}
+    >
+      {!row || signedUrlQuery.isLoading ? (
+        <div className="operation-photo-state">Cargando imagen...</div>
+      ) : signedUrlQuery.isError || !imageUrl ? (
+        <div className="operation-photo-state">
+          <IconAlert size={22} />
+          No se pudo cargar la imagen.
+        </div>
+      ) : (
+        <div className="operation-photo-frame">
+          <div className="operation-photo-stage">
+            <img src={imageUrl} alt={`Vehículo ${row.plate}`} />
+            {bbox ? (
+              <span
+                className="operation-photo-plate"
+                style={plateOverlayStyle(bbox)}
+              />
+            ) : null}
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -211,6 +298,9 @@ function EntryDetailDrawer({
           </p>
 
           <div className="operation-detail-list">
+            <DetailItem label="Ticket">
+              {row.ticketNumber ?? <MutedDash />}
+            </DetailItem>
             <DetailItem label="Caja">
               {cashSessionName ?? <MutedDash />}
             </DetailItem>
@@ -277,7 +367,8 @@ export function HistorialPage() {
   );
   const [includeInLot, setIncludeInLot] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [invoiceChip, setInvoiceChip] = useState<InvoiceChip>('all');
+  const [photoRow, setPhotoRow] = useState<EntryHistoryRow | null>(null);
+  const [visibleEntryIds, setVisibleEntryIds] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchResults, setBatchResults] = useState<InvoiceBatchResult[] | null>(
@@ -316,6 +407,21 @@ export function HistorialPage() {
     queryFn: () => listInvoices(sucursalId),
     enabled: Boolean(sucursalId),
   });
+  const lprEventsQuery = useQuery({
+    queryKey: [
+      'owner-operations',
+      sucursalId,
+      'registered-lpr-events',
+      visibleEntryIds,
+    ],
+    queryFn: () =>
+      listRegisteredLprDetectionEventsForEntries({
+        tenantId: sucursalId,
+        entryIds: visibleEntryIds,
+      }),
+    enabled: Boolean(sucursalId && visibleEntryIds.length > 0),
+    staleTime: 60 * 1000,
+  });
 
   const sessions = useMemo(
     () =>
@@ -348,8 +454,14 @@ export function HistorialPage() {
         entriesQuery.data ?? [],
         paymentsQuery.data ?? [],
         invoicesQuery.data ?? [],
+        lprEventsQuery.data ?? [],
       ),
-    [entriesQuery.data, paymentsQuery.data, invoicesQuery.data],
+    [
+      entriesQuery.data,
+      paymentsQuery.data,
+      invoicesQuery.data,
+      lprEventsQuery.data,
+    ],
   );
   const switchedRows = useMemo(
     () =>
@@ -360,19 +472,7 @@ export function HistorialPage() {
       }),
     [activeCashSession?.id, baseRows, includeInLot, onlyCurrentSession],
   );
-  const chipCounts = useMemo(
-    () => countInvoiceChips(switchedRows),
-    [switchedRows],
-  );
-  const rows = useMemo(
-    () =>
-      invoiceChip === 'all'
-        ? switchedRows
-        : switchedRows.filter((row) =>
-            matchesInvoiceChip(row.invoiceState, invoiceChip),
-          ),
-    [invoiceChip, switchedRows],
-  );
+  const rows = switchedRows;
   const selected = useMemo(
     () => baseRows.find((row) => row.id === selectedId) ?? null,
     [baseRows, selectedId],
@@ -417,23 +517,68 @@ export function HistorialPage() {
         : [],
     [focusedCashSessionId],
   );
+  const handleVisibleRowIdsChange = useCallback((ids: string[]) => {
+    setVisibleEntryIds((current) => {
+      if (
+        current.length === ids.length &&
+        current.every((id, index) => id === ids[index])
+      ) {
+        return current;
+      }
+      return ids;
+    });
+  }, []);
 
   const columns = useMemo<ColumnDef<EntryHistoryRow, unknown>[]>(
     () => [
       {
-        id: 'cashSessionId',
-        accessorFn: (row) => row.cashSessionId ?? '',
-        header: 'Caja',
-        size: 190,
-        filterFn: 'includesSome',
+        id: 'photo',
+        header: '',
+        size: 44,
+        enableSorting: false,
+        enableHiding: false,
         cell: ({ row }) => {
-          const id = row.original.cashSessionId;
-          return id ? (
-            (sessionLabelById.get(id) ?? id.slice(0, 8))
-          ) : (
-            <MutedDash />
+          const hasPhoto = Boolean(
+            row.original.historyImageUrl ||
+            row.original.lprDetection?.imageStoragePath,
+          );
+          return (
+            <button
+              type="button"
+              className="operation-photo-button"
+              disabled={!hasPhoto}
+              title={
+                hasPhoto
+                  ? `Ver foto de ${row.original.plate}`
+                  : 'Este ingreso no tiene foto'
+              }
+              aria-label={
+                hasPhoto
+                  ? `Ver foto de ${row.original.plate}`
+                  : 'Este ingreso no tiene foto'
+              }
+              onClick={(event) => {
+                event.stopPropagation();
+                if (hasPhoto) setPhotoRow(row.original);
+              }}
+            >
+              <IconEye size={16} />
+            </button>
           );
         },
+      },
+      {
+        accessorKey: 'ticketNumber',
+        header: '#',
+        size: 64,
+        cell: ({ row }) =>
+          row.original.ticketNumber != null ? (
+            <span className="operation-ticket-badge">
+              #{row.original.ticketNumber}
+            </span>
+          ) : (
+            <MutedDash />
+          ),
       },
       {
         accessorKey: 'plate',
@@ -454,12 +599,6 @@ export function HistorialPage() {
         header: 'Modelo',
         size: 140,
         cell: ({ row }) => row.original.vehicleModel || <MutedDash />,
-      },
-      {
-        accessorKey: 'color',
-        header: 'Color',
-        size: 110,
-        cell: ({ row }) => row.original.color || <MutedDash />,
       },
       {
         id: 'enteredAtLocalDate',
@@ -483,20 +622,14 @@ export function HistorialPage() {
           ),
       },
       {
-        accessorKey: 'rateSnapshotName',
-        header: 'Tarifa',
-        size: 150,
-        cell: ({ row }) => row.original.rateSnapshotName || <MutedDash />,
-      },
-      {
         id: 'paymentMethodValues',
         accessorKey: 'paymentMethodValues',
         header: 'Cobrado',
-        size: 210,
+        size: 155,
         filterFn: 'includesSome',
         sortingFn: moneySorting,
         meta: { filterLabel: 'Medio de pago' },
-        cell: ({ row }) => <PaymentLines row={row.original} compact />,
+        cell: ({ row }) => <PaymentSummary row={row.original} />,
       },
       {
         id: 'invoiceState',
@@ -528,31 +661,43 @@ export function HistorialPage() {
         cell: ({ row }) => row.original.invoiceReceiver || <MutedDash />,
       },
       {
-        id: 'paidTotal',
-        accessorFn: (row) => row.paidTotal ?? undefined,
-        header: 'Monto',
-        size: 120,
-        filterFn: 'numberRange',
-        cell: ({ row }) =>
-          row.original.paidTotal != null ? (
-            <span className="operation-mono">
-              {fmtMoney(row.original.paidTotal)}
-            </span>
+        id: 'cashSessionId',
+        accessorFn: (row) => row.cashSessionId ?? '',
+        header: 'Caja',
+        size: 190,
+        filterFn: 'includesSome',
+        cell: ({ row }) => {
+          const id = row.original.cashSessionId;
+          return id ? (
+            (sessionLabelById.get(id) ?? id.slice(0, 8))
           ) : (
             <MutedDash />
-          ),
+          );
+        },
       },
       {
-        accessorKey: 'cochera',
-        header: 'Cochera',
+        accessorKey: 'rateSnapshotName',
+        header: 'Tarifa',
+        size: 150,
+        cell: ({ row }) => row.original.rateSnapshotName || <MutedDash />,
+      },
+      {
+        accessorKey: 'color',
+        header: 'Color',
         size: 110,
-        cell: ({ row }) => row.original.cochera || <MutedDash />,
+        cell: ({ row }) => row.original.color || <MutedDash />,
       },
       {
         accessorKey: 'notes',
         header: 'Notas',
         size: 240,
         cell: ({ row }) => row.original.notes || <MutedDash />,
+      },
+      {
+        accessorKey: 'cochera',
+        header: 'Cochera',
+        size: 110,
+        cell: ({ row }) => row.original.cochera || <MutedDash />,
       },
     ],
     [sessionLabelById],
@@ -574,6 +719,7 @@ export function HistorialPage() {
     void sessionsQuery.refetch();
     void paymentsQuery.refetch();
     void invoicesQuery.refetch();
+    void lprEventsQuery.refetch();
   }
 
   /** Después de emitir o marcar: facturas y estadías (por la `version`). */
@@ -687,31 +833,13 @@ export function HistorialPage() {
         </div>
       ) : (
         <>
-          <div
-            className="operation-invoice-chips"
-            role="group"
-            aria-label="Facturación"
-          >
-            {INVOICE_CHIPS.map((chip) => (
-              <button
-                key={chip.id}
-                type="button"
-                className="operation-invoice-chip"
-                aria-pressed={invoiceChip === chip.id}
-                onClick={() => setInvoiceChip(chip.id)}
-              >
-                {chip.label}
-                {chip.id === 'all' ? null : <b>{chipCounts[chip.id]}</b>}
-              </button>
-            ))}
-          </div>
           <DataTable<EntryHistoryRow>
             key={focusedCashSessionId ?? 'historial'}
             data={rows}
             columns={columns}
             isLoading={isLoading}
             emptyMessage="No hay movimientos registrados todavía."
-            searchPlaceholder="Buscar por patente, vehículo o notas"
+            searchPlaceholder="Buscar por ticket, patente, vehículo o notas"
             searchableKeys={SEARCHABLE_KEYS}
             filterableColumns={FILTERABLE_COLUMNS}
             filterOptionsByColumn={{
@@ -723,6 +851,7 @@ export function HistorialPage() {
             initialColumnVisibility={INITIAL_COLUMN_VISIBILITY}
             initialColumnFilters={initialColumnFilters}
             onColumnFiltersChange={handleColumnFiltersChange}
+            onVisibleRowIdsChange={handleVisibleRowIdsChange}
             columnFiltersOverride={columnFiltersOverride}
             columnFiltersOverrideKey={columnFiltersOverrideKey}
             getRowId={(row) => row.id}
@@ -733,7 +862,8 @@ export function HistorialPage() {
               entriesQuery.isFetching ||
               sessionsQuery.isFetching ||
               paymentsQuery.isFetching ||
-              invoicesQuery.isFetching
+              invoicesQuery.isFetching ||
+              lprEventsQuery.isFetching
             }
             onRowClick={(row) => setSelectedId(row.id)}
             rowSelection={
@@ -797,6 +927,12 @@ export function HistorialPage() {
         emitter={arcaQuery.data?.condicionIva ?? null}
         onInvoiceChanged={refreshInvoicing}
         onClose={() => setSelectedId(null)}
+      />
+
+      <HistoryPhotoModal
+        row={photoRow}
+        tenantId={sucursalId}
+        onClose={() => setPhotoRow(null)}
       />
 
       <InvoiceBatchResultModal

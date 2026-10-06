@@ -1,8 +1,10 @@
 import type { CashSession } from '../../services/cash-sessions';
 import type { Invoice } from '../../services/invoices';
+import type { LprDetectionEvent } from '../../services/lpr-events';
 import type { Entry, PaymentTransaction } from '../../services/operations';
 import {
   invoiceLetter,
+  receiverDescription,
   resolveInvoiceState,
   type InvoiceState,
 } from './invoiceUtils';
@@ -14,6 +16,8 @@ export type EntryHistoryRow = Entry & {
   paymentMethodValues: string[];
   paidTotal: number | null;
   invoice: Invoice | null;
+  lprDetection: LprDetectionEvent | null;
+  historyImageUrl: string | null;
   invoiceState: InvoiceState;
   /** `A` / `B` / `C`, o `''`: para el filtro «Comprobante». */
   invoiceLetterValue: string;
@@ -21,12 +25,11 @@ export type EntryHistoryRow = Entry & {
   invoiceReceiver: string;
 };
 
-const DOC_TIPO_CUIT = 80;
-
 function receiverLabel(invoice: Invoice | null): string {
-  if (!invoice || invoice.receptorDocTipo !== DOC_TIPO_CUIT) return '';
-  const cuit = invoice.receptorDocNro ?? '';
-  return invoice.receptorNombre ? `${invoice.receptorNombre} · ${cuit}` : cuit;
+  if (!invoice || invoice.receptorDocTipo !== 80 || !invoice.receptorDocNro) {
+    return '';
+  }
+  return receiverDescription(invoice);
 }
 
 export interface PaymentMethodSummary {
@@ -96,10 +99,29 @@ export function attachPaymentsToEntries(
   entries: Entry[],
   transactions: PaymentTransaction[],
   invoices: Invoice[] = [],
+  lprEvents: LprDetectionEvent[] = [],
 ): EntryHistoryRow[] {
   const invoiceByEntryId = new Map(
     invoices.map((invoice) => [invoice.entryId, invoice]),
   );
+  const lprEventByEntryId = new Map<string, LprDetectionEvent>();
+  [...lprEvents]
+    .filter(
+      (event) =>
+        event.entryId &&
+        !event.imageDeletedAt &&
+        (event.imageStoragePath || event.imageUrl),
+    )
+    .sort(
+      (left, right) =>
+        new Date(right.lastSeenAt).getTime() -
+        new Date(left.lastSeenAt).getTime(),
+    )
+    .forEach((event) => {
+      if (event.entryId && !lprEventByEntryId.has(event.entryId)) {
+        lprEventByEntryId.set(event.entryId, event);
+      }
+    });
   const paymentsByEntryId = new Map<string, PaymentTransaction[]>();
   for (const tx of transactions) {
     const lines = paymentsByEntryId.get(tx.entryId);
@@ -132,6 +154,7 @@ export function attachPaymentsToEntries(
       invoiceState !== 'none' &&
       invoiceState !== 'na' &&
       invoiceState !== 'manual';
+    const lprDetection = lprEventByEntryId.get(entry.id) ?? null;
 
     return {
       ...entry,
@@ -141,6 +164,8 @@ export function attachPaymentsToEntries(
       paymentMethodValues: paymentLines.map(paymentMethodFilterValue),
       paidTotal,
       invoice,
+      lprDetection,
+      historyImageUrl: entry.entryImageUrl ?? lprDetection?.imageUrl ?? null,
       invoiceState,
       invoiceLetterValue: countsAsVoucher
         ? (invoiceLetter(invoice?.cbteTipo) ?? '')

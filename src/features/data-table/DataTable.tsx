@@ -177,6 +177,7 @@ export function DataTable<TData>({
   serverState,
   onRowClick,
   onFilteredCountChange,
+  onVisibleRowIdsChange,
   rowSelection,
 }: DataTableProps<TData>) {
   const [globalFilter, setGlobalFilter] = useState('');
@@ -428,6 +429,7 @@ export function DataTable<TData>({
     Math.max(0, pageCount - 1),
   );
   const rows = table.getRowModel().rows;
+  const visibleRowIdsKey = rows.map((row) => row.id).join('\u0000');
   const visibleColumns = table.getVisibleLeafColumns();
   const hasActiveFilters =
     columnFilters.length > 0 || globalFilter.trim().length > 0;
@@ -439,6 +441,12 @@ export function DataTable<TData>({
       setPagination((current) => ({ ...current, pageIndex: safePageIndex }));
     }
   }, [pagination.pageIndex, safePageIndex]);
+
+  useEffect(() => {
+    onVisibleRowIdsChange?.(
+      visibleRowIdsKey.length > 0 ? visibleRowIdsKey.split('\u0000') : [],
+    );
+  }, [onVisibleRowIdsChange, visibleRowIdsKey]);
 
   return (
     <section className="dt-card">

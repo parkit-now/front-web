@@ -19,6 +19,8 @@ import {
   IconChevronDown,
   IconChevronRight,
   IconAlert,
+  IconUser,
+  IconZap,
 } from '../../../shared/components/icons';
 
 interface NavLeaf {
@@ -58,10 +60,26 @@ export const OWNER_NAV: NavEntry[] = [
     label: 'Configuración',
     icon: <IconSettings size={18} />,
     children: [
-      { segment: 'config/perfil', label: 'Perfil', icon: null },
-      { segment: 'config/horarios', label: 'Horarios', icon: null },
-      { segment: 'config/servicios', label: 'Servicios', icon: null },
-      { segment: 'config/retencion', label: 'Retención', icon: null },
+      {
+        segment: 'config/perfil',
+        label: 'Perfil',
+        icon: <IconUser size={16} />,
+      },
+      {
+        segment: 'config/horarios',
+        label: 'Horarios',
+        icon: <IconClock size={16} />,
+      },
+      {
+        segment: 'config/servicios',
+        label: 'Servicios',
+        icon: <IconZap size={16} />,
+      },
+      {
+        segment: 'config/retencion',
+        label: 'Retención',
+        icon: <IconShield size={16} />,
+      },
       { segment: 'tarifas', label: 'Tarifas', icon: <IconDollar size={16} /> },
       {
         segment: 'metodos-de-pago',
