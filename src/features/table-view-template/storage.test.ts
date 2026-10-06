@@ -127,4 +127,11 @@ describe('table view template storage', () => {
       pagination: { pageSize: 20 },
     });
   });
+
+  it('inserts new known columns into persisted order', () => {
+    expect(
+      sanitizeTableViewConfig(config, ['photo', 'name', 'status', 'createdAt'])
+        ?.columns.order,
+    ).toEqual(['photo', 'status', 'name', 'createdAt']);
+  });
 });

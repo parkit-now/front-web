@@ -296,24 +296,101 @@
   gap: 6px;
 }
 
-.operation-payment-table {
+.operation-photo-button {
+  width: 32px;
+  height: 32px;
   display: grid;
-  gap: 4px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--brand) 30%, var(--border));
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--brand) 7%, var(--card));
+  color: var(--brand-strong);
+  cursor: pointer;
 }
 
-.operation-payment-table-line {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  color: var(--text-2);
-  font-size: 12px;
+.operation-photo-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--brand) 52%, var(--border));
+  background: color-mix(in srgb, var(--brand) 12%, var(--card));
 }
 
-.operation-payment-table-line strong {
+.operation-photo-button:disabled {
+  border-color: var(--border-soft);
+  background: var(--surface);
+  color: var(--text-4);
+  cursor: not-allowed;
+}
+
+.operation-ticket-number {
   color: var(--text-1);
   font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.operation-payment-summary {
+  display: grid;
+  gap: 2px;
+  min-width: 118px;
+  line-height: 1.2;
+}
+
+.operation-payment-summary strong {
+  color: var(--text-1);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.operation-payment-summary span {
+  min-width: 0;
+  color: var(--text-2);
   font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.operation-photo-state {
+  width: min(820px, calc(100vw - 64px));
+  min-height: 280px;
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  color: var(--text-2);
+  font-weight: 700;
+}
+
+.operation-photo-frame {
+  width: min(920px, calc(100vw - 64px));
+  max-height: min(72vh, 720px);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow: auto;
+  border-radius: var(--r-lg);
+  background: #0b1220;
+}
+
+.operation-photo-stage {
+  position: relative;
+  flex: 0 0 auto;
+  line-height: 0;
+}
+
+.operation-photo-stage img {
+  display: block;
+  max-width: 100%;
+  max-height: min(72vh, 720px);
+  object-fit: contain;
+}
+
+.operation-photo-plate {
+  position: absolute;
+  border: 3px solid #22c55e;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(4, 120, 87, 0.65);
+  pointer-events: none;
 }
 
 .operation-quick-switch {

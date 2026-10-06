@@ -62,6 +62,8 @@ export type DataTableProps<TData> = {
    * filtros de columna), antes de paginar. En modo servidor es `rowCount`.
    */
   onFilteredCountChange?: (count: number) => void;
+  /** IDs de las filas de la página visible, después de filtrar/ordenar/paginar. */
+  onVisibleRowIdsChange?: (ids: string[]) => void;
   onRowClick?: (row: TData) => void;
   /** Requiere `getRowId`: la selección se guarda por id. */
   rowSelection?: DataTableRowSelection<TData>;

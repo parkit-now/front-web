@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CashSession } from '../../services/cash-sessions';
+import type { LprDetectionEvent } from '../../services/lpr-events';
 import type { Entry, PaymentTransaction } from '../../services/operations';
 import {
   attachPaymentsToEntries,
@@ -72,6 +73,38 @@ describe('operation utils', () => {
     expect(rows[0].paymentLines).toHaveLength(2);
     expect(rows[0].paidTotal).toBe(3000);
     expect(rows[0].paymentMethodValues).toEqual(['pm-cash', 'pm-mp']);
+  });
+
+  it('associates a visible LPR history image by entry id', () => {
+    const lprEvent = {
+      id: 'lpr-1',
+      entryId: 'entry-1',
+      imageStoragePath: 'tenant/lpr-1.jpg',
+      imageUrl: null,
+      imageDeletedAt: null,
+      lastSeenAt: '2026-09-21T10:02:00.000Z',
+    } as LprDetectionEvent;
+
+    const [row] = attachPaymentsToEntries([entry({})], [], [], [lprEvent]);
+
+    expect(row.lprDetection).toBe(lprEvent);
+    expect(row.historyImageUrl).toBeNull();
+  });
+
+  it('does not expose LPR images already deleted by retention', () => {
+    const lprEvent = {
+      id: 'lpr-1',
+      entryId: 'entry-1',
+      imageStoragePath: 'tenant/lpr-1.jpg',
+      imageUrl: 'https://example.test/stale.jpg',
+      imageDeletedAt: '2026-09-22T10:00:00.000Z',
+      lastSeenAt: '2026-09-21T10:02:00.000Z',
+    } as LprDetectionEvent;
+
+    const [row] = attachPaymentsToEntries([entry({})], [], [], [lprEvent]);
+
+    expect(row.lprDetection).toBeNull();
+    expect(row.historyImageUrl).toBeNull();
   });
 
   it('filters out active entries unless include-in-lot is enabled', () => {
