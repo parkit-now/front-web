@@ -98,11 +98,12 @@ export function MercadoPagoCard({
   const linkedLike = state.kind === 'linked' || state.kind === 'expiring';
 
   return (
-    <Card padding="lg">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div style={{ ...ROW, justifyContent: 'space-between' }}>
+    <Card padding="lg" className="mp-integration-card">
+      <div className="mp-card-stack">
+        <div className="mp-card-header">
           <div style={ROW}>
             <span
+              className="mp-card-brand-icon"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -220,7 +221,7 @@ export function MercadoPagoCard({
                 alignItems: 'flex-start',
               }}
             >
-              <div style={{ display: 'grid', gap: 12, minWidth: 220 }}>
+              <div className="mp-account-meta">
                 <div>
                   <p style={{ ...LABEL, margin: '0 0 2px' }}>
                     Cuenta de Mercado Pago
@@ -385,7 +386,7 @@ function QrBlock({
 }) {
   if (!account.qrImageUrl) {
     return (
-      <div style={{ flex: '1 1 260px', minWidth: 240 }}>
+      <div className="mp-qr-block mp-qr-block--missing">
         <Alert
           variant="warn"
           icon={<IconAlert size={16} />}
@@ -411,6 +412,7 @@ function QrBlock({
 
   return (
     <div
+      className="mp-qr-block"
       style={{
         flex: '1 1 260px',
         minWidth: 240,
@@ -420,6 +422,7 @@ function QrBlock({
       }}
     >
       <img
+        className="mp-qr-image"
         src={account.qrImageUrl}
         alt="Código QR de Mercado Pago de tu estacionamiento"
         width={128}
@@ -435,7 +438,7 @@ function QrBlock({
           flexShrink: 0,
         }}
       />
-      <div style={{ display: 'grid', gap: 10, minWidth: 0 }}>
+      <div className="mp-qr-copy">
         <p style={HINT}>
           Imprimí el QR y pegalo en la ventanilla, a la vista. El cliente lo
           escanea con su celular, escribe el monto que le pasás y paga.
@@ -446,7 +449,7 @@ function QrBlock({
               href={account.qrTemplateDocumentUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="pk-btn pk-btn-secondary pk-btn-sm"
+              className="pk-btn pk-btn-secondary pk-btn-sm mp-qr-download"
               style={{ textDecoration: 'none' }}
             >
               <IconDownload size={14} />

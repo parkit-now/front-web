@@ -46,6 +46,7 @@ export type EndpointKey =
   | 'admin.parkings.create'
   | 'admin.parkings.update'
   | 'admin.parkings.delete'
+  | 'admin.parkings.restore'
   | 'admin.users.list'
   | 'admin.users.detail'
   | 'admin.users.updateRole'
@@ -171,6 +172,16 @@ const CODE_MESSAGES: Record<string, string> = {
   ENTITY_NO_ACCESS: 'No tenés acceso a este estacionamiento.',
   ENTITY_INSUFFICIENT_ROLE:
     'No tenés permisos suficientes para esta acción en este estacionamiento.',
+  // 410 Gone. Existió y ya no: el estacionamiento fue dado de baja.
+  ENTITY_DELETED:
+    'Este estacionamiento fue eliminado. Si creés que es un error, hablá con el administrador.',
+
+  // Borrado de estacionamiento (panel de admin global).
+  PARKING_CONFIRM_NAME_MISMATCH:
+    'El nombre que escribiste no coincide con el del estacionamiento.',
+  PARKING_ALREADY_DELETED: 'Este estacionamiento ya estaba dado de baja.',
+  PARKING_NOT_DELETED:
+    'Este estacionamiento no está dado de baja, así que no hay nada que restaurar.',
 
   // Medios de pago.
   PAYMENT_METHOD_NOT_FOUND: 'No encontramos el medio de pago.',

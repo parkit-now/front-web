@@ -3,18 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Badge } from '../../../../shared/components/ui/Badge';
 import { Button } from '../../../../shared/components/ui/Button';
-import { ConfirmDialog } from '../../../../shared/components/ui/ConfirmDialog';
 import {
   IconPlus,
   IconEye,
   IconPencil,
   IconTrash,
+  IconRefresh,
 } from '../../../../shared/components/icons';
 import { DataTable } from '../../../../features/data-table';
 import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
 import { useParkingActions, useParkingsList } from '../../hooks/useParkings';
 import type { Parking } from '../../services/parkings';
+import { ParkingDeletionModal } from './ParkingDeletionModal';
 import { ParkingFormModal } from './ParkingFormModal';
+import { deletionBadgeLabel } from './parkingNameMatch';
 
 // Client-side table: fetch a large page and let DataTable own search, sorting,
 // filtering, pagination and the saved view templates.
@@ -24,8 +26,14 @@ export function InventoryPage() {
   const navigate = useNavigate();
   const userId = useCurrentUserId();
 
-  const listQuery = useParkingsList({ pageSize: FETCH_PAGE_SIZE });
-  const { deleteMutation } = useParkingActions();
+  // El inventario es el ÚNICO listado del producto que puede mostrar los dados
+  // de baja, porque es desde donde se restauran.
+  const [showDeleted, setShowDeleted] = useState(false);
+  const listQuery = useParkingsList({
+    pageSize: FETCH_PAGE_SIZE,
+    includeDeleted: showDeleted,
+  });
+  const { restoreMutation } = useParkingActions();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Parking | null>(null);
@@ -46,13 +54,6 @@ export function InventoryPage() {
   /** Enter the parking's panel as admin (same panel the owner sees). */
   function openParking(parking: Parking) {
     void navigate(`/ops/estacionamientos/${parking.id}/estadisticas`);
-  }
-
-  function confirmDelete() {
-    if (!deleteTarget) return;
-    deleteMutation.mutate(deleteTarget.id, {
-      onSuccess: () => setDeleteTarget(null),
-    });
   }
 
   const columns = useMemo<ColumnDef<Parking, unknown>[]>(
@@ -107,11 +108,25 @@ export function InventoryPage() {
         id: 'status',
         header: 'Estado',
         accessorKey: 'status',
-        cell: ({ row }) => (
-          <Badge variant={row.original.status === 'active' ? 'ok' : 'warn'} dot>
-            {row.original.status === 'active' ? 'Activo' : 'Mantenimiento'}
-          </Badge>
-        ),
+        cell: ({ row }) => {
+          // La baja le gana al estado operativo: un estacionamiento eliminado
+          // que dijera "Activo" sería la peor fila de la tabla.
+          if (row.original.deletedAt) {
+            return (
+              <Badge variant="err" dot>
+                {deletionBadgeLabel(row.original.purgeAfter)}
+              </Badge>
+            );
+          }
+          return (
+            <Badge
+              variant={row.original.status === 'active' ? 'ok' : 'warn'}
+              dot
+            >
+              {row.original.status === 'active' ? 'Activo' : 'Mantenimiento'}
+            </Badge>
+          );
+        },
       },
       {
         id: 'acciones',
@@ -120,6 +135,27 @@ export function InventoryPage() {
         enableHiding: false,
         cell: ({ row }) => {
           const parking = row.original;
+
+          // Dado de baja: lo único que se puede hacer es traerlo de vuelta.
+          // Ver el panel o editarlo abriría pantallas que el backend ya
+          // responde con 410.
+          if (parking.deletedAt) {
+            return (
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <button
+                  type="button"
+                  className="pk-btn pk-btn-ghost pk-btn-icon"
+                  title="Restaurar"
+                  aria-label={`Restaurar ${parking.name}`}
+                  disabled={restoreMutation.isPending}
+                  onClick={() => restoreMutation.mutate(parking.id)}
+                >
+                  <IconRefresh size={16} />
+                </button>
+              </div>
+            );
+          }
+
           return (
             <div
               style={{
@@ -150,8 +186,8 @@ export function InventoryPage() {
               <button
                 type="button"
                 className="pk-btn pk-btn-ghost pk-btn-icon"
-                title="Eliminar"
-                aria-label={`Eliminar ${parking.name}`}
+                title="Dar de baja"
+                aria-label={`Dar de baja ${parking.name}`}
                 style={{ color: 'var(--err-text)' }}
                 onClick={() => setDeleteTarget(parking)}
               >
@@ -162,7 +198,7 @@ export function InventoryPage() {
         },
       },
     ],
-    [],
+    [restoreMutation],
   );
 
   return (
@@ -192,14 +228,32 @@ export function InventoryPage() {
         onRefresh={() => void listQuery.refetch()}
         refreshDisabled={listQuery.isFetching}
         headerAction={
-          <Button
-            variant="primary"
-            size="sm"
-            icon={<IconPlus size={15} />}
-            onClick={openCreate}
-          >
-            Nuevo estacionamiento
-          </Button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <label
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: 13,
+                color: 'var(--text-2)',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={showDeleted}
+                onChange={(e) => setShowDeleted(e.target.checked)}
+              />
+              Mostrar eliminados
+            </label>
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<IconPlus size={15} />}
+              onClick={openCreate}
+            >
+              Nuevo estacionamiento
+            </Button>
+          </div>
         }
       />
 
@@ -209,21 +263,10 @@ export function InventoryPage() {
         parking={editing}
       />
 
-      <ConfirmDialog
+      <ParkingDeletionModal
         open={deleteTarget !== null}
-        title="Eliminar estacionamiento"
-        destructive
-        confirmLabel="Eliminar"
-        loading={deleteMutation.isPending}
-        onConfirm={confirmDelete}
         onClose={() => setDeleteTarget(null)}
-        message={
-          <>
-            ¿Seguro que querés eliminar <strong>{deleteTarget?.name}</strong>?
-            Se borrarán también sus zonas, tarifas, movimientos y vínculos de
-            usuarios. Esta acción no se puede deshacer.
-          </>
-        }
+        parking={deleteTarget}
       />
     </>
   );
