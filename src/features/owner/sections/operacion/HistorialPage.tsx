@@ -554,13 +554,13 @@ export function HistorialPage() {
       },
       {
         accessorKey: 'ticketNumber',
-        header: 'TICKET',
+        header: '#',
         size: 64,
         cell: ({ row }) =>
           row.original.ticketNumber != null ? (
-            <strong className="operation-ticket-number">
-              {row.original.ticketNumber}
-            </strong>
+            <span className="operation-ticket-badge">
+              #{row.original.ticketNumber}
+            </span>
           ) : (
             <MutedDash />
           ),
