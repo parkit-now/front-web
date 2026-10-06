@@ -1,5 +1,19 @@
 import type { MpAccountStatus } from '../../services/mercado-pago';
-import type { PaymentMethodType } from '../../services/entities';
+import type {
+  PaymentMethodSummary,
+  PaymentMethodType,
+} from '../../services/entities';
+
+export function paymentMethodToggleBlockReason(
+  method: Pick<PaymentMethodSummary, 'isDefault' | 'enabled'>,
+  enableLocked: boolean,
+): string | null {
+  if (!method.enabled && enableLocked)
+    return 'Mercado Pago no está vinculado. Volvé a vincular la cuenta para poder cobrar con el QR.';
+  if (method.isDefault && method.enabled && !enableLocked)
+    return 'El medio predeterminado siempre está activo. Para desactivarlo, primero marcá otro como predeterminado.';
+  return null;
+}
 
 /**
  * Lógica pura de los medios de pago respaldados por una integración.
