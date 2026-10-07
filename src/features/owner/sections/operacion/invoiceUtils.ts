@@ -77,6 +77,20 @@ export function formatVoucherNumber(
   return `${String(ptoVta).padStart(4, '0')}-${String(cbteNro).padStart(8, '0')}`;
 }
 
+/** Sin extension: el navegador la agrega al guardar como PDF. */
+export function invoicePdfTitle(input: {
+  plate: string;
+  cae?: string | null;
+  ptoVta?: number | null;
+  cbteNro?: number | null;
+}): string {
+  const number =
+    input.ptoVta != null && input.cbteNro != null
+      ? `${String(input.cbteNro).padStart(8, '0')}-${String(input.ptoVta).padStart(4, '0')}`
+      : null;
+  return [number, input.cae, input.plate].filter(Boolean).join('_');
+}
+
 /** «Factura B 0001-00000123», o sólo «Factura B» si todavía no tiene número. */
 export function voucherLabel(
   invoice: Pick<Invoice, 'cbteTipo' | 'ptoVta' | 'cbteNro'>,

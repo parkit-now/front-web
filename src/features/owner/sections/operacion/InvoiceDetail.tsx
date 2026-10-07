@@ -22,7 +22,7 @@ import {
   canIssueInvoice,
   describeIssueConfirmation,
   expectedLetter,
-  formatVoucherNumber,
+  invoicePdfTitle,
   formatIsoDay,
   INVOICE_STATE_LABEL,
   INVOICE_STATE_VARIANT,
@@ -127,10 +127,9 @@ export function InvoiceDetail({
           margin: 0,
           errorCorrectionLevel: 'M',
         });
-        const number = formatVoucherNumber(invoice.ptoVta, invoice.cbteNro);
         await printInvoice(
           renderInvoiceHtml(doc, qr),
-          [row.plate, invoice.cae, number].filter(Boolean).join('-'),
+          invoicePdfTitle({ plate: row.plate, ...invoice }),
         );
       } catch {
         showToast({
