@@ -8,6 +8,7 @@ interface DrawerProps {
   children: React.ReactNode;
   width?: number;
   footer?: React.ReactNode;
+  suspended?: boolean;
 }
 
 export function Drawer({
@@ -17,6 +18,7 @@ export function Drawer({
   children,
   width = 460,
   footer,
+  suspended = false,
 }: DrawerProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
@@ -25,6 +27,7 @@ export function Drawer({
     if (open) {
       triggerRef.current = document.activeElement as HTMLElement;
       setTimeout(() => {
+        if (panelRef.current?.closest('[inert]')) return;
         panelRef.current
           ?.querySelector<HTMLElement>(
             'button, input, [tabindex]:not([tabindex="-1"])',
@@ -37,7 +40,7 @@ export function Drawer({
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || suspended) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         onClose();
@@ -64,7 +67,7 @@ export function Drawer({
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose]);
+  }, [open, onClose, suspended]);
 
   if (!open) return null;
 
@@ -73,10 +76,12 @@ export function Drawer({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 40,
+        zIndex: suspended ? 30 : 40,
         background: 'rgba(16,24,40,0.35)',
         backdropFilter: 'blur(2px)',
       }}
+      inert={suspended}
+      aria-hidden={suspended || undefined}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -84,7 +89,7 @@ export function Drawer({
       <div
         ref={panelRef}
         role="dialog"
-        aria-modal="true"
+        aria-modal={!suspended}
         aria-label={title}
         style={{
           position: 'absolute',

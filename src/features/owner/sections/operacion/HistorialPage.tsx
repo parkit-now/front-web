@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
@@ -374,14 +380,21 @@ function EntryDetailDrawer({
   );
 }
 
-export function HistorialPage() {
+export function HistorialPage({
+  cashSessionId,
+  renderTable,
+}: {
+  cashSessionId?: string;
+  renderTable?: (table: ReactNode, nestedDialogOpen: boolean) => ReactNode;
+} = {}) {
   const { sucursalId, sucursal } = useSucursal();
   const userId = useCurrentUserId();
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = location.state as HistorialLocationState;
   const [searchParams] = useSearchParams();
-  const focusedCashSessionId = searchParams.get('cashSessionId');
+  const focusedCashSessionId =
+    cashSessionId ?? searchParams.get('cashSessionId');
   const openedFromCaja =
     searchParams.get('from') === 'caja' || Boolean(locationState?.fromCaja);
   const [onlyCurrentSession, setOnlyCurrentSession] = useState(
@@ -407,7 +420,8 @@ export function HistorialPage() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnFiltersOverride, setColumnFiltersOverride] =
     useState<ColumnFiltersState>([]);
-  const [columnFiltersOverrideKey, setColumnFiltersOverrideKey] = useState(0);
+  const [columnFiltersOverrideKey, setColumnFiltersOverrideKey] =
+    useState<number>();
 
   const entriesQuery = useQuery({
     queryKey: ['owner-operations', sucursalId, 'entries'],
@@ -849,134 +863,152 @@ export function HistorialPage() {
     setColumnFiltersOverride(
       columnFilters.filter((filter) => filter.id !== 'cashSessionId'),
     );
-    setColumnFiltersOverrideKey((current) => current + 1);
+    setColumnFiltersOverrideKey((current) => (current ?? 0) + 1);
   }
 
+  const renderContent = renderTable ?? ((content: ReactNode) => content);
   return (
     <div className="operation-page">
-      <SectionHeader
-        title="Historial"
-        subtitle={`Movimientos de ${sucursal?.nombre ?? 'este estacionamiento'}`}
-        action={
-          openedFromCaja ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<IconChevronLeft size={15} />}
-              onClick={backToCaja}
-            >
-              Volver a Caja
-            </Button>
-          ) : undefined
-        }
-      />
-
-      {isError ? (
-        <div className="pk-card">
-          <EmptyState
-            icon={<IconAlert size={28} />}
-            title="No se pudo cargar el historial"
-            description="Probá actualizar la sección."
-            action={
+      {!renderTable ? (
+        <SectionHeader
+          title="Historial"
+          subtitle={`Movimientos de ${sucursal?.nombre ?? 'este estacionamiento'}`}
+          action={
+            openedFromCaja ? (
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<IconRefresh size={15} />}
-                onClick={refreshAll}
+                icon={<IconChevronLeft size={15} />}
+                onClick={backToCaja}
               >
-                Reintentar
+                Volver a Caja
               </Button>
-            }
-          />
-        </div>
-      ) : (
-        <>
-          <DataTable<EntryHistoryRow>
-            excelExport={{
-              fileName: (rows) =>
-                getDateRangeExcelFileName(rows.map((row) => row.enteredAt)),
-              onError: (error) =>
-                showToast({ message: translateApiError(error), kind: 'error' }),
-            }}
-            key={focusedCashSessionId ?? 'historial'}
-            data={rows}
-            columns={columns}
-            isLoading={isLoading}
-            emptyMessage="No hay movimientos registrados todavía."
-            searchPlaceholder="Buscar por ticket, patente, vehículo o notas"
-            searchableKeys={SEARCHABLE_KEYS}
-            filterableColumns={FILTERABLE_COLUMNS}
-            filterOptionsByColumn={{
-              cashSessionId: cashSessionOptions,
-              paymentMethodValues: paymentOptions,
-              invoiceState: INVOICE_STATE_OPTIONS,
-              invoiceLetterValue: INVOICE_LETTER_OPTIONS,
-            }}
-            initialColumnVisibility={INITIAL_COLUMN_VISIBILITY}
-            initialColumnFilters={initialColumnFilters}
-            onColumnFiltersChange={handleColumnFiltersChange}
-            onVisibleRowIdsChange={handleVisibleRowIdsChange}
-            columnFiltersOverride={columnFiltersOverride}
-            columnFiltersOverrideKey={columnFiltersOverrideKey}
-            getRowId={(row) => row.id}
-            initialPageSize={20}
-            pageSizeOptions={[10, 20, 50, 100]}
-            onRefresh={refreshAll}
-            refreshDisabled={
-              entriesQuery.isFetching ||
-              sessionsQuery.isFetching ||
-              paymentsQuery.isFetching ||
-              invoicesQuery.isFetching ||
-              lprEventsQuery.isFetching
-            }
-            onRowClick={(row) => setSelectedId(row.id)}
-            rowSelection={
-              arca === 'none'
-                ? undefined
-                : {
-                    selectedIds: selectedIssuable,
-                    onChange: setSelectedIds,
-                    canSelect: (row) => issuableIds.has(row.id),
-                    actions: (
-                      <Button
-                        size="sm"
-                        loading={batchRunning}
-                        disabled={selectedIssuable.length === 0}
-                        onClick={() => void issueSelected()}
-                      >
-                        Emitir a consumidor final ({selectedIssuable.length})
-                      </Button>
-                    ),
-                  }
-            }
-            toolbarLeading={
-              <div className="dt-quick-switches">
-                <label className="operation-quick-switch">
-                  <Switch
-                    checked={onlyCurrentSession}
-                    disabled={!activeCashSession}
-                    onChange={handleOnlyCurrentSessionChange}
-                    aria-label="Solo caja actual"
-                  />
-                  Solo caja actual
-                </label>
-                <label className="operation-quick-switch">
-                  <Switch
-                    checked={includeInLot}
-                    onChange={setIncludeInLot}
-                    aria-label="Incluir autos en base"
-                  />
-                  Incluir autos en base
-                </label>
-              </div>
-            }
-            templateScope={
-              userId && sucursalId
-                ? { userId, tenantId: sucursalId, tableKey: 'owner-history' }
-                : undefined
-            }
-          />
-        </>
+            ) : undefined
+          }
+        />
+      ) : null}
+
+      {renderContent(
+        isError ? (
+          <div className="pk-card">
+            <EmptyState
+              icon={<IconAlert size={28} />}
+              title="No se pudo cargar el historial"
+              description="Probá actualizar la sección."
+              action={
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<IconRefresh size={15} />}
+                  onClick={refreshAll}
+                >
+                  Reintentar
+                </Button>
+              }
+            />
+          </div>
+        ) : (
+          <>
+            <DataTable<EntryHistoryRow>
+              excelExport={{
+                fileName: (rows) =>
+                  getDateRangeExcelFileName(rows.map((row) => row.enteredAt)),
+                onError: (error) =>
+                  showToast({
+                    message: translateApiError(error),
+                    kind: 'error',
+                  }),
+              }}
+              key={focusedCashSessionId ?? 'historial'}
+              data={rows}
+              columns={columns}
+              isLoading={isLoading}
+              emptyMessage="No hay movimientos registrados todavía."
+              searchPlaceholder="Buscar por ticket, patente, vehículo o notas"
+              searchableKeys={SEARCHABLE_KEYS}
+              filterableColumns={FILTERABLE_COLUMNS}
+              filterOptionsByColumn={{
+                cashSessionId: cashSessionOptions,
+                paymentMethodValues: paymentOptions,
+                invoiceState: INVOICE_STATE_OPTIONS,
+                invoiceLetterValue: INVOICE_LETTER_OPTIONS,
+              }}
+              initialColumnVisibility={INITIAL_COLUMN_VISIBILITY}
+              initialColumnFilters={initialColumnFilters}
+              initialColumnFiltersOverridePersistedState={Boolean(
+                focusedCashSessionId,
+              )}
+              onColumnFiltersChange={handleColumnFiltersChange}
+              onVisibleRowIdsChange={handleVisibleRowIdsChange}
+              columnFiltersOverride={columnFiltersOverride}
+              columnFiltersOverrideKey={columnFiltersOverrideKey}
+              getRowId={(row) => row.id}
+              initialPageSize={20}
+              pageSizeOptions={[10, 20, 50, 100]}
+              onRefresh={refreshAll}
+              refreshDisabled={
+                entriesQuery.isFetching ||
+                sessionsQuery.isFetching ||
+                paymentsQuery.isFetching ||
+                invoicesQuery.isFetching ||
+                lprEventsQuery.isFetching
+              }
+              onRowClick={(row) => setSelectedId(row.id)}
+              rowSelection={
+                arca === 'none'
+                  ? undefined
+                  : {
+                      selectedIds: selectedIssuable,
+                      onChange: setSelectedIds,
+                      canSelect: (row) => issuableIds.has(row.id),
+                      actions: (
+                        <Button
+                          size="sm"
+                          loading={batchRunning}
+                          disabled={selectedIssuable.length === 0}
+                          onClick={() => void issueSelected()}
+                        >
+                          Emitir a consumidor final ({selectedIssuable.length})
+                        </Button>
+                      ),
+                    }
+              }
+              toolbarLeading={
+                <div className="dt-quick-switches">
+                  <label className="operation-quick-switch">
+                    <Switch
+                      checked={onlyCurrentSession}
+                      disabled={!activeCashSession}
+                      onChange={handleOnlyCurrentSessionChange}
+                      aria-label="Solo caja actual"
+                    />
+                    Solo caja actual
+                  </label>
+                  <label className="operation-quick-switch">
+                    <Switch
+                      checked={includeInLot}
+                      onChange={setIncludeInLot}
+                      aria-label="Incluir autos en base"
+                    />
+                    Incluir autos en base
+                  </label>
+                </div>
+              }
+              templateScope={
+                userId && sucursalId
+                  ? {
+                      userId,
+                      tenantId: sucursalId,
+                      tableKey: renderTable
+                        ? 'owner-cash-session-movements'
+                        : 'owner-history',
+                    }
+                  : undefined
+              }
+            />
+          </>
+        ),
+        Boolean(selectedId || photoRow || batchResults),
       )}
 
       <EntryDetailDrawer

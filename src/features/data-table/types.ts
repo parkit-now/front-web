@@ -44,6 +44,7 @@ export type DataTableProps<TData> = {
   filterableColumns?: string[];
   filterOptionsByColumn?: Record<string, DataTableFilterOption[]>;
   initialColumnFilters?: ColumnFiltersState;
+  initialColumnFiltersOverridePersistedState?: boolean;
   onColumnFiltersChange?: (filters: ColumnFiltersState) => void;
   columnFiltersOverride?: ColumnFiltersState;
   columnFiltersOverrideKey?: string | number;

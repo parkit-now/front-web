@@ -162,6 +162,7 @@ export function DataTable<TData>({
   filterableColumns = [],
   filterOptionsByColumn,
   initialColumnFilters,
+  initialColumnFiltersOverridePersistedState = false,
   onColumnFiltersChange,
   columnFiltersOverride,
   columnFiltersOverrideKey,
@@ -389,8 +390,23 @@ export function DataTable<TData>({
     if (!template) return;
 
     setSelectedTemplateId(template.id);
-    applyConfig(template.config);
-  }, [applyConfig, currentScopeKey, knownColumnIds.length, templateScope]);
+    applyConfig(
+      initialColumnFiltersOverridePersistedState
+        ? {
+            ...template.config,
+            filters: initialColumnFilters ?? [],
+            globalSearch: '',
+          }
+        : template.config,
+    );
+  }, [
+    applyConfig,
+    currentScopeKey,
+    knownColumnIds.length,
+    templateScope,
+    initialColumnFilters,
+    initialColumnFiltersOverridePersistedState,
+  ]);
 
   const currentConfig = useCallback((): TableViewConfig => {
     return {
