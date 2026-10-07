@@ -59,6 +59,16 @@ export function InvoiceReceiverChooser({
           </button>
         ))}
       </div>
+      {receiver.resolvingSuggestion ? (
+        <p className="operation-invoice-lookup" role="status">
+          Consultando datos del pagador...
+        </p>
+      ) : null}
+      {receiver.source === 'mercadopago' && receiver.choice === 'cuit' ? (
+        <p className="operation-invoice-lookup">
+          <small>Mercado Pago</small>
+        </p>
+      ) : null}
       {receiver.choice === 'cuit' ? (
         <>
           <Input

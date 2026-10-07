@@ -27,6 +27,22 @@ async function bearer(): Promise<string> {
   return session.access_token;
 }
 
+export async function getInvoiceReceiverSuggestion(
+  tenantId: string,
+  entryId: string,
+  signal: AbortSignal,
+): Promise<components['schemas']['InvoiceReceiverSuggestionDto']> {
+  const token = await bearer();
+  signal.throwIfAborted();
+  return apiRequest({
+    method: 'POST',
+    path: `/tenants/${encodeURIComponent(tenantId)}/entries/${encodeURIComponent(entryId)}/invoice/receiver-suggestion`,
+    body: {} satisfies components['schemas']['InvoiceReceiverSuggestionRequestDto'],
+    bearer: token,
+    signal,
+  });
+}
+
 /**
  * Todas las facturas de la sede, por el feed de sync (el mismo que baja el
  * desktop). El Historial las une a las estadías del lado del cliente, igual

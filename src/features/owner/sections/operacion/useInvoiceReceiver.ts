@@ -1,7 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { translateApiError } from '../../../../lib/api/translate';
-import { listInvoiceReceivers, lookupTaxpayer } from '../../services/invoices';
+import {
+  getInvoiceReceiverSuggestion,
+  listInvoiceReceivers,
+  lookupTaxpayer,
+} from '../../services/invoices';
 import { isValidArcaCuit, normalizeArcaCuit } from '../integraciones/arca/cuit';
 import {
   isReceiverReady,
@@ -13,16 +17,85 @@ import {
 
 /** Espera después de la última tecla antes de consultar el padrón. */
 const LOOKUP_DEBOUNCE_MS = 250;
+const RECEIVER_SUGGESTION_TIMEOUT_MS = 5000;
 
 /**
  * El receptor de «Emitir factura» en el detalle del Historial: consumidor
  * final o un CUIT, con la consulta al padrón mientras se tipea y los CUIT ya
  * facturados como sugerencias. Gemelo de `useInvoiceReceiver` del desktop.
  */
-export function useInvoiceReceiver(tenantId: string) {
+export function useInvoiceReceiver(input: {
+  tenantId: string;
+  entryId: string;
+  suggestionEnabled: boolean;
+  frozen?: boolean;
+}) {
+  const { tenantId, entryId, suggestionEnabled, frozen = false } = input;
   const [choice, setChoiceState] = useState<ReceiverChoice>('final');
   const [cuit, setCuit] = useState('');
   const [touched, setTouched] = useState(false);
+  const userEditedRef = useRef(false);
+  const frozenRef = useRef(false);
+  const [userEdited, setUserEdited] = useState(false);
+  const [source, setSource] = useState<'mercadopago' | null>(null);
+  const [settledSuggestion, setSettledSuggestion] = useState<string | null>(
+    null,
+  );
+  const suggestionScope = `${tenantId}:${entryId}`;
+  const identityRef = useRef(suggestionScope);
+  const resolvingSuggestion =
+    suggestionEnabled && settledSuggestion !== suggestionScope && !userEdited;
+  useEffect(() => {
+    frozenRef.current = frozen;
+  }, [frozen]);
+  useEffect(() => {
+    if (identityRef.current === suggestionScope) return;
+    identityRef.current = suggestionScope;
+    userEditedRef.current = false;
+    setUserEdited(false);
+    setSource(null);
+    setChoiceState('final');
+    setCuit('');
+    setTouched(false);
+  }, [suggestionScope]);
+  useEffect(() => {
+    if (!suggestionEnabled) {
+      setSettledSuggestion(null);
+      return;
+    }
+    if (userEditedRef.current) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      controller.abort();
+      setSettledSuggestion(suggestionScope);
+    }, RECEIVER_SUGGESTION_TIMEOUT_MS);
+    void getInvoiceReceiverSuggestion(tenantId, entryId, controller.signal)
+      .then(({ cuit: suggestedCuit }) => {
+        if (
+          controller.signal.aborted ||
+          userEditedRef.current ||
+          frozenRef.current ||
+          !suggestedCuit ||
+          !isValidArcaCuit(suggestedCuit)
+        )
+          return;
+        setSource('mercadopago');
+        setChoiceState('cuit');
+        setCuit(suggestedCuit);
+        setTouched(false);
+      })
+      .catch(() => {
+        /* Optional suggestion: keep the usual receiver. */
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setSettledSuggestion(suggestionScope);
+        window.clearTimeout(timer);
+      });
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [suggestionEnabled, tenantId, entryId, suggestionScope]);
   const digits = normalizeArcaCuit(cuit);
   const [debounced, setDebounced] = useState(digits);
 
@@ -74,13 +147,23 @@ export function useInvoiceReceiver(tenantId: string) {
   return {
     choice,
     setChoice: (next: ReceiverChoice) => {
+      userEditedRef.current = true;
+      setUserEdited(true);
+      setSource(null);
       setChoiceState(next);
       setTouched(false);
     },
     cuit,
-    setCuit,
+    setCuit: (next: string) => {
+      userEditedRef.current = true;
+      setUserEdited(true);
+      setSource(null);
+      setCuit(next);
+    },
     markTouched: () => setTouched(true),
     lookup,
+    source,
+    resolvingSuggestion,
     suggestions: suggestionsQuery.data ?? [],
     /**
      * El error aparece al salir del campo o con los 11 dígitos, nunca con el
@@ -88,7 +171,7 @@ export function useInvoiceReceiver(tenantId: string) {
      */
     visibleCuitError:
       digits.length > 0 && (touched || digits.length >= 11) ? error : null,
-    ready: isReceiverReady(state),
+    ready: !resolvingSuggestion && isReceiverReady(state),
     cuitToSend: receiverCuitToSend(state),
   };
 }

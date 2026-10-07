@@ -77,7 +77,12 @@ export function InvoiceDetail({
   const actionBusy = busy !== null || confirmation.busy;
   // «Emitir factura» abre primero el receptor (consumidor final o CUIT).
   const [issueOpen, setIssueOpen] = useState(false);
-  const receiver = useInvoiceReceiver(tenantId);
+  const receiver = useInvoiceReceiver({
+    tenantId,
+    entryId: row.id,
+    suggestionEnabled: issueOpen,
+    frozen: actionBusy || confirmation.snapshot !== null,
+  });
   const letter = expectedLetter({
     emitter,
     choice: receiver.choice,
