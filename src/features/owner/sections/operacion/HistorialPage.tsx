@@ -13,6 +13,7 @@ import type {
   SortingFn,
 } from '@tanstack/react-table';
 import { DataTable } from '../../../../features/data-table';
+import { VehicleCell } from '../../../../features/data-table/components/VehicleCell';
 import { dateTimeSorting } from '../../../../features/data-table/utils';
 import { getDateRangeExcelFileName } from '../../../../features/data-table/excelExport';
 import { translateApiError } from '../../../../lib/api/translate';
@@ -90,7 +91,7 @@ const FILTERABLE_COLUMNS = [
   'vehicleModel',
   'color',
 ];
-/** Columnas que existen para filtrar pero arrancan ocultas. */
+/** El receptor puede mostrarse; el comprobante queda solo como filtro. */
 const INITIAL_COLUMN_VISIBILITY = {
   invoiceLetterValue: false,
   invoiceReceiver: false,
@@ -633,16 +634,33 @@ export function HistorialPage({
         ),
       },
       {
+        id: 'vehicle',
+        accessorFn: (row) =>
+          [row.vehicleBrand, row.vehicleModel].filter(Boolean).join(' '),
+        header: 'Vehículo',
+        size: 165,
+        meta: {
+          exportValue: (row) =>
+            [row.vehicleBrand, row.vehicleModel].filter(Boolean).join('\n'),
+        },
+        cell: ({ row }) => (
+          <VehicleCell
+            brand={row.original.vehicleBrand}
+            model={row.original.vehicleModel}
+          />
+        ),
+      },
+      {
         accessorKey: 'vehicleBrand',
         header: 'Marca',
-        size: 130,
-        cell: ({ row }) => row.original.vehicleBrand || <MutedDash />,
+        enableHiding: false,
+        meta: { filterOnly: true, displayColumnId: 'vehicle' },
       },
       {
         accessorKey: 'vehicleModel',
         header: 'Modelo',
-        size: 140,
-        cell: ({ row }) => row.original.vehicleModel || <MutedDash />,
+        enableHiding: false,
+        meta: { filterOnly: true, displayColumnId: 'vehicle' },
       },
       {
         id: 'enteredAtLocalDate',
@@ -701,18 +719,9 @@ export function HistorialPage({
         id: 'invoiceLetterValue',
         accessorKey: 'invoiceLetterValue',
         header: 'Comprobante',
-        meta: {
-          exportValue: (row) =>
-            row.invoiceLetterValue ? `Factura ${row.invoiceLetterValue}` : '',
-        },
-        size: 120,
+        enableHiding: false,
+        meta: { filterOnly: true },
         filterFn: 'includesSome',
-        cell: ({ row }) =>
-          row.original.invoiceLetterValue ? (
-            `Factura ${row.original.invoiceLetterValue}`
-          ) : (
-            <MutedDash />
-          ),
       },
       {
         id: 'invoiceReceiver',

@@ -10,6 +10,7 @@ import {
   IconTrash,
 } from '../../../../shared/components/icons';
 import { DataTable } from '../../../../features/data-table';
+import { VehicleCell } from '../../../../features/data-table/components/VehicleCell';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { ApiError } from '../../../../lib/api/client';
 import {
@@ -188,24 +189,27 @@ export function VehiculosPage() {
   const columns = useMemo<ColumnDef<Vehicle, unknown>[]>(() => {
     const base: ColumnDef<Vehicle, unknown>[] = [
       {
+        id: 'vehicle',
+        accessorFn: (row) => `${row.brand} ${row.model}`,
+        header: 'Vehículo',
+        size: 190,
+        cell: ({ row }) => (
+          <VehicleCell brand={row.original.brand} model={row.original.model} />
+        ),
+      },
+      {
         id: 'brand',
         header: 'Marca',
         accessorKey: 'brand',
-        size: 180,
-        cell: ({ row }) => (
-          <span
-            style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}
-          >
-            {row.original.brand}
-          </span>
-        ),
+        enableHiding: false,
+        meta: { filterOnly: true, displayColumnId: 'vehicle' },
       },
       {
         id: 'model',
         header: 'Modelo',
         accessorKey: 'model',
-        size: 180,
-        cell: ({ row }) => row.original.model,
+        enableHiding: false,
+        meta: { filterOnly: true, displayColumnId: 'vehicle' },
       },
       {
         id: 'type',
@@ -293,7 +297,7 @@ export function VehiculosPage() {
         }
         searchPlaceholder="Buscar por marca o modelo..."
         searchableKeys={['brand', 'model']}
-        filterableColumns={['type']}
+        filterableColumns={['brand', 'model', 'type']}
         getRowId={(vehicle) => vehicle.id}
         initialPageSize={10}
         onRefresh={() => void listQuery.refetch()}

@@ -780,6 +780,25 @@
   cursor: pointer;
 }
 
+.dt-vehicle-cell {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.dt-vehicle-cell strong {
+  color: var(--text-1);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dt-vehicle-cell span {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
 .dt-table tbody tr.dt-row-clickable:focus-visible {
   outline: 2px solid var(--color-brand);
   outline-offset: -2px;

@@ -18,6 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import { DataTable } from '../../../../features/data-table';
+import { VehicleCell } from '../../../../features/data-table/components/VehicleCell';
 import {
   dateTimeSorting,
   normalizeText,
@@ -78,6 +79,7 @@ const AUDIT_INITIAL_COLUMN_VISIBILITY = {
   leftAtLocalDate: false,
   paymentMethodNames: false,
   rateNames: false,
+  vehicle: false,
   vehicleBrands: false,
   vehicleModels: false,
 };
@@ -1679,14 +1681,31 @@ export function AuditoriaPage() {
         accessorKey: 'rateNames',
       },
       {
+        id: 'vehicle',
+        header: 'Vehículo',
+        accessorFn: (row) =>
+          [...row.vehicleBrands, ...row.vehicleModels].join(' '),
+        size: 175,
+        cell: ({ row }) => (
+          <VehicleCell
+            brand={row.original.vehicleBrands.join(', ')}
+            model={row.original.vehicleModels.join(', ')}
+          />
+        ),
+      },
+      {
         id: 'vehicleBrands',
         header: 'Marca',
         accessorKey: 'vehicleBrands',
+        enableHiding: false,
+        meta: { filterOnly: true, displayColumnId: 'vehicle' },
       },
       {
         id: 'vehicleModels',
         header: 'Modelo',
         accessorKey: 'vehicleModels',
+        enableHiding: false,
+        meta: { filterOnly: true, displayColumnId: 'vehicle' },
       },
       {
         id: 'colors',
