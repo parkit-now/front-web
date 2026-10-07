@@ -4,6 +4,7 @@ import type {
   VisibilityState,
 } from '@tanstack/react-table';
 import type { ReactNode } from 'react';
+import type { ExcelExportOptions } from './excelExport';
 import type { TableTemplateScope } from '../table-view-template';
 
 export type DataTableFilterOption = {
@@ -53,6 +54,7 @@ export type DataTableProps<TData> = {
   templateScope?: TableTemplateScope;
   headerAction?: ReactNode;
   toolbarExtra?: ReactNode;
+  excelExport?: ExcelExportOptions<TData>;
   toolbarLeading?: ReactNode;
   onRefresh?: () => void;
   refreshDisabled?: boolean;

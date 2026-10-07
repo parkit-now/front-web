@@ -8,6 +8,7 @@ import type {
 } from '@tanstack/react-table';
 import { DataTable } from '../../../../features/data-table';
 import { dateTimeSorting } from '../../../../features/data-table/utils';
+import { getDateRangeExcelFileName } from '../../../../features/data-table/excelExport';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
@@ -141,6 +142,26 @@ function InvoiceCell({ row }: { row: EntryHistoryRow }) {
 
 function paidLabel(row: EntryHistoryRow): string {
   return row.paidTotal != null ? fmtMoney(row.paidTotal) : 'Sin cobro';
+}
+
+function invoiceExportValue(row: EntryHistoryRow): string {
+  if (row.invoiceState === 'na') return '';
+  const invoice =
+    row.invoiceState === 'issued' || row.invoiceState === 'issuing'
+      ? row.invoice
+      : null;
+  const letter = invoiceLetter(invoice?.cbteTipo);
+  const number =
+    invoice?.ptoVta != null && invoice.cbteNro != null
+      ? `${String(invoice.ptoVta).padStart(4, '0')}-${String(invoice.cbteNro).padStart(8, '0')}`
+      : null;
+  return [
+    INVOICE_STATE_LABEL[row.invoiceState],
+    letter ? `Factura ${letter}` : invoice ? voucherLabel(invoice) : null,
+    number,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function compactPaymentMethods(row: EntryHistoryRow): string {
@@ -539,6 +560,9 @@ export function HistorialPage() {
     () => [
       {
         id: 'photo',
+        meta: {
+          excludeFromExport: true,
+        },
         header: '',
         size: 44,
         enableSorting: false,
@@ -610,6 +634,7 @@ export function HistorialPage() {
         id: 'enteredAtLocalDate',
         accessorKey: 'enteredAtLocalDate',
         header: 'Ingreso',
+        meta: { exportValue: (row) => fmtDateTimeAr(row.enteredAt) },
         size: 160,
         filterFn: 'dateRange',
         sortingFn: dateTimeSorting((row) => row.enteredAt),
@@ -619,6 +644,10 @@ export function HistorialPage() {
         id: 'leftAtLocalDate',
         accessorKey: 'leftAtLocalDate',
         header: 'Egreso',
+        meta: {
+          exportValue: (row) =>
+            row.leftAt ? fmtDateTimeAr(row.leftAt) : 'En base',
+        },
         size: 160,
         filterFn: 'dateRange',
         sortingFn: dateTimeSorting((row) => row.leftAt),
@@ -636,13 +665,20 @@ export function HistorialPage() {
         size: 155,
         filterFn: 'includesSome',
         sortingFn: moneySorting,
-        meta: { filterLabel: 'Medio de pago' },
+        meta: {
+          filterLabel: 'Medio de pago',
+          exportValue: (row) =>
+            row.paidTotal == null
+              ? ''
+              : `${fmtMoney(row.paidTotal)}\n${compactPaymentMethods(row)}`,
+        },
         cell: ({ row }) => <PaymentSummary row={row.original} />,
       },
       {
         id: 'invoiceState',
         accessorKey: 'invoiceState',
         header: 'Factura',
+        meta: { exportValue: invoiceExportValue },
         size: 190,
         filterFn: 'includesSome',
         cell: ({ row }) => <InvoiceCell row={row.original} />,
@@ -651,6 +687,10 @@ export function HistorialPage() {
         id: 'invoiceLetterValue',
         accessorKey: 'invoiceLetterValue',
         header: 'Comprobante',
+        meta: {
+          exportValue: (row) =>
+            row.invoiceLetterValue ? `Factura ${row.invoiceLetterValue}` : '',
+        },
         size: 120,
         filterFn: 'includesSome',
         cell: ({ row }) =>
@@ -672,6 +712,13 @@ export function HistorialPage() {
         id: 'cashSessionId',
         accessorFn: (row) => row.cashSessionId ?? '',
         header: 'Caja',
+        meta: {
+          exportValue: (row) =>
+            row.cashSessionId
+              ? (sessionLabelById.get(row.cashSessionId) ??
+                row.cashSessionId.slice(0, 8))
+              : '',
+        },
         size: 190,
         filterFn: 'includesSome',
         sortingFn: dateTimeSorting((row) =>
@@ -845,6 +892,12 @@ export function HistorialPage() {
       ) : (
         <>
           <DataTable<EntryHistoryRow>
+            excelExport={{
+              fileName: (rows) =>
+                getDateRangeExcelFileName(rows.map((row) => row.enteredAt)),
+              onError: (error) =>
+                showToast({ message: translateApiError(error), kind: 'error' }),
+            }}
             key={focusedCashSessionId ?? 'historial'}
             data={rows}
             columns={columns}
