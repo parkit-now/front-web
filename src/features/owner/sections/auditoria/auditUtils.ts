@@ -3,11 +3,16 @@ import type { AuditEvent, AuditSeverity } from '../../services/audit';
 
 export type AuditActionKind =
   | 'entry.corrected'
+  | 'entry.deleted'
   | 'entry.undercharged'
   | 'invoice.cert_expired'
   | 'other';
 
-export type AuditOrigin = 'history' | 'operational_exit' | 'unknown';
+export type AuditOrigin =
+  | 'history'
+  | 'operational_exit'
+  | 'desktop'
+  | 'unknown';
 
 export type PaymentSnapshot = {
   id?: string;
@@ -142,6 +147,7 @@ const RESERVATION_AUDIT_ACTIONS = [
 
 const OWNER_AUDIT_VISIBLE_ACTIONS = new Set<string>([
   'entry.corrected',
+  'entry.deleted',
   'entry.undercharged',
   'invoice.cert_expired',
   'arca_account.certificate_expired',
@@ -166,6 +172,7 @@ const KNOWN_AUDIT_ACTIONS = new Set<string>([
   'entity.profile_updated',
   'payment_method.toggled',
   'entry.corrected',
+  'entry.deleted',
   'rate.prices_propagated',
   'entry.undercharged',
   'entry.reservation_unlinked',
@@ -326,7 +333,12 @@ function readNullableString(
 
 function readOrigin(record: Record<string, unknown>): AuditOrigin {
   const origin = readString(record, 'origin');
-  if (origin === 'history' || origin === 'operational_exit') return origin;
+  if (
+    origin === 'history' ||
+    origin === 'operational_exit' ||
+    origin === 'desktop'
+  )
+    return origin;
   return 'unknown';
 }
 
@@ -380,6 +392,7 @@ function paymentMethodNames(
 
 export function actionKindFor(action: string): AuditActionKind {
   if (action === 'entry.corrected') return 'entry.corrected';
+  if (action === 'entry.deleted') return 'entry.deleted';
   if (action === 'entry.undercharged') return 'entry.undercharged';
   if (action === 'invoice.cert_expired') return 'invoice.cert_expired';
   return 'other';
@@ -468,6 +481,7 @@ function reservationSummary(
 
 export function actionLabelFor(action: string): string {
   if (action === 'entry.corrected') return 'Corrección de estadía';
+  if (action === 'entry.deleted') return 'Ingreso eliminado';
   if (action === 'entry.undercharged') return 'Cobro menor al sugerido';
   if (action === 'invoice.cert_expired') return 'Cobro sin factura';
   return OTHER_ACTION_LABELS[action] ?? 'Evento del sistema';
@@ -483,6 +497,11 @@ function actionSummaryFor(
   action: string,
   metadata: Record<string, unknown>,
 ): string {
+  if (action === 'entry.deleted') {
+    const plate = readString(metadata, 'plate');
+    const ticket = readNumber(metadata, 'ticketNumber');
+    return `Ingreso eliminado${plate ? ` de ${plate}` : ''}${ticket === null ? '' : ` (ticket ${ticket})`}`;
+  }
   if (action === 'arca_account.certificate_expired') {
     return 'El certificado de ARCA venció y la playa no puede facturar';
   }
@@ -521,6 +540,7 @@ function actionSummaryFor(
 export function originLabelFor(origin: AuditOrigin): string {
   if (origin === 'history') return 'Historial';
   if (origin === 'operational_exit') return 'Panel operativo';
+  if (origin === 'desktop') return 'Aplicación desktop';
   return 'Sin origen';
 }
 
@@ -622,6 +642,12 @@ function moneyImpactFor(
   before: EntrySnapshot,
   after: EntrySnapshot,
 ): { label: string; amount: number | null } {
+  if (action === 'entry.deleted') {
+    const amount = readNumber(metadata, 'amountPaid');
+    return amount !== null && amount > 0
+      ? { label: `Retirado de caja ${fmtMoney0(amount)}`, amount: -amount }
+      : { label: 'Sin cobro', amount: 0 };
+  }
   if (action === 'entry.undercharged') {
     const delta = readNumber(metadata, 'delta');
     return {
@@ -691,7 +717,10 @@ export function buildAuditRow(event: AuditEvent): AuditRow {
   const after = readSnapshot(metadata, 'after');
   const changedFields = readStringArray(metadata, 'changedFields');
   const labels = changedFieldLabels(changedFields);
-  const origin = readOrigin(metadata);
+  const origin =
+    event.action === 'entry.deleted' && !readString(metadata, 'origin')
+      ? 'desktop'
+      : readOrigin(metadata);
   const kind = actionKindFor(event.action);
   const plate =
     after.plate ??
@@ -706,7 +735,10 @@ export function buildAuditRow(event: AuditEvent): AuditRow {
   const reason = isReservationAction(event.action)
     ? reservationReason(metadata)
     : readString(metadata, 'reason');
-  const actorRole = actorRoleLabel(readString(metadata, 'actorRole'));
+  const actorRole = actorRoleLabel(
+    readString(metadata, 'actorRole') ||
+      (event.action === 'entry.deleted' ? 'owner' : ''),
+  );
   const cashSessionId =
     after.cashSessionId ??
     before.cashSessionId ??
@@ -899,6 +931,8 @@ function compactEntries(entries: Array<MetadataEntry | null>): MetadataEntry[] {
 
 export function metadataEntries(row: AuditRow): MetadataEntry[] {
   const metadata = row.metadata;
+
+  if (row.action === 'entry.deleted') return [];
 
   if (row.action === 'arca_account.certificate_expired') {
     return compactEntries([

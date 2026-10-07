@@ -151,6 +151,7 @@ function actionBadgeVariant(
   kind: AuditRow['actionKind'],
 ): 'brand' | 'warn' | 'default' {
   if (kind === 'entry.corrected') return 'brand';
+  if (kind === 'entry.deleted') return 'warn';
   if (kind === 'entry.undercharged') return 'warn';
   if (kind === 'invoice.cert_expired') return 'warn';
   return 'default';
@@ -160,6 +161,7 @@ function originBadgeVariant(
   origin: AuditRow['origin'],
 ): 'default' | 'brand' | 'warn' {
   if (origin === 'history') return 'brand';
+  if (origin === 'desktop') return 'brand';
   if (origin === 'operational_exit') return 'warn';
   return 'default';
 }
@@ -557,6 +559,20 @@ function CertExpiredDetail({ row }: { row: AuditRow }) {
           Renovar certificado
         </Link>
       </div>
+    </section>
+  );
+}
+
+function DeletedEntryDetail({ row }: { row: AuditRow }) {
+  const amount = metadataNumber(row.metadata, 'amountPaid');
+  return (
+    <section className="audit2-detail-section">
+      <h3>Cobro retirado</h3>
+      <p className="audit2-muted">
+        {amount !== null && amount > 0
+          ? `Se retiraron ${fmtMoney0(amount)} de la caja. La baja no devuelve dinero al cliente.`
+          : 'Este ingreso no tenía un cobro asociado.'}
+      </p>
     </section>
   );
 }
@@ -1346,11 +1362,16 @@ function LprReviewTab({
 
 function AuditDetailDrawer({
   row,
+  cashSessions,
   onClose,
 }: {
   row: AuditRow | null;
+  cashSessions: CashSession[];
   onClose: () => void;
 }) {
+  const cashSession = cashSessions.find(
+    (session) => session.id === row?.cashSessionId,
+  );
   return (
     <Drawer
       open={Boolean(row)}
@@ -1388,13 +1409,25 @@ function AuditDetailDrawer({
               />
               <DetailLine label="Patente" value={row.plate} />
               <DetailLine label="Ticket" value={row.ticketNumber} />
-              <DetailLine label="Caja" value={row.cashSessionId} />
-              <DetailLine label="Razón" value={row.reason} />
+              <DetailLine
+                label="Caja"
+                value={
+                  cashSession
+                    ? cashSessionLabel(cashSession)
+                    : fallbackCashSessionLabel(row.cashSessionId)
+                }
+              />
+              {row.reason !== '-' ? (
+                <DetailLine label="Razón" value={row.reason} />
+              ) : null}
             </div>
           </section>
 
           {row.actionKind === 'entry.corrected' ? (
             <CorrectionDetail row={row} />
+          ) : null}
+          {row.actionKind === 'entry.deleted' ? (
+            <DeletedEntryDetail row={row} />
           ) : null}
           {row.actionKind === 'entry.undercharged' ? (
             <UnderchargedDetail row={row} />
@@ -1873,6 +1906,7 @@ export function AuditoriaPage() {
               ],
               actionKind: [
                 { value: 'entry.corrected', label: 'Corrección de estadía' },
+                { value: 'entry.deleted', label: 'Ingreso eliminado' },
                 {
                   value: 'entry.undercharged',
                   label: 'Cobro menor al sugerido',
@@ -1883,6 +1917,7 @@ export function AuditoriaPage() {
               origin: [
                 { value: 'history', label: 'Historial' },
                 { value: 'operational_exit', label: 'Panel operativo' },
+                { value: 'desktop', label: 'Aplicación desktop' },
                 { value: 'unknown', label: 'Sin origen' },
               ],
             }}
@@ -1935,7 +1970,11 @@ export function AuditoriaPage() {
         />
       )}
 
-      <AuditDetailDrawer row={selected} onClose={() => setSelected(null)} />
+      <AuditDetailDrawer
+        row={selected}
+        cashSessions={cashSessionsQuery.data ?? []}
+        onClose={() => setSelected(null)}
+      />
     </div>
   );
 }
