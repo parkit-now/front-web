@@ -18,7 +18,10 @@ import {
   X,
 } from 'lucide-react';
 import { DataTable } from '../../../../features/data-table';
-import { normalizeText } from '../../../../features/data-table/utils';
+import {
+  dateTimeSorting,
+  normalizeText,
+} from '../../../../features/data-table/utils';
 import { Pagination } from '../../../../features/data-table/components/Pagination';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
@@ -1606,6 +1609,7 @@ export function AuditoriaPage() {
         header: 'Fecha',
         accessorKey: 'createdAtLocalDate',
         filterFn: 'dateRange',
+        sortingFn: dateTimeSorting((row) => row.createdAt),
         cell: ({ row }) => (
           <span className="audit2-mono">
             {fmtDateTimeAr(row.original.createdAt)}
@@ -1617,12 +1621,14 @@ export function AuditoriaPage() {
         header: 'Ingreso',
         accessorKey: 'enteredAtLocalDate',
         filterFn: 'dateRange',
+        sortingFn: dateTimeSorting((row) => row.enteredAt),
       },
       {
         id: 'leftAtLocalDate',
         header: 'Egreso',
         accessorKey: 'leftAtLocalDate',
         filterFn: 'dateRange',
+        sortingFn: dateTimeSorting((row) => row.leftAt),
       },
       {
         id: 'cashSessionId',

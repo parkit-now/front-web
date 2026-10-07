@@ -51,11 +51,13 @@ export type AuditRow = {
   createdAt: string;
   createdAtLocalDate: string;
   economicImpact: AuditEconomicImpact | null;
+  enteredAt: string | undefined;
   enteredAtLocalDate: string;
   entityId: string | null;
   entityType: string;
   impactAmount: number | null;
   isActiveEntry: boolean;
+  leftAt: string | null | undefined;
   leftAtLocalDate: string;
   metadata: Record<string, unknown>;
   moneyImpact: string;
@@ -739,11 +741,13 @@ export function buildAuditRow(event: AuditEvent): AuditRow {
     createdAt: event.createdAt,
     createdAtLocalDate: dateKeyAr(event.createdAt),
     economicImpact,
+    enteredAt: after.enteredAt ?? before.enteredAt,
     enteredAtLocalDate: maybeDateKeyAr(after.enteredAt ?? before.enteredAt),
     entityId: event.entityId,
     entityType: event.entityType,
     impactAmount: moneyImpact.amount,
     isActiveEntry,
+    leftAt: after.leftAt ?? before.leftAt,
     leftAtLocalDate: maybeDateKeyAr(after.leftAt ?? before.leftAt),
     metadata,
     moneyImpact: moneyImpact.label,

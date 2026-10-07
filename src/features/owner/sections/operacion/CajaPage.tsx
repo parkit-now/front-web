@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../../../../features/data-table';
+import { dateTimeSorting } from '../../../../features/data-table/utils';
 import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
 import { SectionHeader } from '../../../../shared/components/SectionHeader';
 import { Badge } from '../../../../shared/components/ui/Badge';
@@ -517,6 +518,7 @@ export function CajaPage() {
         header: 'Apertura',
         size: 160,
         filterFn: 'dateRange',
+        sortingFn: dateTimeSorting((row) => row.openedAt),
         cell: ({ row }) => fmtDateTimeAr(row.original.openedAt),
       },
       {
@@ -525,6 +527,7 @@ export function CajaPage() {
         header: 'Cierre',
         size: 160,
         filterFn: 'dateRange',
+        sortingFn: dateTimeSorting((row) => row.closedAt),
         cell: ({ row }) =>
           row.original.closedAt ? (
             fmtDateTimeAr(row.original.closedAt)

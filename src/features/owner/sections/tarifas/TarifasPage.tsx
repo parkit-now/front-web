@@ -11,6 +11,7 @@ import {
   IconTrash,
 } from '../../../../shared/components/icons';
 import { DataTable } from '../../../../features/data-table';
+import { dateTimeSorting } from '../../../../features/data-table/utils';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { ApiError } from '../../../../lib/api/client';
 import {
@@ -331,6 +332,7 @@ export function TarifasPage() {
         id: 'updatedAt',
         header: 'Actualizada',
         accessorKey: 'updatedAt',
+        sortingFn: dateTimeSorting((row) => row.updatedAt),
         size: 170,
         cell: ({ row }) => (
           <span style={{ fontSize: 12, color: 'var(--text-3)' }}>

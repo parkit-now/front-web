@@ -7,6 +7,7 @@ import type {
   SortingFn,
 } from '@tanstack/react-table';
 import { DataTable } from '../../../../features/data-table';
+import { dateTimeSorting } from '../../../../features/data-table/utils';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
@@ -448,6 +449,11 @@ export function HistorialPage() {
     return labels;
   }, [sessions]);
 
+  const sessionOpenedAtById = useMemo(
+    () => new Map(sessions.map((session) => [session.id, session.openedAt])),
+    [sessions],
+  );
+
   const baseRows = useMemo(
     () =>
       attachPaymentsToEntries(
@@ -606,6 +612,7 @@ export function HistorialPage() {
         header: 'Ingreso',
         size: 160,
         filterFn: 'dateRange',
+        sortingFn: dateTimeSorting((row) => row.enteredAt),
         cell: ({ row }) => fmtDateTimeAr(row.original.enteredAt),
       },
       {
@@ -614,6 +621,7 @@ export function HistorialPage() {
         header: 'Egreso',
         size: 160,
         filterFn: 'dateRange',
+        sortingFn: dateTimeSorting((row) => row.leftAt),
         cell: ({ row }) =>
           row.original.leftAt ? (
             fmtDateTimeAr(row.original.leftAt)
@@ -666,6 +674,9 @@ export function HistorialPage() {
         header: 'Caja',
         size: 190,
         filterFn: 'includesSome',
+        sortingFn: dateTimeSorting((row) =>
+          sessionOpenedAtById.get(row.cashSessionId ?? ''),
+        ),
         cell: ({ row }) => {
           const id = row.original.cashSessionId;
           return id ? (
@@ -700,7 +711,7 @@ export function HistorialPage() {
         cell: ({ row }) => row.original.cochera || <MutedDash />,
       },
     ],
-    [sessionLabelById],
+    [sessionLabelById, sessionOpenedAtById],
   );
 
   const isLoading =

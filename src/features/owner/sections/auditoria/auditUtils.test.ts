@@ -180,8 +180,40 @@ describe('audit utils', () => {
     );
 
     expect(row.isActiveEntry).toBe(true);
+    expect(row.enteredAt).toBe('2026-09-08T12:00:00.000Z');
     expect(row.enteredAtLocalDate).toBe('2026-09-08');
+    expect(row.leftAt).toBeNull();
     expect(row.leftAtLocalDate).toBe('');
+  });
+
+  it('preserves full corrected timestamps separately from day-only filters', () => {
+    const row = buildAuditRow(
+      event({
+        metadata: {
+          before: {
+            enteredAt: '2026-09-08T12:00:00.000Z',
+            leftAt: '2026-09-08T14:00:00.000Z',
+          },
+          after: {
+            enteredAt: '2026-09-08T12:15:00.000Z',
+            leftAt: '2026-09-08T14:30:00.000Z',
+          },
+        },
+      }),
+    );
+
+    expect(row.enteredAt).toBe('2026-09-08T12:15:00.000Z');
+    expect(row.leftAt).toBe('2026-09-08T14:30:00.000Z');
+    expect(row.enteredAtLocalDate).toBe('2026-09-08');
+    expect(row.leftAtLocalDate).toBe('2026-09-08');
+
+    const previous = buildAuditRow(
+      event({
+        metadata: { before: { enteredAt: row.enteredAt, leftAt: row.leftAt } },
+      }),
+    );
+    expect(previous.enteredAt).toBe(row.enteredAt);
+    expect(previous.leftAt).toBe(row.leftAt);
   });
 
   it('shows charged economic impact for entry corrections', () => {
