@@ -9,6 +9,7 @@ export type InvoiceBatchResult = components['schemas']['InvoiceBatchItemDto'];
 export type Taxpayer = components['schemas']['TaxpayerDto'];
 export type InvoiceReceiver = components['schemas']['InvoiceReceiverDto'];
 export type InvoiceDocument = components['schemas']['InvoiceDocumentDto'];
+export type InvoicePreview = components['schemas']['InvoicePreviewDto'];
 type InvoiceChangesResponse =
   components['schemas']['InvoiceChangesResponseDto'];
 type InvoiceBatchResponse = components['schemas']['InvoiceBatchResponseDto'];
@@ -68,11 +69,26 @@ export async function issueInvoice(
   tenantId: string,
   entryId: string,
   receiverCuit?: string,
+  expectedAmount?: number,
 ): Promise<InvoiceSummary> {
   return apiRequest<InvoiceSummary>({
     method: 'POST',
     path: `/tenants/${encodeURIComponent(tenantId)}/entries/${encodeURIComponent(entryId)}/invoice`,
-    body: receiverCuit ? { receiverCuit } : {},
+    body: {
+      receiverCuit,
+      expectedAmount,
+    } satisfies components['schemas']['IssueInvoiceDto'],
+    bearer: await bearer(),
+  });
+}
+
+export async function getInvoicePreview(
+  tenantId: string,
+  entryId: string,
+): Promise<InvoicePreview> {
+  return apiRequest<InvoicePreview>({
+    method: 'GET',
+    path: `/tenants/${encodeURIComponent(tenantId)}/entries/${encodeURIComponent(entryId)}/invoice/preview`,
     bearer: await bearer(),
   });
 }
