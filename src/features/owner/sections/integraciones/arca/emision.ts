@@ -74,6 +74,6 @@ export function describeInvoiceEffect(mode: PaymentMethodInvoiceMode): string {
     case 'auto':
       return 'Se emite la factura al confirmar el pago.';
     case 'manual':
-      return 'Queda pendiente para emitirla desde el Historial.';
+      return 'No se factura al cobrar; se puede emitir desde el Historial.';
   }
 }

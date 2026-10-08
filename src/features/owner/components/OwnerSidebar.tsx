@@ -105,6 +105,11 @@ export const OWNER_NAV: NavEntry[] = [
         icon: <IconPlug size={16} />,
       },
       {
+        segment: 'config/clientes',
+        label: 'Clientes',
+        icon: <IconUsers size={16} />,
+      },
+      {
         segment: 'config/lista-blanca',
         label: 'Lista blanca',
         icon: <ListChecks size={16} />,

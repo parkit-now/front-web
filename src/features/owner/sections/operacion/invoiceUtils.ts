@@ -28,7 +28,7 @@ export const INVOICE_STATE_LABEL: Record<InvoiceState, string> = {
   error: 'Con error',
   pending: 'Pendiente',
   manual: 'Facturada a mano',
-  none: 'Sin factura',
+  none: 'No facturado',
   na: 'No aplica',
 };
 

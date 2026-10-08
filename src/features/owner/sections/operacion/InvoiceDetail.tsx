@@ -1,5 +1,6 @@
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Save } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
@@ -35,6 +36,7 @@ import type { EntryHistoryRow } from './operationUtils';
 import { printInvoice } from './printInvoice';
 import { useInvoiceReceiver } from './useInvoiceReceiver';
 import { useInvoiceConfirmation } from './useInvoiceConfirmation';
+import { ClientContact } from '../clientes/ClientContact';
 
 /** Cómo factura la sede: con ARCA (vinculada o con el certificado vencido) o no. */
 export type ArcaInvoicing = 'linked' | 'cert_expired' | 'none';
@@ -74,6 +76,7 @@ export function InvoiceDetail({
   onChanged: () => void;
 }) {
   const { showToast } = useToast();
+  const queryClient = useQueryClient();
   const [busy, setBusy] = useState<'pdf' | 'manual' | 'number' | null>(null);
   const [manualNumberDraft, setManualNumberDraft] = useState(
     row.manualInvoiceNumber ?? '',
@@ -89,6 +92,7 @@ export function InvoiceDetail({
   const receiver = useInvoiceReceiver({
     tenantId,
     entryId: row.id,
+    plate: row.plate,
     suggestionEnabled: issueOpen,
     frozen: actionBusy || confirmation.snapshot !== null,
   });
@@ -112,6 +116,7 @@ export function InvoiceDetail({
       if (result.status === 'issued') {
         setIssueOpen(false);
         showToast({ message: `${label} emitida.`, kind: 'success' });
+        void queryClient.invalidateQueries({ queryKey: ['clients', tenantId] });
       } else {
         showToast({
           message:
@@ -236,6 +241,15 @@ export function InvoiceDetail({
           <Item label="Receptor">{receiverDescription(invoice)}</Item>
         ) : null}
       </div>
+      {invoiceState === 'issued' ? (
+        <ClientContact
+          tenantId={tenantId}
+          plate={row.plate}
+          receiverCuit={
+            invoice?.receptorDocTipo === 80 ? invoice.receptorDocNro : null
+          }
+        />
+      ) : null}
 
       {errorText ? (
         <div className="operation-invoice-error" role="status">
@@ -265,6 +279,13 @@ export function InvoiceDetail({
             emitter={emitter}
             disabled={actionBusy}
           />
+          {(receiver.choice === 'final' || receiver.cuitToSend) && (
+            <ClientContact
+              tenantId={tenantId}
+              plate={row.plate}
+              receiverCuit={receiver.cuitToSend}
+            />
+          )}
           <div className="operation-invoice-actions">
             <Button
               variant="secondary"
