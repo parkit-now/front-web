@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Plus, Power, Trash2 } from 'lucide-react';
 import { DataTable } from '../../../data-table';
+import { PlateCell } from '../../../data-table/components/PlateCell';
 import { Button } from '../../../../shared/components/ui/Button';
 import { Badge } from '../../../../shared/components/ui/Badge';
 import { Input } from '../../../../shared/components/ui/Input';
@@ -122,7 +123,8 @@ function WhitelistTenantPage({ tenantId }: { tenantId: string }) {
       {
         accessorKey: 'plate',
         header: 'Patente',
-        cell: (info) => <strong>{String(info.getValue())}</strong>,
+        size: 120,
+        cell: (info) => <PlateCell plate={String(info.getValue())} />,
       },
       {
         accessorKey: 'notes',

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { PlateCell } from '../../../../features/data-table/components/PlateCell';
 import { Skeleton } from '../../../../shared/components/ui/Skeleton';
 import { EmptyState } from '../../../../shared/components/ui/EmptyState';
 import { fmtMoney0 } from '../../../../shared/utils/fmt';
@@ -113,7 +114,7 @@ export function TopPlatesTable({ items, loading, error }: TopPlatesTableProps) {
                     {index + 1}
                   </td>
                   <td style={CELL}>
-                    <span className="pk-plate">{plate.plate}</span>
+                    <PlateCell plate={plate.plate} />
                   </td>
                   <td
                     style={{

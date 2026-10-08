@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Plus, Trash2, X } from 'lucide-react';
 import { DataTable } from '../../../data-table';
+import { PlateCell } from '../../../data-table/components/PlateCell';
 import { Button } from '../../../../shared/components/ui/Button';
 import { Input } from '../../../../shared/components/ui/Input';
 import { Modal } from '../../../../shared/components/ui/Modal';
@@ -176,9 +177,12 @@ function ClientesTenantPage({ tenantId }: { tenantId: string }) {
         id: 'plates',
         accessorFn: (row) => row.plates.join(', '),
         header: 'Patentes',
+        size: 230,
         cell: ({ row }) => (
-          <span className="client-plates">
-            {row.original.plates.join(' · ')}
+          <span className="dt-plate-list">
+            {row.original.plates.map((plate) => (
+              <PlateCell key={plate} plate={plate} />
+            ))}
           </span>
         ),
       },
