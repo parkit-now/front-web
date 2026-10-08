@@ -412,6 +412,83 @@ h2 {
   box-shadow: var(--shadow-card);
 }
 
+/* ── Selector de período ──────────────────────────────────────────────────
+   Es la autoridad de la pantalla: define qué resumen las cards y acota todo
+   lo de abajo. Va con su propio marco y etiqueta para que no se confunda con
+   un botón más de la barra de acciones. */
+.audit-period-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--brand);
+  border-radius: 10px;
+  padding: 4px 4px 4px 12px;
+  background: var(--card);
+}
+
+.audit-period-picker-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--brand);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ── Cards y barras clickeables ───────────────────────────────────────────
+   Tocar una card filtra la tabla por los eventos que ese número suma. Se
+   renderizan como <button>, así que hay que apagarles los estilos que el
+   navegador le pone a los botones y devolverles la forma de card. */
+.audit-risk-card.clickable {
+  width: 100%;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.audit-risk-card.clickable:hover {
+  border-color: var(--brand);
+  transform: translateY(-1px);
+}
+
+.audit-risk-card.clickable:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* La card activa: borde de marca y un anillo que la despega de las otras.
+   El borde solo no alcanzaba, porque las cards de warn y err ya tienen el
+   suyo de color y la seleccionada se perdía entre ellas. */
+.audit-risk-card.active {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 2px var(--brand-soft, rgba(14, 95, 216, 0.25));
+}
+
+/* Sin nada detrás: apagada y sin reaccionar. Tocarla sólo llevaría a una
+   tabla vacía, y eso habría que apretarlo para descubrirlo. */
+.audit-risk-card.clickable.empty,
+.audit-risk-bar-row.empty {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.audit-risk-card.clickable.empty:hover {
+  border-color: var(--border-soft);
+  transform: none;
+}
+
+.audit-risk-bar-row.empty:hover {
+  background: none;
+}
+
 .audit-risk-card.warn {
   border-color: var(--warn-border);
   background: var(--warn-bg);
@@ -484,14 +561,41 @@ h2 {
   font-size: 18px;
 }
 
+/* Es un <button>: filtra la tabla por los eventos que suman esta barra. */
 .audit-risk-bar-row {
   display: grid;
   grid-template-columns: minmax(150px, 0.9fr) minmax(120px, 2fr) minmax(
       88px,
       auto
     );
+  width: 100%;
   align-items: center;
   gap: 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 4px 6px;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.audit-risk-bar-row:hover {
+  background: var(--bg-soft, rgba(14, 95, 216, 0.06));
+}
+
+.audit-risk-bar-row.active {
+  border-color: var(--brand);
+  background: var(--bg-soft, rgba(14, 95, 216, 0.08));
+}
+
+.audit-risk-bar-row:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .audit-risk-bar-track {
@@ -576,7 +680,7 @@ h2 {
 }
 
 .audit2-stack strong,
-.audit2-stack > span:first-child {
+.audit2-stack > span:first-child:not(.dt-plate) {
   color: var(--text-1);
   font-weight: 700;
 }
@@ -651,7 +755,7 @@ h2 {
   background: #fff;
 }
 
-.audit2-detail-line span {
+.audit2-detail-line > span {
   display: block;
   margin-bottom: 4px;
   color: var(--text-3);
@@ -660,7 +764,7 @@ h2 {
   text-transform: uppercase;
 }
 
-.audit2-detail-line strong {
+.audit2-detail-line > strong {
   display: block;
   min-width: 0;
   overflow-wrap: anywhere;
