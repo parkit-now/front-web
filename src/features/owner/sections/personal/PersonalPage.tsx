@@ -11,6 +11,7 @@ import { isUuid } from '../../../../shared/utils/uuid';
 import { useDebouncedValue } from '../../../../shared/hooks/useDebouncedValue';
 import { translateApiError } from '../../../../lib/api/translate';
 import { DataTable } from '../../../../features/data-table';
+import { dateTimeSorting } from '../../../../features/data-table/utils';
 import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
 import { useSucursal } from '../../context/SucursalContext';
 import { useStaffList } from '../../hooks/useStaff';
@@ -133,6 +134,7 @@ export function PersonalPage() {
         id: 'alta',
         header: 'Alta',
         accessorKey: 'createdAt',
+        sortingFn: dateTimeSorting((row) => row.createdAt),
         cell: ({ row }) => (
           <span style={{ fontSize: 13, color: 'var(--text-3)' }}>
             {fmtDateTimeAr(row.original.createdAt)}

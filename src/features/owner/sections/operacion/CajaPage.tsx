@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../../../../features/data-table';
+import { dateTimeSorting } from '../../../../features/data-table/utils';
 import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
 import { SectionHeader } from '../../../../shared/components/SectionHeader';
 import { Badge } from '../../../../shared/components/ui/Badge';
@@ -33,6 +34,7 @@ import {
   type SessionStats,
 } from './operationUtils';
 import './operation.css';
+import { CashSessionMovementsDialog } from './CashSessionMovementsDialog';
 
 type CashSessionRow = CashSession & {
   openedAtLocalDate: string;
@@ -318,10 +320,12 @@ function CashSessionDrawer({
   row,
   onClose,
   onViewMovements,
+  suspended = false,
 }: {
   row: CashSessionRow | null;
   onClose: () => void;
   onViewMovements: (sessionId: string) => void;
+  suspended?: boolean;
 }) {
   return (
     <Drawer
@@ -329,6 +333,7 @@ function CashSessionDrawer({
       onClose={onClose}
       title="Detalle de caja"
       width={560}
+      suspended={suspended}
     >
       {row ? (
         <div className="operation-drawer">
@@ -439,6 +444,10 @@ export function CajaPage() {
   const location = useLocation();
   const locationState = location.state as CajaLocationState;
   const [selected, setSelected] = useState<CashSessionRow | null>(null);
+  const [movementsSession, setMovementsSession] = useState<{
+    tenantId: string;
+    sessionId: string;
+  } | null>(null);
 
   const entriesQuery = useQuery({
     queryKey: ['owner-operations', sucursalId, 'entries'],
@@ -497,16 +506,8 @@ export function CajaPage() {
     return active ? (statsBySession.get(active.id) ?? null) : null;
   }, [sessions, statsBySession]);
 
-  function historyPath(sessionId: string): string {
-    const base = location.pathname.replace(/\/caja\/?$/, '/historial');
-    return `${base}?cashSessionId=${encodeURIComponent(sessionId)}&from=caja`;
-  }
-
   function viewMovements(sessionId: string) {
-    setSelected(null);
-    void navigate(historyPath(sessionId), {
-      state: { fromCaja: true, cashSessionId: sessionId },
-    });
+    setMovementsSession({ tenantId: sucursalId, sessionId });
   }
 
   const columns = useMemo<ColumnDef<CashSessionRow, unknown>[]>(
@@ -517,6 +518,7 @@ export function CajaPage() {
         header: 'Apertura',
         size: 160,
         filterFn: 'dateRange',
+        sortingFn: dateTimeSorting((row) => row.openedAt),
         cell: ({ row }) => fmtDateTimeAr(row.original.openedAt),
       },
       {
@@ -525,6 +527,7 @@ export function CajaPage() {
         header: 'Cierre',
         size: 160,
         filterFn: 'dateRange',
+        sortingFn: dateTimeSorting((row) => row.closedAt),
         cell: ({ row }) =>
           row.original.closedAt ? (
             fmtDateTimeAr(row.original.closedAt)
@@ -678,7 +681,15 @@ export function CajaPage() {
         row={selected}
         onClose={() => setSelected(null)}
         onViewMovements={viewMovements}
+        suspended={movementsSession?.tenantId === sucursalId}
       />
+      {movementsSession?.tenantId === sucursalId ? (
+        <CashSessionMovementsDialog
+          key={`${sucursalId}:${movementsSession.sessionId}`}
+          cashSessionId={movementsSession.sessionId}
+          onClose={() => setMovementsSession(null)}
+        />
+      ) : null}
     </div>
   );
 }

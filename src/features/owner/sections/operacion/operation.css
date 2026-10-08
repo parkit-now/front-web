@@ -2,6 +2,35 @@
   display: block;
 }
 
+.cash-session-movements-table {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cash-session-movements-table .dt-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  border-radius: 0;
+}
+
+.cash-session-movements-table .dt-scroll-shell {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+
+.cash-session-movements-table .dt-quick-switches {
+  flex-wrap: wrap;
+}
+
 .operation-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -539,6 +568,30 @@
 
 .operation-invoice {
   margin-top: 22px;
+}
+
+.operation-manual-invoice-number {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.operation-manual-invoice-number > div {
+  display: flex;
+  gap: 8px;
+  max-width: 360px;
+}
+
+.operation-manual-invoice-number input {
+  min-width: 0;
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--card);
+  color: var(--text-1);
 }
 
 /* «Emitir factura»: receptor, lo que dijo el padrón y los botones. */

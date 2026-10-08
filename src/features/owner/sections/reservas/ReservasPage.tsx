@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../../../data-table';
+import { dateTimeSorting } from '../../../data-table/utils';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { SectionHeader } from '../../../../shared/components/SectionHeader';
@@ -296,6 +297,7 @@ export function ReservasPage() {
       {
         id: 'slot',
         accessorKey: 'entryAt',
+        sortingFn: dateTimeSorting((row) => row.entryAt),
         header: 'Franja',
         size: 190,
         cell: ({ row }) =>

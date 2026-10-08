@@ -77,6 +77,20 @@ export function formatVoucherNumber(
   return `${String(ptoVta).padStart(4, '0')}-${String(cbteNro).padStart(8, '0')}`;
 }
 
+/** Sin extension: el navegador la agrega al guardar como PDF. */
+export function invoicePdfTitle(input: {
+  plate: string;
+  cae?: string | null;
+  ptoVta?: number | null;
+  cbteNro?: number | null;
+}): string {
+  const number =
+    input.ptoVta != null && input.cbteNro != null
+      ? `${String(input.cbteNro).padStart(8, '0')}-${String(input.ptoVta).padStart(4, '0')}`
+      : null;
+  return [number, input.cae, input.plate].filter(Boolean).join('_');
+}
+
 /** «Factura B 0001-00000123», o sólo «Factura B» si todavía no tiene número. */
 export function voucherLabel(
   invoice: Pick<Invoice, 'cbteTipo' | 'ptoVta' | 'cbteNro'>,
@@ -183,6 +197,25 @@ export function receiverDescription(
 // invoiceUtils.ts`): si cambia acá, cambiar allá.
 
 export type InvoiceLetter = 'A' | 'B' | 'C';
+
+export function describeIssueConfirmation(input: {
+  letter: InvoiceLetter | null;
+  cuit: string | null | undefined;
+  receiverName?: string | null;
+  amount: string;
+}): { title: string; message: string; confirmLabel: string } {
+  const to = input.cuit
+    ? input.receiverName
+      ? `a ${input.receiverName} (CUIT ${formatCuit(input.cuit)})`
+      : `al CUIT ${formatCuit(input.cuit)}`
+    : 'a consumidor final';
+  const name = input.letter ? `la Factura ${input.letter}` : 'la factura';
+  return {
+    title: `¿Emitir ${name}?`,
+    message: `Se emite ${to} por ${input.amount}. Una factura emitida no se puede anular desde Parkit.`,
+    confirmLabel: input.letter ? `Emitir Factura ${input.letter}` : 'Emitir',
+  };
+}
 
 /** A quién se factura: consumidor final (la de siempre) o el CUIT del cliente. */
 export type ReceiverChoice = 'final' | 'cuit';

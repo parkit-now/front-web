@@ -180,8 +180,40 @@ describe('audit utils', () => {
     );
 
     expect(row.isActiveEntry).toBe(true);
+    expect(row.enteredAt).toBe('2026-09-08T12:00:00.000Z');
     expect(row.enteredAtLocalDate).toBe('2026-09-08');
+    expect(row.leftAt).toBeNull();
     expect(row.leftAtLocalDate).toBe('');
+  });
+
+  it('preserves full corrected timestamps separately from day-only filters', () => {
+    const row = buildAuditRow(
+      event({
+        metadata: {
+          before: {
+            enteredAt: '2026-09-08T12:00:00.000Z',
+            leftAt: '2026-09-08T14:00:00.000Z',
+          },
+          after: {
+            enteredAt: '2026-09-08T12:15:00.000Z',
+            leftAt: '2026-09-08T14:30:00.000Z',
+          },
+        },
+      }),
+    );
+
+    expect(row.enteredAt).toBe('2026-09-08T12:15:00.000Z');
+    expect(row.leftAt).toBe('2026-09-08T14:30:00.000Z');
+    expect(row.enteredAtLocalDate).toBe('2026-09-08');
+    expect(row.leftAtLocalDate).toBe('2026-09-08');
+
+    const previous = buildAuditRow(
+      event({
+        metadata: { before: { enteredAt: row.enteredAt, leftAt: row.leftAt } },
+      }),
+    );
+    expect(previous.enteredAt).toBe(row.enteredAt);
+    expect(previous.leftAt).toBe(row.leftAt);
   });
 
   it('shows charged economic impact for entry corrections', () => {
@@ -230,6 +262,54 @@ describe('audit utils', () => {
     expect(row.summary).toBe('Cobro bajo en AA123BB: 90% del sugerido');
     expect(row.moneyImpact).toBe('Diferencia $200');
     expect(row.impactAmount).toBe(200);
+  });
+
+  it('presenta una baja previa con cobro sin mostrar metadata técnica', () => {
+    const row = buildAuditRow(
+      event({
+        action: 'entry.deleted',
+        metadata: {
+          plate: 'LIB474',
+          ticketNumber: 2,
+          cashSessionId: 'cash-1',
+          amountPaid: 500,
+          paymentTransactionIds: ['payment-1'],
+          reason: null,
+        },
+      }),
+    );
+
+    expect(row.actionKind).toBe('entry.deleted');
+    expect(row.actionLabel).toBe('Ingreso eliminado');
+    expect(row.summary).toBe('Ingreso eliminado de LIB474 (ticket 2)');
+    expect(row.actorRole).toBe('Dueño');
+    expect(row.originLabel).toBe('Aplicación desktop');
+    expect(row.moneyImpact).toBe('Retirado de caja $500');
+    expect(row.impactAmount).toBe(-500);
+    expect(row.searchText).toContain('LIB474');
+    expect(metadataEntries(row)).toEqual([]);
+    expect(isOwnerAuditVisible('entry.deleted')).toBe(true);
+  });
+
+  it('presenta una baja sin cobro ni ticket y respeta rol, origen y razón', () => {
+    const row = buildAuditRow(
+      event({
+        action: 'entry.deleted',
+        metadata: {
+          actorRole: 'owner',
+          origin: 'desktop',
+          plate: 'ABC123',
+          amountPaid: 0,
+          reason: 'Duplicado',
+        },
+      }),
+    );
+
+    expect(row.summary).toBe('Ingreso eliminado de ABC123');
+    expect(row.moneyImpact).toBe('Sin cobro');
+    expect(row.impactAmount).toBe(0);
+    expect(row.reason).toBe('Duplicado');
+    expect(row.searchText).toContain('Duplicado');
   });
 
   it('keeps unknown generic events usable without exposing raw action text', () => {

@@ -13,6 +13,7 @@ import {
   IconTrash,
 } from '../../../../shared/components/icons';
 import { DataTable } from '../../../../features/data-table';
+import { dateTimeSorting } from '../../../../features/data-table/utils';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
@@ -274,6 +275,7 @@ export function PaymentMethodsPage() {
         id: 'updatedAt',
         header: 'Actualizado',
         accessorKey: 'updatedAt',
+        sortingFn: dateTimeSorting((row) => row.updatedAt),
         cell: ({ row }) => (
           <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
             {formatDateTime(row.original.updatedAt)}

@@ -9,6 +9,7 @@ export type InvoiceBatchResult = components['schemas']['InvoiceBatchItemDto'];
 export type Taxpayer = components['schemas']['TaxpayerDto'];
 export type InvoiceReceiver = components['schemas']['InvoiceReceiverDto'];
 export type InvoiceDocument = components['schemas']['InvoiceDocumentDto'];
+export type InvoicePreview = components['schemas']['InvoicePreviewDto'];
 type InvoiceChangesResponse =
   components['schemas']['InvoiceChangesResponseDto'];
 type InvoiceBatchResponse = components['schemas']['InvoiceBatchResponseDto'];
@@ -24,6 +25,22 @@ async function bearer(): Promise<string> {
     throw new Error('No active session');
   }
   return session.access_token;
+}
+
+export async function getInvoiceReceiverSuggestion(
+  tenantId: string,
+  entryId: string,
+  signal: AbortSignal,
+): Promise<components['schemas']['InvoiceReceiverSuggestionDto']> {
+  const token = await bearer();
+  signal.throwIfAborted();
+  return apiRequest({
+    method: 'POST',
+    path: `/tenants/${encodeURIComponent(tenantId)}/entries/${encodeURIComponent(entryId)}/invoice/receiver-suggestion`,
+    body: {} satisfies components['schemas']['InvoiceReceiverSuggestionRequestDto'],
+    bearer: token,
+    signal,
+  });
 }
 
 /**
@@ -68,11 +85,26 @@ export async function issueInvoice(
   tenantId: string,
   entryId: string,
   receiverCuit?: string,
+  expectedAmount?: number,
 ): Promise<InvoiceSummary> {
   return apiRequest<InvoiceSummary>({
     method: 'POST',
     path: `/tenants/${encodeURIComponent(tenantId)}/entries/${encodeURIComponent(entryId)}/invoice`,
-    body: receiverCuit ? { receiverCuit } : {},
+    body: {
+      receiverCuit,
+      expectedAmount,
+    } satisfies components['schemas']['IssueInvoiceDto'],
+    bearer: await bearer(),
+  });
+}
+
+export async function getInvoicePreview(
+  tenantId: string,
+  entryId: string,
+): Promise<InvoicePreview> {
+  return apiRequest<InvoicePreview>({
+    method: 'GET',
+    path: `/tenants/${encodeURIComponent(tenantId)}/entries/${encodeURIComponent(entryId)}/invoice/preview`,
     bearer: await bearer(),
   });
 }
@@ -156,6 +188,19 @@ export async function setEntryManuallyInvoiced(
     method: 'PATCH',
     path: `/tenants/${encodeURIComponent(tenantId)}/entries/${encodeURIComponent(entry.id)}/correction?expectedVersion=${entry.version}`,
     body: { manuallyInvoiced },
+    bearer: await bearer(),
+  });
+}
+
+export async function setEntryManualInvoiceNumber(
+  tenantId: string,
+  entry: Pick<Entry, 'id' | 'version'>,
+  manualInvoiceNumber: string,
+): Promise<Entry> {
+  return apiRequest<Entry>({
+    method: 'PATCH',
+    path: `/tenants/${encodeURIComponent(tenantId)}/entries/${encodeURIComponent(entry.id)}/correction?expectedVersion=${entry.version}`,
+    body: { manualInvoiceNumber },
     bearer: await bearer(),
   });
 }

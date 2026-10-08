@@ -1,5 +1,6 @@
 import QRCode from 'qrcode';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Save } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
   translateApiError,
@@ -8,19 +9,22 @@ import {
 import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { Badge } from '../../../../shared/components/ui/Badge';
 import { Button } from '../../../../shared/components/ui/Button';
+import { ConfirmDialog } from '../../../../shared/components/ui/ConfirmDialog';
+import { fmtMoney } from '../../../../shared/utils/fmt';
 import { Switch } from '../../../../shared/components/ui/Switch';
 import type { ArcaTaxCondition } from '../../services/arca';
 import {
   getInvoiceDocument,
-  issueInvoice,
+  setEntryManualInvoiceNumber,
   setEntryManuallyInvoiced,
 } from '../../services/invoices';
 import { renderInvoiceHtml } from './invoiceDocument';
 import { InvoiceReceiverChooser } from './InvoiceReceiverChooser';
 import {
   canIssueInvoice,
+  describeIssueConfirmation,
   expectedLetter,
-  formatVoucherNumber,
+  invoicePdfTitle,
   formatIsoDay,
   INVOICE_STATE_LABEL,
   INVOICE_STATE_VARIANT,
@@ -30,6 +34,7 @@ import {
 import type { EntryHistoryRow } from './operationUtils';
 import { printInvoice } from './printInvoice';
 import { useInvoiceReceiver } from './useInvoiceReceiver';
+import { useInvoiceConfirmation } from './useInvoiceConfirmation';
 
 /** Cómo factura la sede: con ARCA (vinculada o con el certificado vencido) o no. */
 export type ArcaInvoicing = 'linked' | 'cert_expired' | 'none';
@@ -69,10 +74,24 @@ export function InvoiceDetail({
   onChanged: () => void;
 }) {
   const { showToast } = useToast();
-  const [busy, setBusy] = useState<'issue' | 'pdf' | 'manual' | null>(null);
+  const [busy, setBusy] = useState<'pdf' | 'manual' | 'number' | null>(null);
+  const [manualNumberDraft, setManualNumberDraft] = useState(
+    row.manualInvoiceNumber ?? '',
+  );
+
+  useEffect(() => {
+    setManualNumberDraft(row.manualInvoiceNumber ?? '');
+  }, [row.id, row.manualInvoiceNumber]);
+  const confirmation = useInvoiceConfirmation(tenantId, row.id);
+  const actionBusy = busy !== null || confirmation.busy;
   // «Emitir factura» abre primero el receptor (consumidor final o CUIT).
   const [issueOpen, setIssueOpen] = useState(false);
-  const receiver = useInvoiceReceiver(tenantId);
+  const receiver = useInvoiceReceiver({
+    tenantId,
+    entryId: row.id,
+    suggestionEnabled: issueOpen,
+    frozen: actionBusy || confirmation.snapshot !== null,
+  });
   const letter = expectedLetter({
     emitter,
     choice: receiver.choice,
@@ -88,9 +107,7 @@ export function InvoiceDetail({
       : null;
 
   async function issue() {
-    setBusy('issue');
-    try {
-      const result = await issueInvoice(tenantId, row.id, receiver.cuitToSend);
+    await confirmation.confirm((result) => {
       const label = voucherLabel(result) ?? 'La factura';
       if (result.status === 'issued') {
         setIssueOpen(false);
@@ -103,15 +120,8 @@ export function InvoiceDetail({
           kind: 'error',
         });
       }
-    } catch (error) {
-      showToast({
-        message: translateApiError(error, { endpoint: 'invoices.issue' }),
-        kind: 'error',
-      });
-    } finally {
-      setBusy(null);
-      onChanged();
-    }
+    });
+    onChanged();
   }
 
   async function downloadPdf() {
@@ -126,10 +136,9 @@ export function InvoiceDetail({
           margin: 0,
           errorCorrectionLevel: 'M',
         });
-        const number = formatVoucherNumber(invoice.ptoVta, invoice.cbteNro);
         await printInvoice(
           renderInvoiceHtml(doc, qr),
-          [row.plate, invoice.cae, number].filter(Boolean).join('-'),
+          invoicePdfTitle({ plate: row.plate, ...invoice }),
         );
       } catch {
         showToast({
@@ -161,6 +170,33 @@ export function InvoiceDetail({
     } finally {
       setBusy(null);
       onChanged();
+    }
+  }
+
+  async function saveManualNumber() {
+    if (
+      actionBusy ||
+      manualNumberDraft.trim() === (row.manualInvoiceNumber ?? '')
+    )
+      return;
+    setBusy('number');
+    try {
+      await setEntryManualInvoiceNumber(
+        tenantId,
+        row,
+        manualNumberDraft.trim(),
+      );
+      showToast({ message: 'Número de factura guardado.', kind: 'success' });
+      onChanged();
+    } catch (error) {
+      showToast({
+        message: translateApiError(error, {
+          endpoint: 'entries.setManuallyInvoiced',
+        }),
+        kind: 'error',
+      });
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -227,22 +263,31 @@ export function InvoiceDetail({
           <InvoiceReceiverChooser
             receiver={receiver}
             emitter={emitter}
-            disabled={busy !== null}
+            disabled={actionBusy}
           />
           <div className="operation-invoice-actions">
             <Button
               variant="secondary"
               size="sm"
-              disabled={busy !== null}
+              disabled={actionBusy}
               onClick={() => setIssueOpen(false)}
             >
               Cancelar
             </Button>
             <Button
               size="sm"
-              loading={busy === 'issue'}
-              disabled={busy !== null || !receiver.ready}
-              onClick={() => void issue()}
+              loading={confirmation.busy}
+              disabled={actionBusy || !receiver.ready}
+              onClick={() =>
+                void confirmation.open({
+                  letter,
+                  cuit: receiver.cuitToSend,
+                  receiverName:
+                    receiver.lookup.status === 'done'
+                      ? receiver.lookup.taxpayer.razonSocial
+                      : null,
+                })
+              }
             >
               {letter ? `Emitir Factura ${letter}` : 'Emitir factura'}
             </Button>
@@ -257,7 +302,7 @@ export function InvoiceDetail({
               variant="secondary"
               size="sm"
               loading={busy === 'pdf'}
-              disabled={busy !== null}
+              disabled={actionBusy}
               onClick={() => void downloadPdf()}
             >
               Descargar PDF
@@ -270,7 +315,7 @@ export function InvoiceDetail({
         {showIssue && !issueOpen ? (
           <Button
             size="sm"
-            disabled={busy !== null}
+            disabled={actionBusy}
             onClick={() => setIssueOpen(true)}
           >
             {invoiceState === 'error' ? 'Reintentar' : 'Emitir factura'}
@@ -280,7 +325,7 @@ export function InvoiceDetail({
           <label className="operation-quick-switch">
             <Switch
               checked={invoiceState === 'manual'}
-              disabled={busy !== null}
+              disabled={actionBusy}
               onChange={(next) => void toggleManual(next)}
               aria-label="Facturada"
             />
@@ -288,6 +333,54 @@ export function InvoiceDetail({
           </label>
         ) : null}
       </div>
+      {showManual && invoiceState === 'manual' ? (
+        <div className="operation-manual-invoice-number">
+          <label htmlFor={`manual-invoice-number-${row.id}`}>
+            Número de factura
+          </label>
+          <div>
+            <input
+              id={`manual-invoice-number-${row.id}`}
+              type="text"
+              value={manualNumberDraft}
+              maxLength={40}
+              disabled={actionBusy}
+              onChange={(event) => setManualNumberDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  void saveManualNumber();
+                }
+              }}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              title="Guardar número de factura"
+              aria-label="Guardar número de factura"
+              disabled={
+                actionBusy ||
+                manualNumberDraft.trim() === (row.manualInvoiceNumber ?? '')
+              }
+              onClick={() => void saveManualNumber()}
+            >
+              <Save size={16} aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      {confirmation.snapshot ? (
+        <ConfirmDialog
+          open
+          {...describeIssueConfirmation({
+            ...confirmation.snapshot,
+            amount: fmtMoney(confirmation.snapshot.amount),
+          })}
+          loading={confirmation.busy}
+          onClose={confirmation.close}
+          onConfirm={() => void issue()}
+        />
+      ) : null}
     </div>
   );
 }

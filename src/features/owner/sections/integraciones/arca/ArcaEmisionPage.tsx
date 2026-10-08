@@ -169,7 +169,7 @@ export function ArcaEmisionPage() {
   const header = (
     <SectionHeader
       title="Configurar emisión"
-      subtitle="Elegí qué medios de pago facturan automáticamente al cobrar."
+      subtitle="Elegí qué medios de pago pueden facturar manual o automáticamente al cobrar."
     />
   );
 
@@ -240,7 +240,7 @@ export function ArcaEmisionPage() {
           variant="warn"
           icon={<IconAlert size={16} />}
           title="Todavía no tenés ARCA vinculada"
-          description="Vinculá ARCA para poder elegir qué medios de pago facturan automáticamente."
+          description="Vinculá ARCA para poder elegir qué medios de pago pueden facturar manual o automáticamente."
           action={
             <Link
               to="../integraciones/arca/vincular"

@@ -56,6 +56,7 @@ export type RequestOptions = {
   path: string;
   body?: unknown;
   bearer?: string;
+  signal?: AbortSignal;
 };
 
 export async function apiRequest<TResponse>(
@@ -75,6 +76,7 @@ export async function apiRequest<TResponse>(
 
   const response = await fetch(`${baseUrl}${options.path}`, {
     method: options.method,
+    signal: options.signal,
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });

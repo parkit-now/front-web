@@ -11,6 +11,8 @@ interface ModalProps {
   fitContent?: boolean;
   bodyStyle?: CSSProperties;
   bodyScrollable?: boolean;
+  keyboardEnabled?: boolean;
+  zIndex?: number;
 }
 
 export function Modal({
@@ -23,6 +25,8 @@ export function Modal({
   fitContent = false,
   bodyStyle,
   bodyScrollable = true,
+  keyboardEnabled = true,
+  zIndex = 50,
 }: ModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const firstFocusRef = useRef<HTMLElement | null>(null);
@@ -45,8 +49,12 @@ export function Modal({
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !keyboardEnabled) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        overlayRef.current?.querySelector('[role="dialog"][aria-modal="true"]')
+      )
+        return;
       if (e.key === 'Escape') {
         onClose();
         return;
@@ -72,7 +80,7 @@ export function Modal({
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose]);
+  }, [open, onClose, keyboardEnabled]);
 
   if (!open) return null;
 
@@ -82,7 +90,7 @@ export function Modal({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 50,
+        zIndex,
         background: 'rgba(16,24,40,0.5)',
         backdropFilter: 'blur(4px)',
         display: 'flex',

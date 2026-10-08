@@ -6,6 +6,7 @@ import {
   describeTaxpayerLookup,
   expectedLetter,
   formatVoucherNumber,
+  invoicePdfTitle,
   isReceiverReady,
   receiverCuitError,
   receiverCuitToSend,
@@ -14,6 +15,42 @@ import {
 } from './invoiceUtils';
 
 const paid = { leftAt: '2026-09-24T15:30:00.000Z', paidTotal: 1210 };
+
+describe('invoicePdfTitle', () => {
+  it('usa número-punto de venta_CAE_patente para el nombre propuesto por el navegador', () => {
+    expect(
+      invoicePdfTitle({
+        plate: 'IXO431',
+        cae: '86406602350114',
+        ptoVta: 7,
+        cbteNro: 9,
+      }),
+    ).toBe('00000009-0007_86406602350114_IXO431');
+    expect(
+      invoicePdfTitle({
+        plate: 'AB123CD',
+        cae: '86390928613357',
+        ptoVta: 1,
+        cbteNro: 6,
+      }),
+    ).toBe('00000006-0001_86390928613357_AB123CD');
+  });
+
+  it('omite datos ausentes sin separadores sobrantes ni duplicar la extension PDF', () => {
+    expect(invoicePdfTitle({ plate: 'IXO431', ptoVta: 7, cbteNro: 9 })).toBe(
+      '00000009-0007_IXO431',
+    );
+    expect(
+      invoicePdfTitle({
+        plate: 'IXO431',
+        cae: '86406602350114',
+        ptoVta: 7,
+        cbteNro: null,
+      }),
+    ).toBe('86406602350114_IXO431');
+    expect(invoicePdfTitle({ plate: 'IXO431' })).toBe('IXO431');
+  });
+});
 
 describe('resolveInvoiceState', () => {
   it('manda el estado de la factura de ARCA', () => {

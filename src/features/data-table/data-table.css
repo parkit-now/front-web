@@ -780,6 +780,48 @@
   cursor: pointer;
 }
 
+.dt-vehicle-cell {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.dt-vehicle-cell strong {
+  color: var(--text-1);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dt-vehicle-cell span {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.dt-vehicle-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+.dt-vehicle-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  text-transform: capitalize;
+}
+
+.dt-vehicle-swatch {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  flex: none;
+  border: 1px solid #98a6b9;
+  border-radius: 50%;
+}
+
 .dt-table tbody tr.dt-row-clickable:focus-visible {
   outline: 2px solid var(--color-brand);
   outline-offset: -2px;

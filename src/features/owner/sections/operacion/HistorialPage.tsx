@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
@@ -7,6 +13,9 @@ import type {
   SortingFn,
 } from '@tanstack/react-table';
 import { DataTable } from '../../../../features/data-table';
+import { VehicleCell } from '../../../../features/data-table/components/VehicleCell';
+import { dateTimeSorting } from '../../../../features/data-table/utils';
+import { getDateRangeExcelFileName } from '../../../../features/data-table/excelExport';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
 import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
@@ -66,6 +75,7 @@ const SEARCHABLE_KEYS = [
   'plate',
   'vehicleBrand',
   'vehicleModel',
+  'color',
   'invoiceReceiver',
   'notes',
 ];
@@ -82,7 +92,7 @@ const FILTERABLE_COLUMNS = [
   'vehicleModel',
   'color',
 ];
-/** Columnas que existen para filtrar pero arrancan ocultas. */
+/** El receptor puede mostrarse; el comprobante queda solo como filtro. */
 const INITIAL_COLUMN_VISIBILITY = {
   invoiceLetterValue: false,
   invoiceReceiver: false,
@@ -134,12 +144,40 @@ function InvoiceCell({ row }: { row: EntryHistoryRow }) {
       {voucherNumber ? (
         <span className="operation-invoice-number">{voucherNumber}</span>
       ) : null}
+      {row.invoiceState === 'manual' && row.manualInvoiceNumber ? (
+        <span className="operation-invoice-number">
+          N° {row.manualInvoiceNumber}
+        </span>
+      ) : null}
     </div>
   );
 }
 
 function paidLabel(row: EntryHistoryRow): string {
   return row.paidTotal != null ? fmtMoney(row.paidTotal) : 'Sin cobro';
+}
+
+function invoiceExportValue(row: EntryHistoryRow): string {
+  if (row.invoiceState === 'na') return '';
+  const invoice =
+    row.invoiceState === 'issued' || row.invoiceState === 'issuing'
+      ? row.invoice
+      : null;
+  const letter = invoiceLetter(invoice?.cbteTipo);
+  const number =
+    invoice?.ptoVta != null && invoice.cbteNro != null
+      ? `${String(invoice.ptoVta).padStart(4, '0')}-${String(invoice.cbteNro).padStart(8, '0')}`
+      : null;
+  return [
+    INVOICE_STATE_LABEL[row.invoiceState],
+    row.invoiceState === 'manual' && row.manualInvoiceNumber
+      ? `Número ${row.manualInvoiceNumber}`
+      : null,
+    letter ? `Factura ${letter}` : invoice ? voucherLabel(invoice) : null,
+    number,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 function compactPaymentMethods(row: EntryHistoryRow): string {
@@ -352,14 +390,21 @@ function EntryDetailDrawer({
   );
 }
 
-export function HistorialPage() {
+export function HistorialPage({
+  cashSessionId,
+  renderTable,
+}: {
+  cashSessionId?: string;
+  renderTable?: (table: ReactNode, nestedDialogOpen: boolean) => ReactNode;
+} = {}) {
   const { sucursalId, sucursal } = useSucursal();
   const userId = useCurrentUserId();
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = location.state as HistorialLocationState;
   const [searchParams] = useSearchParams();
-  const focusedCashSessionId = searchParams.get('cashSessionId');
+  const focusedCashSessionId =
+    cashSessionId ?? searchParams.get('cashSessionId');
   const openedFromCaja =
     searchParams.get('from') === 'caja' || Boolean(locationState?.fromCaja);
   const [onlyCurrentSession, setOnlyCurrentSession] = useState(
@@ -385,7 +430,8 @@ export function HistorialPage() {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnFiltersOverride, setColumnFiltersOverride] =
     useState<ColumnFiltersState>([]);
-  const [columnFiltersOverrideKey, setColumnFiltersOverrideKey] = useState(0);
+  const [columnFiltersOverrideKey, setColumnFiltersOverrideKey] =
+    useState<number>();
 
   const entriesQuery = useQuery({
     queryKey: ['owner-operations', sucursalId, 'entries'],
@@ -447,6 +493,11 @@ export function HistorialPage() {
       labels.set(session.id, cashSessionLabel(session));
     return labels;
   }, [sessions]);
+
+  const sessionOpenedAtById = useMemo(
+    () => new Map(sessions.map((session) => [session.id, session.openedAt])),
+    [sessions],
+  );
 
   const baseRows = useMemo(
     () =>
@@ -533,6 +584,9 @@ export function HistorialPage() {
     () => [
       {
         id: 'photo',
+        meta: {
+          excludeFromExport: true,
+        },
         header: '',
         size: 44,
         enableSorting: false,
@@ -589,31 +643,60 @@ export function HistorialPage() {
         ),
       },
       {
+        id: 'vehicle',
+        accessorFn: (row) =>
+          [row.vehicleBrand, row.vehicleModel, row.color]
+            .filter(Boolean)
+            .join(' '),
+        header: 'Vehículo',
+        size: 165,
+        meta: {
+          exportValue: (row) =>
+            [row.vehicleBrand, row.vehicleModel, row.color]
+              .filter(Boolean)
+              .join('\n'),
+        },
+        cell: ({ row }) => (
+          <VehicleCell
+            brand={row.original.vehicleBrand}
+            model={row.original.vehicleModel}
+            color={row.original.color}
+          />
+        ),
+      },
+      {
         accessorKey: 'vehicleBrand',
         header: 'Marca',
-        size: 130,
-        cell: ({ row }) => row.original.vehicleBrand || <MutedDash />,
+        enableHiding: false,
+        meta: { filterOnly: true, displayColumnId: 'vehicle' },
       },
       {
         accessorKey: 'vehicleModel',
         header: 'Modelo',
-        size: 140,
-        cell: ({ row }) => row.original.vehicleModel || <MutedDash />,
+        enableHiding: false,
+        meta: { filterOnly: true, displayColumnId: 'vehicle' },
       },
       {
         id: 'enteredAtLocalDate',
         accessorKey: 'enteredAtLocalDate',
         header: 'Ingreso',
+        meta: { exportValue: (row) => fmtDateTimeAr(row.enteredAt) },
         size: 160,
         filterFn: 'dateRange',
+        sortingFn: dateTimeSorting((row) => row.enteredAt),
         cell: ({ row }) => fmtDateTimeAr(row.original.enteredAt),
       },
       {
         id: 'leftAtLocalDate',
         accessorKey: 'leftAtLocalDate',
         header: 'Egreso',
+        meta: {
+          exportValue: (row) =>
+            row.leftAt ? fmtDateTimeAr(row.leftAt) : 'En base',
+        },
         size: 160,
         filterFn: 'dateRange',
+        sortingFn: dateTimeSorting((row) => row.leftAt),
         cell: ({ row }) =>
           row.original.leftAt ? (
             fmtDateTimeAr(row.original.leftAt)
@@ -628,13 +711,20 @@ export function HistorialPage() {
         size: 155,
         filterFn: 'includesSome',
         sortingFn: moneySorting,
-        meta: { filterLabel: 'Medio de pago' },
+        meta: {
+          filterLabel: 'Medio de pago',
+          exportValue: (row) =>
+            row.paidTotal == null
+              ? ''
+              : `${fmtMoney(row.paidTotal)}\n${compactPaymentMethods(row)}`,
+        },
         cell: ({ row }) => <PaymentSummary row={row.original} />,
       },
       {
         id: 'invoiceState',
         accessorKey: 'invoiceState',
         header: 'Factura',
+        meta: { exportValue: invoiceExportValue },
         size: 190,
         filterFn: 'includesSome',
         cell: ({ row }) => <InvoiceCell row={row.original} />,
@@ -643,14 +733,9 @@ export function HistorialPage() {
         id: 'invoiceLetterValue',
         accessorKey: 'invoiceLetterValue',
         header: 'Comprobante',
-        size: 120,
+        enableHiding: false,
+        meta: { filterOnly: true },
         filterFn: 'includesSome',
-        cell: ({ row }) =>
-          row.original.invoiceLetterValue ? (
-            `Factura ${row.original.invoiceLetterValue}`
-          ) : (
-            <MutedDash />
-          ),
       },
       {
         id: 'invoiceReceiver',
@@ -664,8 +749,18 @@ export function HistorialPage() {
         id: 'cashSessionId',
         accessorFn: (row) => row.cashSessionId ?? '',
         header: 'Caja',
+        meta: {
+          exportValue: (row) =>
+            row.cashSessionId
+              ? (sessionLabelById.get(row.cashSessionId) ??
+                row.cashSessionId.slice(0, 8))
+              : '',
+        },
         size: 190,
         filterFn: 'includesSome',
+        sortingFn: dateTimeSorting((row) =>
+          sessionOpenedAtById.get(row.cashSessionId ?? ''),
+        ),
         cell: ({ row }) => {
           const id = row.original.cashSessionId;
           return id ? (
@@ -684,8 +779,8 @@ export function HistorialPage() {
       {
         accessorKey: 'color',
         header: 'Color',
-        size: 110,
-        cell: ({ row }) => row.original.color || <MutedDash />,
+        enableHiding: false,
+        meta: { filterOnly: true, displayColumnId: 'vehicle' },
       },
       {
         accessorKey: 'notes',
@@ -700,7 +795,7 @@ export function HistorialPage() {
         cell: ({ row }) => row.original.cochera || <MutedDash />,
       },
     ],
-    [sessionLabelById],
+    [sessionLabelById, sessionOpenedAtById],
   );
 
   const isLoading =
@@ -791,128 +886,152 @@ export function HistorialPage() {
     setColumnFiltersOverride(
       columnFilters.filter((filter) => filter.id !== 'cashSessionId'),
     );
-    setColumnFiltersOverrideKey((current) => current + 1);
+    setColumnFiltersOverrideKey((current) => (current ?? 0) + 1);
   }
 
+  const renderContent = renderTable ?? ((content: ReactNode) => content);
   return (
     <div className="operation-page">
-      <SectionHeader
-        title="Historial"
-        subtitle={`Movimientos de ${sucursal?.nombre ?? 'este estacionamiento'}`}
-        action={
-          openedFromCaja ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={<IconChevronLeft size={15} />}
-              onClick={backToCaja}
-            >
-              Volver a Caja
-            </Button>
-          ) : undefined
-        }
-      />
-
-      {isError ? (
-        <div className="pk-card">
-          <EmptyState
-            icon={<IconAlert size={28} />}
-            title="No se pudo cargar el historial"
-            description="Probá actualizar la sección."
-            action={
+      {!renderTable ? (
+        <SectionHeader
+          title="Historial"
+          subtitle={`Movimientos de ${sucursal?.nombre ?? 'este estacionamiento'}`}
+          action={
+            openedFromCaja ? (
               <Button
                 variant="secondary"
                 size="sm"
-                icon={<IconRefresh size={15} />}
-                onClick={refreshAll}
+                icon={<IconChevronLeft size={15} />}
+                onClick={backToCaja}
               >
-                Reintentar
+                Volver a Caja
               </Button>
-            }
-          />
-        </div>
-      ) : (
-        <>
-          <DataTable<EntryHistoryRow>
-            key={focusedCashSessionId ?? 'historial'}
-            data={rows}
-            columns={columns}
-            isLoading={isLoading}
-            emptyMessage="No hay movimientos registrados todavía."
-            searchPlaceholder="Buscar por ticket, patente, vehículo o notas"
-            searchableKeys={SEARCHABLE_KEYS}
-            filterableColumns={FILTERABLE_COLUMNS}
-            filterOptionsByColumn={{
-              cashSessionId: cashSessionOptions,
-              paymentMethodValues: paymentOptions,
-              invoiceState: INVOICE_STATE_OPTIONS,
-              invoiceLetterValue: INVOICE_LETTER_OPTIONS,
-            }}
-            initialColumnVisibility={INITIAL_COLUMN_VISIBILITY}
-            initialColumnFilters={initialColumnFilters}
-            onColumnFiltersChange={handleColumnFiltersChange}
-            onVisibleRowIdsChange={handleVisibleRowIdsChange}
-            columnFiltersOverride={columnFiltersOverride}
-            columnFiltersOverrideKey={columnFiltersOverrideKey}
-            getRowId={(row) => row.id}
-            initialPageSize={20}
-            pageSizeOptions={[10, 20, 50, 100]}
-            onRefresh={refreshAll}
-            refreshDisabled={
-              entriesQuery.isFetching ||
-              sessionsQuery.isFetching ||
-              paymentsQuery.isFetching ||
-              invoicesQuery.isFetching ||
-              lprEventsQuery.isFetching
-            }
-            onRowClick={(row) => setSelectedId(row.id)}
-            rowSelection={
-              arca === 'none'
-                ? undefined
-                : {
-                    selectedIds: selectedIssuable,
-                    onChange: setSelectedIds,
-                    canSelect: (row) => issuableIds.has(row.id),
-                    actions: (
-                      <Button
-                        size="sm"
-                        loading={batchRunning}
-                        disabled={selectedIssuable.length === 0}
-                        onClick={() => void issueSelected()}
-                      >
-                        Emitir a consumidor final ({selectedIssuable.length})
-                      </Button>
-                    ),
-                  }
-            }
-            toolbarLeading={
-              <div className="dt-quick-switches">
-                <label className="operation-quick-switch">
-                  <Switch
-                    checked={onlyCurrentSession}
-                    disabled={!activeCashSession}
-                    onChange={handleOnlyCurrentSessionChange}
-                    aria-label="Solo caja actual"
-                  />
-                  Solo caja actual
-                </label>
-                <label className="operation-quick-switch">
-                  <Switch
-                    checked={includeInLot}
-                    onChange={setIncludeInLot}
-                    aria-label="Incluir autos en base"
-                  />
-                  Incluir autos en base
-                </label>
-              </div>
-            }
-            templateScope={
-              userId && sucursalId
-                ? { userId, tenantId: sucursalId, tableKey: 'owner-history' }
-                : undefined
-            }
-          />
-        </>
+            ) : undefined
+          }
+        />
+      ) : null}
+
+      {renderContent(
+        isError ? (
+          <div className="pk-card">
+            <EmptyState
+              icon={<IconAlert size={28} />}
+              title="No se pudo cargar el historial"
+              description="Probá actualizar la sección."
+              action={
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<IconRefresh size={15} />}
+                  onClick={refreshAll}
+                >
+                  Reintentar
+                </Button>
+              }
+            />
+          </div>
+        ) : (
+          <>
+            <DataTable<EntryHistoryRow>
+              excelExport={{
+                fileName: (rows) =>
+                  getDateRangeExcelFileName(rows.map((row) => row.enteredAt)),
+                onError: (error) =>
+                  showToast({
+                    message: translateApiError(error),
+                    kind: 'error',
+                  }),
+              }}
+              key={focusedCashSessionId ?? 'historial'}
+              data={rows}
+              columns={columns}
+              isLoading={isLoading}
+              emptyMessage="No hay movimientos registrados todavía."
+              searchPlaceholder="Buscar por ticket, patente, vehículo o notas"
+              searchableKeys={SEARCHABLE_KEYS}
+              filterableColumns={FILTERABLE_COLUMNS}
+              filterOptionsByColumn={{
+                cashSessionId: cashSessionOptions,
+                paymentMethodValues: paymentOptions,
+                invoiceState: INVOICE_STATE_OPTIONS,
+                invoiceLetterValue: INVOICE_LETTER_OPTIONS,
+              }}
+              initialColumnVisibility={INITIAL_COLUMN_VISIBILITY}
+              initialColumnFilters={initialColumnFilters}
+              initialColumnFiltersOverridePersistedState={Boolean(
+                focusedCashSessionId,
+              )}
+              onColumnFiltersChange={handleColumnFiltersChange}
+              onVisibleRowIdsChange={handleVisibleRowIdsChange}
+              columnFiltersOverride={columnFiltersOverride}
+              columnFiltersOverrideKey={columnFiltersOverrideKey}
+              getRowId={(row) => row.id}
+              initialPageSize={20}
+              pageSizeOptions={[10, 20, 50, 100]}
+              onRefresh={refreshAll}
+              refreshDisabled={
+                entriesQuery.isFetching ||
+                sessionsQuery.isFetching ||
+                paymentsQuery.isFetching ||
+                invoicesQuery.isFetching ||
+                lprEventsQuery.isFetching
+              }
+              onRowClick={(row) => setSelectedId(row.id)}
+              rowSelection={
+                arca === 'none'
+                  ? undefined
+                  : {
+                      selectedIds: selectedIssuable,
+                      onChange: setSelectedIds,
+                      canSelect: (row) => issuableIds.has(row.id),
+                      actions: (
+                        <Button
+                          size="sm"
+                          loading={batchRunning}
+                          disabled={selectedIssuable.length === 0}
+                          onClick={() => void issueSelected()}
+                        >
+                          Emitir a consumidor final ({selectedIssuable.length})
+                        </Button>
+                      ),
+                    }
+              }
+              toolbarLeading={
+                <div className="dt-quick-switches">
+                  <label className="operation-quick-switch">
+                    <Switch
+                      checked={onlyCurrentSession}
+                      disabled={!activeCashSession}
+                      onChange={handleOnlyCurrentSessionChange}
+                      aria-label="Solo caja actual"
+                    />
+                    Solo caja actual
+                  </label>
+                  <label className="operation-quick-switch">
+                    <Switch
+                      checked={includeInLot}
+                      onChange={setIncludeInLot}
+                      aria-label="Incluir autos en base"
+                    />
+                    Incluir autos en base
+                  </label>
+                </div>
+              }
+              templateScope={
+                userId && sucursalId
+                  ? {
+                      userId,
+                      tenantId: sucursalId,
+                      tableKey: renderTable
+                        ? 'owner-cash-session-movements'
+                        : 'owner-history',
+                    }
+                  : undefined
+              }
+            />
+          </>
+        ),
+        Boolean(selectedId || photoRow || batchResults),
       )}
 
       <EntryDetailDrawer
