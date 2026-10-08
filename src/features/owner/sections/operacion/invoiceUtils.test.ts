@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  INVOICE_STATE_LABEL,
   canIssueInvoice,
   consumerFinalLetter,
   countInvoiceChips,
@@ -62,6 +63,7 @@ describe('resolveInvoiceState', () => {
   it('sin factura (o not_required): sin factura, o facturada a mano', () => {
     expect(resolveInvoiceState(paid, undefined)).toBe('none');
     expect(resolveInvoiceState(paid, { status: 'not_required' })).toBe('none');
+    expect(INVOICE_STATE_LABEL.none).toBe('No facturado');
     expect(
       resolveInvoiceState({ ...paid, manuallyInvoiced: true }, undefined),
     ).toBe('manual');

@@ -74,6 +74,9 @@ describe('describeInvoiceEffect', () => {
   it('describe los tres modos', () => {
     expect(describeInvoiceEffect('none')).toContain('No se factura');
     expect(describeInvoiceEffect('auto')).toContain('al confirmar el pago');
+    expect(describeInvoiceEffect('manual')).toContain(
+      'No se factura al cobrar',
+    );
     expect(describeInvoiceEffect('manual')).toContain('Historial');
   });
 });
