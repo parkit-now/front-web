@@ -75,6 +75,7 @@ const SEARCHABLE_KEYS = [
   'plate',
   'vehicleBrand',
   'vehicleModel',
+  'color',
   'invoiceReceiver',
   'notes',
 ];
@@ -143,6 +144,11 @@ function InvoiceCell({ row }: { row: EntryHistoryRow }) {
       {voucherNumber ? (
         <span className="operation-invoice-number">{voucherNumber}</span>
       ) : null}
+      {row.invoiceState === 'manual' && row.manualInvoiceNumber ? (
+        <span className="operation-invoice-number">
+          N° {row.manualInvoiceNumber}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -164,6 +170,9 @@ function invoiceExportValue(row: EntryHistoryRow): string {
       : null;
   return [
     INVOICE_STATE_LABEL[row.invoiceState],
+    row.invoiceState === 'manual' && row.manualInvoiceNumber
+      ? `Número ${row.manualInvoiceNumber}`
+      : null,
     letter ? `Factura ${letter}` : invoice ? voucherLabel(invoice) : null,
     number,
   ]
@@ -636,17 +645,22 @@ export function HistorialPage({
       {
         id: 'vehicle',
         accessorFn: (row) =>
-          [row.vehicleBrand, row.vehicleModel].filter(Boolean).join(' '),
+          [row.vehicleBrand, row.vehicleModel, row.color]
+            .filter(Boolean)
+            .join(' '),
         header: 'Vehículo',
         size: 165,
         meta: {
           exportValue: (row) =>
-            [row.vehicleBrand, row.vehicleModel].filter(Boolean).join('\n'),
+            [row.vehicleBrand, row.vehicleModel, row.color]
+              .filter(Boolean)
+              .join('\n'),
         },
         cell: ({ row }) => (
           <VehicleCell
             brand={row.original.vehicleBrand}
             model={row.original.vehicleModel}
+            color={row.original.color}
           />
         ),
       },
@@ -765,8 +779,8 @@ export function HistorialPage({
       {
         accessorKey: 'color',
         header: 'Color',
-        size: 110,
-        cell: ({ row }) => row.original.color || <MutedDash />,
+        enableHiding: false,
+        meta: { filterOnly: true, displayColumnId: 'vehicle' },
       },
       {
         accessorKey: 'notes',

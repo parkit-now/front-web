@@ -1,5 +1,6 @@
 import QRCode from 'qrcode';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Save } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
   translateApiError,
@@ -14,6 +15,7 @@ import { Switch } from '../../../../shared/components/ui/Switch';
 import type { ArcaTaxCondition } from '../../services/arca';
 import {
   getInvoiceDocument,
+  setEntryManualInvoiceNumber,
   setEntryManuallyInvoiced,
 } from '../../services/invoices';
 import { renderInvoiceHtml } from './invoiceDocument';
@@ -72,7 +74,14 @@ export function InvoiceDetail({
   onChanged: () => void;
 }) {
   const { showToast } = useToast();
-  const [busy, setBusy] = useState<'pdf' | 'manual' | null>(null);
+  const [busy, setBusy] = useState<'pdf' | 'manual' | 'number' | null>(null);
+  const [manualNumberDraft, setManualNumberDraft] = useState(
+    row.manualInvoiceNumber ?? '',
+  );
+
+  useEffect(() => {
+    setManualNumberDraft(row.manualInvoiceNumber ?? '');
+  }, [row.id, row.manualInvoiceNumber]);
   const confirmation = useInvoiceConfirmation(tenantId, row.id);
   const actionBusy = busy !== null || confirmation.busy;
   // «Emitir factura» abre primero el receptor (consumidor final o CUIT).
@@ -161,6 +170,33 @@ export function InvoiceDetail({
     } finally {
       setBusy(null);
       onChanged();
+    }
+  }
+
+  async function saveManualNumber() {
+    if (
+      actionBusy ||
+      manualNumberDraft.trim() === (row.manualInvoiceNumber ?? '')
+    )
+      return;
+    setBusy('number');
+    try {
+      await setEntryManualInvoiceNumber(
+        tenantId,
+        row,
+        manualNumberDraft.trim(),
+      );
+      showToast({ message: 'Número de factura guardado.', kind: 'success' });
+      onChanged();
+    } catch (error) {
+      showToast({
+        message: translateApiError(error, {
+          endpoint: 'entries.setManuallyInvoiced',
+        }),
+        kind: 'error',
+      });
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -297,6 +333,42 @@ export function InvoiceDetail({
           </label>
         ) : null}
       </div>
+      {showManual && invoiceState === 'manual' ? (
+        <div className="operation-manual-invoice-number">
+          <label htmlFor={`manual-invoice-number-${row.id}`}>
+            Número de factura
+          </label>
+          <div>
+            <input
+              id={`manual-invoice-number-${row.id}`}
+              type="text"
+              value={manualNumberDraft}
+              maxLength={40}
+              disabled={actionBusy}
+              onChange={(event) => setManualNumberDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  void saveManualNumber();
+                }
+              }}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              title="Guardar número de factura"
+              aria-label="Guardar número de factura"
+              disabled={
+                actionBusy ||
+                manualNumberDraft.trim() === (row.manualInvoiceNumber ?? '')
+              }
+              onClick={() => void saveManualNumber()}
+            >
+              <Save size={16} aria-hidden="true" />
+            </Button>
+          </div>
+        </div>
+      ) : null}
       {confirmation.snapshot ? (
         <ConfirmDialog
           open

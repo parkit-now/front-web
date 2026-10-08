@@ -191,3 +191,16 @@ export async function setEntryManuallyInvoiced(
     bearer: await bearer(),
   });
 }
+
+export async function setEntryManualInvoiceNumber(
+  tenantId: string,
+  entry: Pick<Entry, 'id' | 'version'>,
+  manualInvoiceNumber: string,
+): Promise<Entry> {
+  return apiRequest<Entry>({
+    method: 'PATCH',
+    path: `/tenants/${encodeURIComponent(tenantId)}/entries/${encodeURIComponent(entry.id)}/correction?expectedVersion=${entry.version}`,
+    body: { manualInvoiceNumber },
+    bearer: await bearer(),
+  });
+}

@@ -1684,12 +1684,19 @@ export function AuditoriaPage() {
         id: 'vehicle',
         header: 'Vehículo',
         accessorFn: (row) =>
-          [...row.vehicleBrands, ...row.vehicleModels].join(' '),
+          [...row.vehicleBrands, ...row.vehicleModels, ...row.colors].join(' '),
         size: 175,
+        meta: {
+          exportValue: (row) =>
+            [...row.vehicleBrands, ...row.vehicleModels, ...row.colors].join(
+              '\n',
+            ),
+        },
         cell: ({ row }) => (
           <VehicleCell
             brand={row.original.vehicleBrands.join(', ')}
             model={row.original.vehicleModels.join(', ')}
+            colors={row.original.colors}
           />
         ),
       },
@@ -1711,6 +1718,8 @@ export function AuditoriaPage() {
         id: 'colors',
         header: 'Color',
         accessorKey: 'colors',
+        enableHiding: false,
+        meta: { filterOnly: true, displayColumnId: 'vehicle' },
       },
       {
         id: 'severity',

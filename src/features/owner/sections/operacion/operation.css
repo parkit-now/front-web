@@ -570,6 +570,30 @@
   margin-top: 22px;
 }
 
+.operation-manual-invoice-number {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.operation-manual-invoice-number > div {
+  display: flex;
+  gap: 8px;
+  max-width: 360px;
+}
+
+.operation-manual-invoice-number input {
+  min-width: 0;
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--card);
+  color: var(--text-1);
+}
+
 /* «Emitir factura»: receptor, lo que dijo el padrón y los botones. */
 .operation-invoice-issue {
   display: grid;
