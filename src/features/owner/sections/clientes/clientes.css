@@ -1,0 +1,70 @@
+.client-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 20px;
+  row-gap: 22px;
+}
+.client-plate-field {
+  grid-column: 1 / -1;
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+.client-plate-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.client-plate-row .pk-input {
+  min-width: 0;
+  flex: 1;
+}
+.client-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.client-plates {
+  max-width: 220px;
+  display: inline-block;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 560px) {
+  .client-form {
+    grid-template-columns: 1fr;
+  }
+}
+.client-contact {
+  display: grid;
+  gap: 5px;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid #d6e0ee;
+  border-radius: 6px;
+  background: #f8fafc;
+  font-size: 13px;
+}
+.client-contact-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.client-contact-row span {
+  overflow-wrap: anywhere;
+  margin-right: auto;
+}
+.client-contact-row button,
+.client-contact-row a {
+  color: inherit;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #d6e0ee;
+  border-radius: 5px;
+  background: white;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}

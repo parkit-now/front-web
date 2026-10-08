@@ -10,12 +10,18 @@ const mock = vi.hoisted(() => ({
   suggestion: vi.fn(),
   lookup: vi.fn(),
   list: vi.fn(),
+  clients: vi.fn(),
+  entries: vi.fn(),
+  invoices: vi.fn(),
 }));
 vi.mock('../../services/invoices', () => ({
   getInvoiceReceiverSuggestion: mock.suggestion,
   lookupTaxpayer: mock.lookup,
   listInvoiceReceivers: mock.list,
+  listInvoices: mock.invoices,
 }));
+vi.mock('../../services/clients', () => ({ listClients: mock.clients }));
+vi.mock('../../services/operations', () => ({ listEntries: mock.entries }));
 const CUIT = '20427205208';
 const MANUAL_CUIT = '30712345671';
 type Input = Parameters<typeof useInvoiceReceiver>[0];
@@ -60,6 +66,9 @@ beforeEach(() => {
   vi.resetAllMocks();
   mock.suggestion.mockResolvedValue({ cuit: null });
   mock.list.mockResolvedValue([]);
+  mock.clients.mockResolvedValue([]);
+  mock.entries.mockResolvedValue([]);
+  mock.invoices.mockResolvedValue([]);
   mock.lookup.mockResolvedValue({
     identified: true,
     razonSocial: 'Cliente',
@@ -81,6 +90,63 @@ afterEach(async () => {
 });
 
 describe('useInvoiceReceiver: pagador QR', () => {
+  it('sugiere el CUIT de la ficha de la patente cuando el QR no trae uno', async () => {
+    input.plate = 'IAG574';
+    mock.clients.mockResolvedValue([
+      { plates: ['IAG574'], cuit: CUIT, deletedAt: null },
+    ]);
+    await render();
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(receiver.choice).toBe('cuit');
+    expect(receiver.cuit).toBe(CUIT);
+  });
+  it('completa el CUIT de la ficha aunque se elija Con CUIT antes de recibirla', async () => {
+    input.plate = 'IAG574';
+    const clients =
+      deferred<{ plates: string[]; cuit: string; deletedAt: null }[]>();
+    mock.clients.mockReturnValue(clients.promise);
+    await render();
+    await update(() => receiver.setChoice('cuit'));
+    expect(receiver.cuit).toBe('');
+    await update(() =>
+      clients.resolve([{ plates: ['IAG574'], cuit: CUIT, deletedAt: null }]),
+    );
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(receiver.cuit).toBe(CUIT);
+  });
+  it('no revive el historial si la ficha tiene CUIT vacío', async () => {
+    input.plate = 'IAG574';
+    mock.clients.mockResolvedValue([
+      { plates: ['IAG574'], cuit: null, deletedAt: null },
+    ]);
+    await render();
+    expect(receiver.choice).toBe('final');
+    expect(mock.invoices).not.toHaveBeenCalled();
+  });
+
+  it('usa la última factura con CUIT como respaldo si no hay ficha', async () => {
+    input.plate = 'IAG574';
+    mock.entries.mockResolvedValue([
+      { id: 'old', tenantId: 'tenant', plate: 'IAG574' },
+    ]);
+    mock.invoices.mockResolvedValue([
+      {
+        tenantId: 'tenant',
+        entryId: 'old',
+        status: 'issued',
+        receptorDocTipo: 80,
+        receptorDocNro: CUIT,
+        issuedAt: '2026-10-07T12:00:00Z',
+        updatedAt: '2026-10-07T12:00:00Z',
+      },
+    ]);
+    await render();
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    await act(() => vi.advanceTimersByTimeAsync(0));
+    expect(receiver.choice).toBe('cuit');
+    expect(receiver.cuit).toBe(CUIT);
+  });
   it('selecciona Con CUIT y muestra Mercado Pago sin saltarse el padron', async () => {
     mock.suggestion.mockResolvedValue({ cuit: CUIT });
     await render();

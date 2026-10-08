@@ -3,6 +3,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { InvoiceDetail } from './InvoiceDetail';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { EntryHistoryRow } from './operationUtils';
 
 vi.mock('../../../../lib/notifications/ToastProvider', () => ({
@@ -53,13 +54,15 @@ it('muestra el número de la factura manual en un campo editable', () => {
 
   act(() => {
     root.render(
-      <InvoiceDetail
-        row={row}
-        tenantId="tenant-1"
-        arca="none"
-        emitter={null}
-        onChanged={vi.fn()}
-      />,
+      <QueryClientProvider client={new QueryClient()}>
+        <InvoiceDetail
+          row={row}
+          tenantId="tenant-1"
+          arca="none"
+          emitter={null}
+          onChanged={vi.fn()}
+        />
+      </QueryClientProvider>,
     );
   });
 

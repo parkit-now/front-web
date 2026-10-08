@@ -15,6 +15,7 @@ import { ConfigHorarios } from './features/owner/sections/config/ConfigHorarios'
 import { ConfigServicios } from './features/owner/sections/config/ConfigServicios';
 import { ConfigRetencion } from './features/owner/sections/config/ConfigRetencion';
 import { ListaBlancaPage } from './features/owner/sections/lista-blanca/ListaBlancaPage';
+import { ClientesPage } from './features/owner/sections/clientes/ClientesPage';
 import { PaymentMethodsPage } from './features/owner/sections/payment-methods/PaymentMethodsPage';
 import { IntegracionesPage } from './features/owner/sections/integraciones/IntegracionesPage';
 import {
@@ -112,6 +113,7 @@ const ownerSectionRoutes = [
       { path: 'horarios', element: <ConfigHorarios /> },
       { path: 'servicios', element: <ConfigServicios /> },
       { path: 'retencion', element: <ConfigRetencion /> },
+      { path: 'clientes', element: <ClientesPage /> },
       { path: 'lista-blanca', element: <ListaBlancaPage /> },
     ],
   },
