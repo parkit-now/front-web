@@ -24,6 +24,9 @@ vi.mock('./useInvoiceReceiver', () => ({
 vi.mock('./useInvoiceConfirmation', () => ({
   useInvoiceConfirmation: () => ({ busy: false, snapshot: null }),
 }));
+vi.mock('../clientes/ClientContact', () => ({
+  ClientContact: () => null,
+}));
 
 let root: Root;
 let container: HTMLDivElement;
