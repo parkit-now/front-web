@@ -21,6 +21,7 @@ interface BarChartProps {
   formatValue?: (value: number) => string;
   /** Valor abreviado, para los ticks del eje Y. */
   formatTick?: (value: number) => string;
+  tooltipDetails?: string[];
 }
 
 /**
@@ -37,6 +38,7 @@ export function BarChart({
   color = 'var(--brand)',
   formatValue = (value) => value.toLocaleString('es-AR'),
   formatTick = (value) => value.toLocaleString('es-AR'),
+  tooltipDetails,
 }: BarChartProps) {
   const [hovered, setHovered] = useState<number | null>(null);
 
@@ -130,7 +132,7 @@ export function BarChart({
                   onMouseEnter={() => setHovered(i)}
                   title={
                     labels
-                      ? `${labels[i]}: ${formatValue(value)}`
+                      ? `${labels[i]}: ${formatValue(value)}${tooltipDetails?.[i] ? ` · ${tooltipDetails[i]}` : ''}`
                       : formatValue(value)
                   }
                   style={{
@@ -184,6 +186,7 @@ export function BarChart({
               count={data.length}
               label={labels?.[hovered]}
               value={formatValue(data[hovered])}
+              detail={tooltipDetails?.[hovered]}
             />
           )}
         </div>
@@ -235,11 +238,13 @@ function Tooltip({
   count,
   label,
   value,
+  detail,
 }: {
   index: number;
   count: number;
   label?: string;
   value: string;
+  detail?: string;
 }) {
   const center = ((index + 0.5) / count) * 100;
   const position =
@@ -253,6 +258,7 @@ function Tooltip({
     <div className="pk-tooltip" style={{ top: 0, ...position }}>
       {label && <div style={{ opacity: 0.7, fontSize: 11 }}>{label}</div>}
       <div style={{ fontWeight: 600, fontFamily: 'var(--mono)' }}>{value}</div>
+      {detail && <div style={{ opacity: 0.7, fontSize: 11 }}>{detail}</div>}
     </div>
   );
 }

@@ -66,6 +66,7 @@ export function useRevenueSeries(filters: RevenueFilters | null) {
   const { sucursalId } = useSucursal();
   return useQuery({
     queryKey: [...METRICS_KEY, sucursalId, 'revenue', filters],
+    refetchOnWindowFocus: false,
     queryFn:
       sucursalId && filters
         ? () => fetchRevenueSeries({ tenantId: sucursalId, ...filters })
@@ -88,6 +89,7 @@ export function useRevenueByPaymentMethod(filters: RevenueFilters | null) {
       'by-payment-method',
       { scope, vehicleCategory },
     ],
+    refetchOnWindowFocus: false,
     queryFn:
       sucursalId && scope
         ? () =>
@@ -110,6 +112,7 @@ export function useVehicleCategoryBreakdown(filters: RevenueFilters | null) {
   const scope = filters && scopeOf(filters);
   return useQuery({
     queryKey: [...METRICS_KEY, sucursalId, 'by-vehicle-category', { scope }],
+    refetchOnWindowFocus: false,
     queryFn:
       sucursalId && scope
         ? () => getVehicleCategoryBreakdown({ tenantId: sucursalId, ...scope })
@@ -136,6 +139,7 @@ export function useTopPlates(
       'top-plates',
       { scope, vehicleCategory, limit },
     ],
+    refetchOnWindowFocus: false,
     queryFn:
       sucursalId && scope
         ? () =>
@@ -150,13 +154,15 @@ export function useTopPlates(
 }
 
 /** KPIs de cabecera: ocupación viva, totales de hoy y comparativa. */
-export function useMetricsSummary() {
+export function useMetricsSummary(refreshWhileVisible = false) {
   const { sucursalId } = useSucursal();
   return useQuery({
     queryKey: [...METRICS_KEY, sucursalId, 'summary'],
     queryFn: () => getMetricsSummary({ tenantId: sucursalId }),
     enabled: Boolean(sucursalId),
-    staleTime: 30_000,
+    staleTime: refreshWhileVisible ? 300_000 : 30_000,
+    refetchInterval: refreshWhileVisible ? 300_000 : false,
+    refetchIntervalInBackground: false,
   });
 }
 

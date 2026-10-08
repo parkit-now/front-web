@@ -33,7 +33,7 @@ export type { CashSession } from './cash-sessions';
 
 /** Tope de página del backend: pedir más devuelve 400. */
 const AUDIT_PAGE_SIZE = 100;
-const AUDIT_MAX_ITEMS = 500;
+const AUDIT_MAX_ITEMS = 5_000;
 
 export type ListAuditEventsParams = {
   /**
@@ -42,6 +42,8 @@ export type ListAuditEventsParams = {
    */
   limit?: number;
   severity?: AuditSeverity;
+  from?: string;
+  to?: string;
 };
 
 async function bearer(): Promise<string> {
@@ -76,6 +78,8 @@ export async function listAuditEvents(
     if (params.severity) {
       search.set('severity', params.severity);
     }
+    if (params.from) search.set('from', params.from);
+    if (params.to) search.set('to', params.to);
 
     return apiRequest<PaginatedAudit>({
       method: 'GET',
@@ -91,9 +95,13 @@ export async function listAuditEvents(
     Math.ceil(maxItems / AUDIT_PAGE_SIZE),
   );
 
-  for (let page = 2; page <= pageCount; page += 1) {
-    const nextPage = await fetchPage(page);
-    items.push(...nextPage.items);
+  for (let start = 2; start <= pageCount; start += 4) {
+    const pages = await Promise.all(
+      Array.from({ length: Math.min(4, pageCount - start + 1) }, (_, index) =>
+        fetchPage(start + index),
+      ),
+    );
+    pages.forEach((page) => items.push(...page.items));
   }
 
   return items.slice(0, maxItems);

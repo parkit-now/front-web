@@ -69,7 +69,7 @@ import {
   type AuditRow,
 } from './auditUtils';
 
-const FETCH_LIMIT = 500;
+const FETCH_LIMIT = 5_000;
 const LPR_API_PAGE_SIZE = 100;
 const LPR_PAGE_SIZE_OPTIONS = [12, 24, 48];
 const LPR_DEFAULT_PAGE_SIZE = 24;
@@ -215,6 +215,22 @@ function dateRangeToQuery(range: DateRange | undefined): {
   };
 }
 
+function dateRangeToAuditQuery(range: DateRange | undefined): {
+  from?: string;
+  to?: string;
+} {
+  if (!range?.from) return {};
+  const end = range.to ?? range.from;
+  return {
+    from: startOfDay(range.from).toISOString(),
+    to: new Date(
+      end.getFullYear(),
+      end.getMonth(),
+      end.getDate() + 1,
+    ).toISOString(),
+  };
+}
+
 async function listDismissedLprEventsForAudit(input: {
   tenantId: string;
   firstSeenFrom?: string;
@@ -234,16 +250,20 @@ async function listDismissedLprEventsForAudit(input: {
     Math.ceil(FETCH_LIMIT / LPR_API_PAGE_SIZE),
   );
 
-  for (let page = 2; page <= pageCount; page += 1) {
-    const nextPage = await listLprDetectionEvents({
-      tenantId: input.tenantId,
-      status: 'dismissed',
-      page,
-      pageSize: LPR_API_PAGE_SIZE,
-      firstSeenFrom: input.firstSeenFrom,
-      firstSeenTo: input.firstSeenTo,
-    });
-    items.push(...nextPage.items);
+  for (let start = 2; start <= pageCount; start += 4) {
+    const pages = await Promise.all(
+      Array.from({ length: Math.min(4, pageCount - start + 1) }, (_, index) =>
+        listLprDetectionEvents({
+          tenantId: input.tenantId,
+          status: 'dismissed',
+          page: start + index,
+          pageSize: LPR_API_PAGE_SIZE,
+          firstSeenFrom: input.firstSeenFrom,
+          firstSeenTo: input.firstSeenTo,
+        }),
+      ),
+    );
+    pages.forEach((page) => items.push(...page.items));
   }
 
   return { items: items.slice(0, FETCH_LIMIT), total: firstPage.total };
@@ -1491,9 +1511,14 @@ export function AuditoriaPage() {
     setLprPageIndex(0);
   }
 
+  const auditDateQuery = useMemo(
+    () => dateRangeToAuditQuery(dateRange),
+    [dateRange],
+  );
   const auditQuery = useQuery({
-    queryKey: ['audit', sucursalId],
-    queryFn: () => listAuditEvents(sucursalId, { limit: FETCH_LIMIT }),
+    queryKey: ['audit', sucursalId, auditDateQuery.from, auditDateQuery.to],
+    queryFn: () =>
+      listAuditEvents(sucursalId, { limit: FETCH_LIMIT, ...auditDateQuery }),
     enabled: Boolean(sucursalId),
     staleTime: 30_000,
   });
@@ -2011,6 +2036,26 @@ export function AuditoriaPage() {
           tenantId={sucursalId}
         />
       )}
+
+      {activeTab === 'events' &&
+        !auditQuery.isError &&
+        auditQuery.data &&
+        auditQuery.data.length >= FETCH_LIMIT && (
+          <p style={{ margin: '8px 0', color: 'var(--text-3)', fontSize: 12 }}>
+            Se cargaron hasta {FETCH_LIMIT.toLocaleString('es-AR')} eventos para
+            este período. Acotá las fechas si necesitás ver otros.
+          </p>
+        )}
+
+      {activeTab === 'lpr' &&
+        lprQuery.data &&
+        lprQuery.data.total > lprQuery.data.items.length && (
+          <p style={{ margin: '8px 0', color: 'var(--text-3)', fontSize: 12 }}>
+            Se cargaron {lprQuery.data.items.length.toLocaleString('es-AR')} de{' '}
+            {lprQuery.data.total.toLocaleString('es-AR')} descartes. Acotá las
+            fechas para ver otros.
+          </p>
+        )}
 
       <AuditDetailDrawer
         row={selected}

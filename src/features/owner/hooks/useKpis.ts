@@ -3,11 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { getRevenueSeries } from '../services/metrics';
 import { useSucursal } from '../context/SucursalContext';
 import { useMetricsSummary } from './useMetrics';
-import {
-  arDayKey,
-  monthToDateRange,
-  toArOffsetIso,
-} from '../../../shared/utils/ar-datetime';
+import { arDayKey, toArOffsetIso } from '../../../shared/utils/ar-datetime';
 
 /**
  * View-model de las cards de métricas actuales. Compone `/metrics/summary`
@@ -30,9 +26,10 @@ export interface OwnerKpis {
   /** `null` cuando la base es 0: mostrar "sin datos", nunca 0% ni ∞. */
   revenueDeltaPct: number | null;
   month: {
-    revenue: number;
+    revenue: number | null;
     sparkline: number[];
   };
+  updatedAt: string;
   projections: {
     todayWithOpenEntries: ProjectionKpi;
     todayHistoricalForecast: ProjectionKpi;
@@ -49,26 +46,35 @@ export interface ProjectionKpi {
   confidence: 'low' | 'medium' | 'high';
 }
 
-/** Acumulado del mes en curso. La ventana es estable durante todo el día. */
-function useMonthToDateRevenue() {
+/** El corte mensual coincide exactamente con el snapshot del resumen. */
+function useMonthToDateRevenue(generatedAt?: string) {
   const { sucursalId } = useSucursal();
-  const today = arDayKey();
   const range = useMemo(
-    () => monthToDateRange(new Date(toArOffsetIso(today, '12:00'))),
-    [today],
+    () =>
+      generatedAt
+        ? {
+            from: toArOffsetIso(
+              `${arDayKey(new Date(generatedAt)).slice(0, 7)}-01`,
+            ),
+            to: generatedAt,
+            granularity: 'day' as const,
+          }
+        : null,
+    [generatedAt],
   );
 
   return useQuery({
     queryKey: ['metrics', sucursalId, 'revenue', 'month-to-date', range],
-    queryFn: () => getRevenueSeries({ tenantId: sucursalId, ...range }),
-    enabled: Boolean(sucursalId),
-    staleTime: 60_000,
+    queryFn: () => getRevenueSeries({ tenantId: sucursalId, ...range! }),
+    enabled: Boolean(sucursalId && range),
+    staleTime: 300_000,
+    refetchOnWindowFocus: false,
   });
 }
 
 export function useKpis() {
-  const summaryQuery = useMetricsSummary();
-  const monthQuery = useMonthToDateRevenue();
+  const summaryQuery = useMetricsSummary(true);
+  const monthQuery = useMonthToDateRevenue(summaryQuery.data?.generatedAt);
 
   const data = useMemo<OwnerKpis | undefined>(() => {
     const summary = summaryQuery.data;
@@ -89,8 +95,9 @@ export function useKpis() {
         vehiclesOut: summary.today.vehiclesOut,
       },
       revenueDeltaPct: summary.comparison.previousDay.revenueDeltaPct,
+      updatedAt: summary.generatedAt,
       month: {
-        revenue: monthQuery.data?.totals.revenue ?? 0,
+        revenue: monthQuery.data?.totals.revenue ?? null,
         sparkline: buckets.map((bucket) => bucket.revenue),
       },
       projections: {
@@ -107,6 +114,7 @@ export function useKpis() {
     data,
     isLoading: summaryQuery.isLoading,
     isMonthLoading: monthQuery.isLoading,
+    isMonthError: monthQuery.isError,
     isError: summaryQuery.isError,
     error: summaryQuery.error,
   };

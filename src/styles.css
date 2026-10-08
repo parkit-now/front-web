@@ -818,3 +818,55 @@ h2 {
     grid-template-columns: 110px minmax(0, 1fr) minmax(0, 1fr);
   }
 }
+.report-web-update {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 0 0 10px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+.report-web-refresh {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--brand);
+  cursor: pointer;
+}
+.report-weekday-mode {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  margin: 0 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-b);
+}
+.report-weekday-mode button {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  padding: 6px 12px;
+  font: inherit;
+  cursor: pointer;
+}
+.report-weekday-mode button.active {
+  background: var(--card);
+  color: var(--brand);
+  box-shadow: 0 1px 4px #0001;
+}
+.report-web-refresh:hover,
+.report-weekday-mode button:hover:not(.active) {
+  background: var(--brand-soft);
+}
+.report-web-refresh:focus-visible,
+.report-weekday-mode button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}

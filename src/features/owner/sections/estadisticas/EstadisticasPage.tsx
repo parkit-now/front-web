@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { RefreshCw } from 'lucide-react';
 import { SectionHeader } from '../../../../shared/components/SectionHeader';
 import { Tabs } from '../../../../shared/components/ui/Tabs';
 import { Skeleton } from '../../../../shared/components/ui/Skeleton';
@@ -8,7 +9,7 @@ import {
   DateRangeFilter,
   type DateRange,
 } from '../../../../shared/components/ui/DateRangeFilter';
-import { fmtMoney0 } from '../../../../shared/utils/fmt';
+import { fmtMoney, fmtDateTimeAr } from '../../../../shared/utils/fmt';
 import { translateApiError } from '../../../../lib/api/translate';
 import type { Granularity } from '../../../../shared/utils/ar-datetime';
 import { useSucursal } from '../../context/SucursalContext';
@@ -46,8 +47,11 @@ import {
   formatBucketLabel,
   formatCashSessionLabel,
   formatWindowLabel,
+  groupByWeekday,
   hasInconsistentUnallocated,
   hasUncategorizedStays,
+  type WeekdayMode,
+  weekdayRangeTooLong,
 } from './transform';
 
 const PRESETS: PresetOption[] = ['hoy', '7d', '30d', 'custom', 'caja'];
@@ -174,14 +178,18 @@ export function EstadisticasPage() {
     data: liveKpis,
     isLoading: liveKpisLoading,
     isMonthLoading,
+    isMonthError,
   } = useKpis();
+  const queryClient = useQueryClient();
 
   const [preset, setPreset] = useState<PresetOption>('7d');
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [fromTime, setFromTime] = useState('00:00');
   const [toTime, setToTime] = useState('23:59');
-  const [manualGranularity, setManualGranularity] =
-    useState<Granularity | null>(null);
+  const [manualGranularity, setManualGranularity] = useState<
+    Granularity | 'weekday' | null
+  >(null);
+  const [weekdayMode, setWeekdayMode] = useState<WeekdayMode>('total');
   const [paymentMethod, setPaymentMethod] = useState('');
   // Código de la categoría, o '' para no filtrar.
   const [vehicleCategory, setVehicleCategory] = useState<
@@ -212,13 +220,19 @@ export function EstadisticasPage() {
   );
 
   const wantedGranularity =
-    manualGranularity ?? (resolved.ok ? resolved.granularity : 'day');
+    manualGranularity === 'weekday'
+      ? 'day'
+      : (manualGranularity ?? (resolved.ok ? resolved.granularity : 'day'));
   const granularity = clampGranularity(resolved, wantedGranularity);
   // La elección manual sobrevive al ensanchado de un rango personalizado, así
   // que hay que avisar cuando se degradó sola.
   const granularityWasClamped = granularity !== wantedGranularity;
   const hourAllowed = hourGranularityAllowed(resolved);
-  const tooFine = granularityIsTooFine(resolved, granularity);
+  const tooFine =
+    granularityIsTooFine(resolved, granularity) ||
+    (manualGranularity === 'weekday' &&
+      resolved.ok &&
+      weekdayRangeTooLong(resolved.from, resolved.to));
 
   // El tope de buckets lo rechaza el backend con un 400; si ya sabemos que no
   // entra, los filtros quedan en `null` y los hooks no disparan la request.
@@ -259,19 +273,27 @@ export function EstadisticasPage() {
   }
 
   const series = seriesQuery.data;
+  const displayedBuckets = useMemo(
+    () =>
+      manualGranularity === 'weekday'
+        ? groupByWeekday(series?.buckets ?? [], weekdayMode)
+        : (series?.buckets ?? []),
+    [manualGranularity, series, weekdayMode],
+  );
   const values = useMemo(() => {
-    const buckets = series?.buckets ?? [];
-    return buckets.map((bucket) =>
+    return displayedBuckets.map((bucket) =>
       serie === 'autos' ? bucket.vehiclesIn : bucket.revenue,
     );
-  }, [series, serie]);
+  }, [displayedBuckets, serie]);
 
   const labels = useMemo(
     () =>
-      (series?.buckets ?? []).map((bucket) =>
-        formatBucketLabel(bucket.key, series?.granularity ?? granularity),
+      displayedBuckets.map((bucket) =>
+        manualGranularity === 'weekday'
+          ? bucket.key.slice(0, 3)
+          : formatBucketLabel(bucket.key, series?.granularity ?? granularity),
       ),
-    [series, granularity],
+    [displayedBuckets, series, granularity, manualGranularity],
   );
 
   const breakdown = breakdownQuery.data;
@@ -287,10 +309,32 @@ export function EstadisticasPage() {
         subtitle="Ocupación actual, recaudación y movimiento de vehículos"
       />
 
+      <div className="report-web-update">
+        <span>
+          {liveKpis?.updatedAt
+            ? `Actualizado ${fmtDateTimeAr(liveKpis.updatedAt)} (Argentina)`
+            : 'Sin actualización disponible'}
+        </span>
+        <button
+          type="button"
+          className="report-web-refresh"
+          title="Actualizar estadísticas"
+          aria-label="Actualizar estadísticas"
+          onClick={() =>
+            void queryClient.invalidateQueries({
+              queryKey: ['metrics', sucursalId],
+            })
+          }
+        >
+          <RefreshCw size={16} />
+        </button>
+      </div>
+
       <KpiCards
         kpis={liveKpis}
         loading={liveKpisLoading}
         monthLoading={isMonthLoading}
+        monthError={isMonthError}
       />
 
       <div
@@ -479,9 +523,11 @@ export function EstadisticasPage() {
             Agrupar{' '}
             <select
               className="pk-input"
-              value={granularity}
+              value={manualGranularity === 'weekday' ? 'weekday' : granularity}
               onChange={(event) =>
-                setManualGranularity(event.target.value as Granularity)
+                setManualGranularity(
+                  event.target.value as Granularity | 'weekday',
+                )
               }
               style={{ width: 150, display: 'inline-block' }}
             >
@@ -494,6 +540,7 @@ export function EstadisticasPage() {
                   </option>
                 );
               })}
+              <option value="weekday">Por día de semana</option>
             </select>
           </label>
         </div>
@@ -530,7 +577,11 @@ export function EstadisticasPage() {
         <div className="pk-card">
           <EmptyState
             title="Demasiados intervalos"
-            description="El período elegido no entra en esa agrupación. Probá agrupando por un intervalo más grande."
+            description={
+              manualGranularity === 'weekday'
+                ? 'El rango supera 1.000 días. Acotá las fechas para agrupar por día de semana.'
+                : 'El período elegido no entra en esa agrupación. Probá agrupando por un intervalo más grande.'
+            }
           />
         </div>
       )}
@@ -558,8 +609,8 @@ export function EstadisticasPage() {
             }}
           >
             <KpiCard
-              title="Recaudación total"
-              value={fmtMoney0(series?.totals.revenue ?? 0)}
+              title="Recaudación del período"
+              value={fmtMoney(series?.totals.revenue ?? 0)}
               loading={seriesQuery.isLoading}
             />
             <KpiCard
@@ -585,6 +636,30 @@ export function EstadisticasPage() {
                 onChange={(id) => setSerie(id as SerieTab)}
               />
             </div>
+            {manualGranularity === 'weekday' && (
+              <div
+                className="report-weekday-mode"
+                role="group"
+                aria-label="Cálculo por día de semana"
+              >
+                <button
+                  type="button"
+                  className={weekdayMode === 'total' ? 'active' : ''}
+                  aria-pressed={weekdayMode === 'total'}
+                  onClick={() => setWeekdayMode('total')}
+                >
+                  Total
+                </button>
+                <button
+                  type="button"
+                  className={weekdayMode === 'average' ? 'active' : ''}
+                  aria-pressed={weekdayMode === 'average'}
+                  onClick={() => setWeekdayMode('average')}
+                >
+                  Promedio
+                </button>
+              </div>
+            )}
 
             {seriesQuery.isLoading ? (
               <Skeleton height={200} />
@@ -601,7 +676,15 @@ export function EstadisticasPage() {
                 formatValue={
                   serie === 'autos'
                     ? (value) => value.toLocaleString('es-AR')
-                    : fmtMoney0
+                    : fmtMoney
+                }
+                tooltipDetails={
+                  manualGranularity === 'weekday'
+                    ? displayedBuckets.map(
+                        (bucket) =>
+                          `${'days' in bucket ? bucket.days : 0} días · ${weekdayMode === 'average' ? 'promedio' : 'total'}`,
+                      )
+                    : undefined
                 }
                 formatTick={(value) =>
                   formatAxisValue(value, serie === 'autos' ? 'count' : 'money')

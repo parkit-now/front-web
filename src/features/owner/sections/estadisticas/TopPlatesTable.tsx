@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { PlateCell } from '../../../../features/data-table/components/PlateCell';
 import { Skeleton } from '../../../../shared/components/ui/Skeleton';
 import { EmptyState } from '../../../../shared/components/ui/EmptyState';
-import { fmtMoney0 } from '../../../../shared/utils/fmt';
+import { fmtMoney } from '../../../../shared/utils/fmt';
 import type { TopPlate, TopPlatesOrderBy } from '../../services/metrics';
 import { formatMinutes, sortTopPlates } from './transform';
 
@@ -124,7 +124,7 @@ export function TopPlatesTable({ items, loading, error }: TopPlatesTableProps) {
                       color: 'var(--text-1)',
                     }}
                   >
-                    {fmtMoney0(plate.revenue)}
+                    {fmtMoney(plate.revenue)}
                   </td>
                   <td
                     style={{
