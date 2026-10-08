@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
 import { DataTable } from '../../../data-table';
+import { PlateCell } from '../../../data-table/components/PlateCell';
 import { dateTimeSorting } from '../../../data-table/utils';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
@@ -276,12 +277,10 @@ export function ReservasPage() {
       {
         accessorKey: 'vehiclePlate',
         header: 'Patente',
-        size: 130,
+        size: 140,
         cell: ({ row }) => (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <strong style={{ fontFamily: 'var(--mono)' }}>
-              {row.original.vehiclePlate}
-            </strong>
+            <PlateCell plate={row.original.vehiclePlate} />
             <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
               {row.original.code}
             </span>

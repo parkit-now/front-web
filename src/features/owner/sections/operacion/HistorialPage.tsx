@@ -14,6 +14,12 @@ import type {
 } from '@tanstack/react-table';
 import { DataTable } from '../../../../features/data-table';
 import { VehicleCell } from '../../../../features/data-table/components/VehicleCell';
+import { PlateCell } from '../../../../features/data-table/components/PlateCell';
+import {
+  formatStayDuration,
+  StayDateCell,
+  TableDateTimeCell,
+} from '../../../../features/data-table/components/StayDateCell';
 import { dateTimeSorting } from '../../../../features/data-table/utils';
 import { getDateRangeExcelFileName } from '../../../../features/data-table/excelExport';
 import { translateApiError } from '../../../../lib/api/translate';
@@ -637,10 +643,8 @@ export function HistorialPage({
       {
         accessorKey: 'plate',
         header: 'Patente',
-        size: 110,
-        cell: ({ row }) => (
-          <strong className="operation-mono">{row.original.plate}</strong>
-        ),
+        size: 120,
+        cell: ({ row }) => <PlateCell plate={row.original.plate} />,
       },
       {
         id: 'vehicle',
@@ -680,11 +684,19 @@ export function HistorialPage({
         id: 'enteredAtLocalDate',
         accessorKey: 'enteredAtLocalDate',
         header: 'Ingreso',
-        meta: { exportValue: (row) => fmtDateTimeAr(row.enteredAt) },
-        size: 160,
+        meta: {
+          exportValue: (row) =>
+            `${fmtDateTimeAr(row.enteredAt)}\n${row.leftAt ? '' : 'En curso · '}${formatStayDuration(row.enteredAt, row.leftAt)}`,
+        },
+        size: 180,
         filterFn: 'dateRange',
         sortingFn: dateTimeSorting((row) => row.enteredAt),
-        cell: ({ row }) => fmtDateTimeAr(row.original.enteredAt),
+        cell: ({ row }) => (
+          <StayDateCell
+            enteredAt={row.original.enteredAt}
+            leftAt={row.original.leftAt}
+          />
+        ),
       },
       {
         id: 'leftAtLocalDate',
@@ -699,7 +711,7 @@ export function HistorialPage({
         sortingFn: dateTimeSorting((row) => row.leftAt),
         cell: ({ row }) =>
           row.original.leftAt ? (
-            fmtDateTimeAr(row.original.leftAt)
+            <TableDateTimeCell value={row.original.leftAt} />
           ) : (
             <Badge>En base</Badge>
           ),

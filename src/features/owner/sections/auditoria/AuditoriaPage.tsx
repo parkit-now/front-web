@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { DataTable } from '../../../../features/data-table';
 import { VehicleCell } from '../../../../features/data-table/components/VehicleCell';
+import { PlateCell } from '../../../../features/data-table/components/PlateCell';
+import { TableDateTimeCell } from '../../../../features/data-table/components/StayDateCell';
 import {
   dateTimeSorting,
   normalizeText,
@@ -1657,6 +1659,12 @@ export function AuditoriaPage() {
         accessorKey: 'enteredAtLocalDate',
         filterFn: 'dateRange',
         sortingFn: dateTimeSorting((row) => row.enteredAt),
+        cell: ({ row }) =>
+          row.original.enteredAt ? (
+            <TableDateTimeCell value={row.original.enteredAt} />
+          ) : (
+            <span className="dt-stay-cell__empty">—</span>
+          ),
       },
       {
         id: 'leftAtLocalDate',
@@ -1664,6 +1672,12 @@ export function AuditoriaPage() {
         accessorKey: 'leftAtLocalDate',
         filterFn: 'dateRange',
         sortingFn: dateTimeSorting((row) => row.leftAt),
+        cell: ({ row }) =>
+          row.original.leftAt ? (
+            <TableDateTimeCell value={row.original.leftAt} />
+          ) : (
+            <span className="dt-stay-cell__empty">—</span>
+          ),
       },
       {
         id: 'cashSessionId',
@@ -1782,7 +1796,7 @@ export function AuditoriaPage() {
         accessorFn: (row) => `${row.plate} ${row.ticketNumber}`,
         cell: ({ row }) => (
           <div className="audit2-stack">
-            <strong className="audit2-mono">{row.original.plate}</strong>
+            <PlateCell plate={row.original.plate} />
             <span>Ticket {row.original.ticketNumber}</span>
           </div>
         ),
