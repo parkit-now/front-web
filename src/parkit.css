@@ -836,6 +836,100 @@ a {
   color: var(--text-3);
 }
 
+select.pk-input:disabled,
+.dt-page-size select:disabled {
+  background: var(--bg-b);
+  color: var(--text-3);
+  cursor: not-allowed;
+}
+
+/* Conserva el select nativo y su picker móvil; en navegadores compatibles
+   permite que el menú abierto use el mismo sistema visual que los popovers. */
+@media (hover: hover) and (pointer: fine) {
+  @supports (appearance: base-select) {
+    select.pk-input:not([multiple]):not([size]),
+    .dt-page-size select:not([multiple]):not([size]) {
+      appearance: base-select;
+      display: inline-flex;
+      position: relative;
+      align-items: center;
+      overflow: hidden;
+      padding-right: 44px;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    select.pk-input:not([multiple]):not([size])::picker(select),
+    .dt-page-size select:not([multiple]):not([size])::picker(select) {
+      appearance: base-select;
+    }
+
+    select.pk-input::picker(select),
+    .dt-page-size select::picker(select) {
+      min-width: anchor-size(width);
+      max-width: min(440px, calc(100vw - 24px));
+      max-height: min(360px, 60vh);
+      margin-top: 5px;
+      padding: 5px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      background: var(--card);
+      color: var(--text-1);
+      box-shadow: var(--shadow-float);
+    }
+
+    select.pk-input option,
+    .dt-page-size select option {
+      min-height: 36px;
+      padding: 8px 10px;
+      border-radius: var(--r-sm);
+      color: var(--text-1);
+      line-height: 1.3;
+      white-space: normal;
+    }
+
+    select.pk-input option:hover:not(:disabled),
+    .dt-page-size select option:hover:not(:disabled),
+    select.pk-input option:focus-visible,
+    .dt-page-size select option:focus-visible {
+      background: var(--brand-soft);
+    }
+
+    select.pk-input option:checked,
+    .dt-page-size select option:checked {
+      background: var(--brand-soft);
+      color: var(--brand-hover);
+      font-weight: 700;
+    }
+
+    select.pk-input option:disabled,
+    .dt-page-size select option:disabled {
+      color: var(--text-3);
+    }
+
+    select.pk-input::picker-icon,
+    .dt-page-size select::picker-icon {
+      position: absolute;
+      inset: 0 0 0 auto;
+      display: flex;
+      width: 36px;
+      height: 100%;
+      align-items: center;
+      justify-content: center;
+      padding-left: 8px;
+      background: linear-gradient(90deg, transparent, var(--card) 9px);
+      color: var(--text-2);
+    }
+
+    select.pk-input:disabled::picker-icon,
+    .dt-page-size select:disabled::picker-icon {
+      background: linear-gradient(90deg, transparent, var(--bg-b) 9px);
+    }
+  }
+}
+
 .pk-label {
   font-size: 12px;
   font-weight: 500;

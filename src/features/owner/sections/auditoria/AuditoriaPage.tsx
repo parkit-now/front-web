@@ -68,8 +68,15 @@ import {
   metadataEntries,
   type AuditRow,
 } from './auditUtils';
+import {
+  computeRiskMetrics,
+  filterRowsByMetric,
+  isEventMetric,
+  type AuditMetricKey,
+  type AuditRiskMetrics,
+} from './auditMetrics';
 
-const FETCH_LIMIT = 500;
+const FETCH_LIMIT = 5_000;
 const LPR_API_PAGE_SIZE = 100;
 const LPR_PAGE_SIZE_OPTIONS = [12, 24, 48];
 const LPR_DEFAULT_PAGE_SIZE = 24;
@@ -215,6 +222,22 @@ function dateRangeToQuery(range: DateRange | undefined): {
   };
 }
 
+function dateRangeToAuditQuery(range: DateRange | undefined): {
+  from?: string;
+  to?: string;
+} {
+  if (!range?.from) return {};
+  const end = range.to ?? range.from;
+  return {
+    from: startOfDay(range.from).toISOString(),
+    to: new Date(
+      end.getFullYear(),
+      end.getMonth(),
+      end.getDate() + 1,
+    ).toISOString(),
+  };
+}
+
 async function listDismissedLprEventsForAudit(input: {
   tenantId: string;
   firstSeenFrom?: string;
@@ -234,16 +257,20 @@ async function listDismissedLprEventsForAudit(input: {
     Math.ceil(FETCH_LIMIT / LPR_API_PAGE_SIZE),
   );
 
-  for (let page = 2; page <= pageCount; page += 1) {
-    const nextPage = await listLprDetectionEvents({
-      tenantId: input.tenantId,
-      status: 'dismissed',
-      page,
-      pageSize: LPR_API_PAGE_SIZE,
-      firstSeenFrom: input.firstSeenFrom,
-      firstSeenTo: input.firstSeenTo,
-    });
-    items.push(...nextPage.items);
+  for (let start = 2; start <= pageCount; start += 4) {
+    const pages = await Promise.all(
+      Array.from({ length: Math.min(4, pageCount - start + 1) }, (_, index) =>
+        listLprDetectionEvents({
+          tenantId: input.tenantId,
+          status: 'dismissed',
+          page: start + index,
+          pageSize: LPR_API_PAGE_SIZE,
+          firstSeenFrom: input.firstSeenFrom,
+          firstSeenTo: input.firstSeenTo,
+        }),
+      ),
+    );
+    pages.forEach((page) => items.push(...page.items));
   }
 
   return { items: items.slice(0, FETCH_LIMIT), total: firstPage.total };
@@ -910,89 +937,174 @@ function LprEvidenceCard({
   );
 }
 
-type AuditRiskMetrics = {
-  chargeReductionLoss: number;
-  periodEvents: number;
-  possibleLoss: number;
-  suspiciousDismissals: number;
-  suggestedReductionRisk: number;
-  underchargedLoss: number;
-};
-
+/**
+ * Una card de métrica. Si recibe `onSelect` es un botón que filtra la tabla.
+ *
+ * Se renderiza como `<button>` y no como un `<div>` con `onClick` para que
+ * funcione con teclado y lo anuncien los lectores de pantalla. `aria-pressed`
+ * comunica que es un interruptor: se toca para filtrar y se vuelve a tocar
+ * para dejar de filtrar.
+ */
 function MetricCard({
+  active = false,
+  empty = false,
+  hint,
   icon,
   label,
+  onSelect,
   tone = 'default',
   value,
 }: {
+  active?: boolean;
+  /** Sin nada detrás: se muestra apagada y no se puede tocar. */
+  empty?: boolean;
+  hint?: string;
   icon: React.ReactNode;
   label: string;
+  onSelect?: () => void;
   tone?: 'default' | 'warn' | 'err';
   value: string;
 }) {
-  return (
-    <div className={`audit-risk-card ${tone}`}>
+  const className = `audit-risk-card ${tone}${active ? ' active' : ''}${
+    onSelect ? ' clickable' : ''
+  }${empty ? ' empty' : ''}`;
+  const body = (
+    <>
       <div className="audit-risk-card-icon">{icon}</div>
       <div>
         <span>{label}</span>
         <strong>{value}</strong>
       </div>
-    </div>
+    </>
+  );
+
+  if (!onSelect) {
+    return <div className={className}>{body}</div>;
+  }
+
+  return (
+    <button
+      type="button"
+      className={className}
+      onClick={onSelect}
+      disabled={empty}
+      aria-pressed={active}
+      title={empty ? 'No hay nada de esto en el período' : hint}
+    >
+      {body}
+    </button>
   );
 }
 
+/** Una barra del desglose. Filtra por el corte fino de la card de arriba. */
 function RiskBar({
+  active,
   label,
-  value,
   max,
+  onSelect,
+  value,
 }: {
+  active: boolean;
   label: string;
-  value: number;
   max: number;
+  onSelect: () => void;
+  value: number;
 }) {
-  const width = max > 0 ? Math.max(8, Math.round((value / max) * 100)) : 0;
+  const empty = value <= 0;
+  // El piso del 8% existe para que una barra chica se vea, pero NO puede
+  // aplicar a cero: pintaba una barra con color sobre un valor de $0.
+  const width =
+    empty || max <= 0 ? 0 : Math.max(8, Math.round((value / max) * 100));
 
   return (
-    <div className="audit-risk-bar-row">
+    <button
+      type="button"
+      className={`audit-risk-bar-row${active ? ' active' : ''}${
+        empty ? ' empty' : ''
+      }`}
+      onClick={onSelect}
+      disabled={empty}
+      aria-pressed={active}
+      title={
+        empty
+          ? 'No hay eventos de este tipo en el período'
+          : `Ver los eventos que suman ${fmtMoney0(value)}`
+      }
+    >
       <span>{label}</span>
       <div className="audit-risk-bar-track">
         <div className="audit-risk-bar-fill" style={{ width: `${width}%` }} />
       </div>
       <strong>{fmtMoney0(value)}</strong>
-    </div>
+    </button>
   );
 }
 
-function AuditRiskOverview({ metrics }: { metrics: AuditRiskMetrics }) {
+function AuditRiskOverview({
+  activeMetric,
+  metrics,
+  onSelectMetric,
+}: {
+  activeMetric: AuditMetricKey | null;
+  metrics: AuditRiskMetrics;
+  onSelectMetric: (key: AuditMetricKey | null) => void;
+}) {
+  // Sólo las dos barras que QUEDAN en el desglose. El riesgo por horario o
+  // tarifa salió de acá: no suma al total del encabezado —es riesgo, no plata
+  // perdida— y una barra debajo de un total que no suma a ese total se lee
+  // siempre mal. Su número vive en su propia card.
   const maxRisk = Math.max(
     metrics.underchargedLoss,
     metrics.chargeReductionLoss,
-    metrics.suggestedReductionRisk,
   );
+
+  // Tocar la card activa la apaga. Sin esto, la única forma de volver a ver
+  // todo sería "Eventos auditables", y nadie adivina que ése es el botón de
+  // volver atrás.
+  const toggle = (key: AuditMetricKey) => () =>
+    onSelectMetric(activeMetric === key ? null : key);
 
   return (
     <div className="audit-risk-grid">
       <MetricCard
+        active={activeMetric === 'possibleLoss'}
+        empty={metrics.possibleLoss <= 0}
+        hint="Ver los eventos que explican esta pérdida"
         icon={<IconDollar size={18} />}
         label="Pérdida posible"
+        onSelect={toggle('possibleLoss')}
         tone={metrics.possibleLoss > 0 ? 'err' : 'default'}
         value={fmtMoney0(metrics.possibleLoss)}
       />
       <MetricCard
+        active={activeMetric === 'suggestedReductionRisk'}
+        empty={metrics.suggestedReductionRisk <= 0}
+        hint="Ver las correcciones que bajaron el precio sugerido"
         icon={<IconTrending size={18} />}
         label="Riesgo por horario/tarifa"
+        onSelect={toggle('suggestedReductionRisk')}
         tone={metrics.suggestedReductionRisk > 0 ? 'warn' : 'default'}
         value={fmtMoney0(metrics.suggestedReductionRisk)}
       />
       <MetricCard
+        active={activeMetric === 'suspiciousDismissals'}
+        empty={metrics.suspiciousDismissals <= 0}
+        hint="Ver las patentes descartadas que se habían leído bien"
         icon={<IconCar size={18} />}
         label="Descartes sospechosos"
+        onSelect={toggle('suspiciousDismissals')}
         tone={metrics.suspiciousDismissals > 0 ? 'warn' : 'default'}
         value={String(metrics.suspiciousDismissals)}
       />
+      {/* No lleva estado activo: es una ACCIÓN —quitar el filtro—, no un
+          filtro más. Marcarla al cargar diría "no hay nada filtrado" cuando
+          la tabla todavía arranca con el filtro de severidad por defecto.
+          Que no haya ninguna card encendida ya comunica que se ve todo. */}
       <MetricCard
+        hint="Quitar el filtro y ver todo el período"
         icon={<IconShield size={18} />}
         label="Eventos auditables"
+        onSelect={() => onSelectMetric(null)}
         value={String(metrics.periodEvents)}
       />
       <div className="audit-risk-chart">
@@ -1001,18 +1113,17 @@ function AuditRiskOverview({ metrics }: { metrics: AuditRiskMetrics }) {
           <strong>{fmtMoney0(metrics.possibleLoss)}</strong>
         </div>
         <RiskBar
+          active={activeMetric === 'underchargedLoss'}
           label="Cobros bajo sugerido"
+          max={maxRisk}
+          onSelect={toggle('underchargedLoss')}
           value={metrics.underchargedLoss}
-          max={maxRisk}
         />
         <RiskBar
+          active={activeMetric === 'chargeReductionLoss'}
           label="Correcciones que bajan cobro"
+          onSelect={toggle('chargeReductionLoss')}
           value={metrics.chargeReductionLoss}
-          max={maxRisk}
-        />
-        <RiskBar
-          label="Horario o tarifa reducida"
-          value={metrics.suggestedReductionRisk}
           max={maxRisk}
         />
       </div>
@@ -1411,7 +1522,10 @@ function AuditDetailDrawer({
                   </Badge>
                 }
               />
-              <DetailLine label="Patente" value={row.plate} />
+              <DetailLine
+                label="Patente"
+                value={<PlateCell plate={row.plate} />}
+              />
               <DetailLine label="Ticket" value={row.ticketNumber} />
               <DetailLine
                 label="Caja"
@@ -1454,6 +1568,16 @@ export function AuditoriaPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selected, setSelected] = useState<AuditRow | null>(null);
   const [onlyCurrentCashSession, setOnlyCurrentCashSession] = useState(false);
+  // Qué card o barra está seleccionada. `null` = se ve todo el período.
+  const [activeMetric, setActiveMetric] = useState<AuditMetricKey | null>(null);
+  // Si el dueño ya usó las cards al menos una vez.
+  //
+  // Al abrir la pantalla la tabla arranca con el filtro de severidad puesto,
+  // que esconde los `info`: es lo que hace que lo primero que se vea sea lo
+  // que importa. Pero desde que se tocó una card, ese filtro tiene que
+  // desaparecer, porque si no "Eventos auditables" diría 300 y la tabla
+  // mostraría 45. A partir del primer click manda lo que diga la card.
+  const [metricsUsed, setMetricsUsed] = useState(false);
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   // Filas visibles en la tabla de eventos con todos los filtros activos.
   const [visibleCount, setVisibleCount] = useState<number | null>(null);
@@ -1476,6 +1600,36 @@ export function AuditoriaPage() {
     setSearchParams(next, { replace: true });
   }
 
+  /**
+   * Tocar una card o una barra.
+   *
+   * LA CARD MANDA: limpia los demás filtros y deja sólo el suyo. Por eso
+   * apaga "Solo caja actual" y la tabla se vuelve a montar con los filtros de
+   * columna en blanco (ver la `key` del DataTable). Así el número de la card
+   * y la cantidad de filas que aparecen son siempre el mismo número.
+   *
+   * "Descartes sospechosos" es la excepción: sus datos no están en la tabla de
+   * eventos sino en la pestaña de patentes, así que salta de pestaña y deja
+   * puesto el filtro de severidad, que es justamente "se leyó bien y la
+   * descartaron".
+   */
+  function handleSelectMetric(key: AuditMetricKey | null) {
+    setActiveMetric(key);
+    setMetricsUsed(true);
+    setOnlyCurrentCashSession(false);
+
+    if (key === 'suspiciousDismissals') {
+      handleTabChange('lpr');
+      handleLprFiltersChange({ ...lprFilters, severity: ['warn'] });
+      return;
+    }
+
+    if (activeTab === 'lpr') {
+      handleTabChange('events');
+      handleLprFiltersChange({ ...lprFilters, severity: [] });
+    }
+  }
+
   function handleDateRangeChange(next: DateRange | undefined) {
     setDateRange(next);
     setLprPageIndex(0);
@@ -1491,9 +1645,14 @@ export function AuditoriaPage() {
     setLprPageIndex(0);
   }
 
+  const auditDateQuery = useMemo(
+    () => dateRangeToAuditQuery(dateRange),
+    [dateRange],
+  );
   const auditQuery = useQuery({
-    queryKey: ['audit', sucursalId],
-    queryFn: () => listAuditEvents(sucursalId, { limit: FETCH_LIMIT }),
+    queryKey: ['audit', sucursalId, auditDateQuery.from, auditDateQuery.to],
+    queryFn: () =>
+      listAuditEvents(sucursalId, { limit: FETCH_LIMIT, ...auditDateQuery }),
     enabled: Boolean(sucursalId),
     staleTime: 30_000,
   });
@@ -1547,7 +1706,14 @@ export function AuditoriaPage() {
   }, [activeCashSession]);
 
   const rows = useMemo(() => {
-    return periodRows.filter((row) => {
+    // La métrica seleccionada se aplica ANTES que todo lo demás: es el filtro
+    // que el dueño pidió explícitamente tocando la card.
+    const base =
+      activeMetric && isEventMetric(activeMetric)
+        ? filterRowsByMetric(periodRows, activeMetric)
+        : periodRows;
+
+    return base.filter((row) => {
       if (onlyCurrentCashSession) {
         return activeCashSession
           ? row.cashSessionId === activeCashSession.id
@@ -1555,9 +1721,11 @@ export function AuditoriaPage() {
       }
       return true;
     });
-  }, [activeCashSession, onlyCurrentCashSession, periodRows]);
+  }, [activeCashSession, activeMetric, onlyCurrentCashSession, periodRows]);
 
-  const lprEvents = lprQuery.data?.items ?? [];
+  // Memorizado y no `?? []` suelto: un array nuevo en cada render invalidaba
+  // los memos de abajo que dependen de él, y los recalculaba siempre.
+  const lprEvents = useMemo(() => lprQuery.data?.items ?? [], [lprQuery.data]);
   const lprRowsForCount = useMemo(
     () => lprEvents.map((event) => lprEventToAuditRow(event)),
     [lprEvents],
@@ -1583,42 +1751,33 @@ export function AuditoriaPage() {
     visibleCount ??
     rows.filter((row) => row.severity === 'warn' || row.severity === 'crit')
       .length;
-  const riskMetrics = useMemo<AuditRiskMetrics>(() => {
-    let underchargedLoss = 0;
-    let chargeReductionLoss = 0;
-    let suggestedReductionRisk = 0;
+  // Las cards resumen el PERÍODO auditado, no lo que quedó filtrado en la
+  // tabla. El período es la autoridad; si las cards siguieran los filtros,
+  // tocar una card —que los limpia— cambiaría el número justo cuando el dueño
+  // fue a buscarlo. Y salen del mismo módulo que decide qué filas mostrar, así
+  // que el número y las filas no se pueden contradecir.
+  const riskMetrics = useMemo<AuditRiskMetrics>(
+    () => computeRiskMetrics(periodRows, suspiciousDismissals),
+    [periodRows, suspiciousDismissals],
+  );
 
-    periodRows.forEach((row) => {
-      if (row.actionKind === 'entry.undercharged') {
-        underchargedLoss += Math.max(row.impactAmount ?? 0, 0);
-        return;
-      }
-
-      if (row.actionKind !== 'entry.corrected') return;
-
-      const chargedDelta =
-        row.economicImpact?.chargedDelta ?? row.impactAmount ?? null;
-      if (chargedDelta !== null && chargedDelta < -0.005) {
-        chargeReductionLoss += Math.abs(chargedDelta);
-      }
-
-      const suggestedDelta = row.economicImpact?.suggestedDelta;
-      if (suggestedDelta !== null && suggestedDelta !== undefined) {
-        if (suggestedDelta < -0.005) {
-          suggestedReductionRisk += Math.abs(suggestedDelta);
-        }
-      }
-    });
-
-    return {
-      chargeReductionLoss,
-      periodEvents: eventsCount,
-      possibleLoss: underchargedLoss + chargeReductionLoss,
-      suspiciousDismissals,
-      suggestedReductionRisk,
-      underchargedLoss,
-    };
-  }, [periodRows, suspiciousDismissals, eventsCount]);
+  /**
+   * Si la métrica filtrada se queda sin nada, se apaga sola.
+   *
+   * Pasa al mover el período: filtrás por pérdidas y después elegís una semana
+   * que no tuvo ninguna. Sin esto quedaría una card apagada —porque vale $0—
+   * pero encendida como filtro, con una tabla vacía y sin forma obvia de
+   * salir, ya que la card que habría que tocar para apagarla está
+   * deshabilitada.
+   */
+  useEffect(() => {
+    if (activeMetric === null) return;
+    const value =
+      activeMetric === 'suspiciousDismissals'
+        ? riskMetrics.suspiciousDismissals
+        : riskMetrics[activeMetric];
+    if (value <= 0) setActiveMetric(null);
+  }, [activeMetric, riskMetrics]);
 
   const cashSessionOptions = useMemo(() => {
     const byId = new Map<string, string>();
@@ -1846,11 +2005,21 @@ export function AuditoriaPage() {
         }
         action={
           <div className="audit-header-actions">
-            <DateRangeFilter
-              value={dateRange}
-              onChange={handleDateRangeChange}
-              placeholder="Período auditado"
-            />
+            {/* El período es la AUTORIDAD de esta pantalla: define qué resumen
+                las cards de arriba y acota todo lo que se ve abajo. Va
+                destacado porque antes se perdía entre los botones y alguien
+                podía estar mirando números de otra semana sin darse cuenta. */}
+            <div className="audit-period-picker">
+              <span className="audit-period-picker-label">
+                <CalendarDays size={14} />
+                Período auditado
+              </span>
+              <DateRangeFilter
+                value={dateRange}
+                onChange={handleDateRangeChange}
+                placeholder="Todo el historial"
+              />
+            </div>
             <Button
               variant="secondary"
               size="sm"
@@ -1872,7 +2041,11 @@ export function AuditoriaPage() {
         }
       />
 
-      <AuditRiskOverview metrics={riskMetrics} />
+      <AuditRiskOverview
+        activeMetric={activeMetric}
+        metrics={riskMetrics}
+        onSelectMetric={handleSelectMetric}
+      />
 
       <div className="audit-tabs" role="tablist" aria-label="Auditoría">
         <button
@@ -1920,6 +2093,10 @@ export function AuditoriaPage() {
           </div>
         ) : (
           <DataTable<AuditRow>
+            // La `key` fuerza el remonte al cambiar de métrica. Es lo que
+            // cumple "la card manda": se van la búsqueda, los filtros de
+            // columna y la paginación, y queda sólo el filtro de la card.
+            key={`${metricsUsed ? 'metric' : 'inicial'}-${activeMetric ?? 'todo'}`}
             data={rows}
             columns={columns}
             isLoading={auditQuery.isLoading}
@@ -1963,7 +2140,14 @@ export function AuditoriaPage() {
                 { value: 'unknown', label: 'Sin origen' },
               ],
             }}
-            initialColumnFilters={AUDIT_INITIAL_COLUMN_FILTERS}
+            // Desde el primer click en una card se arranca SIN filtros de
+            // columna. El de severidad por defecto esconde los `info`, así que
+            // dejarlo haría que la card diga 12 y la tabla muestre 3 — y eso
+            // vale también al LIMPIAR: si "Eventos auditables" dice 300, tienen
+            // que aparecer 300.
+            initialColumnFilters={
+              metricsUsed ? [] : AUDIT_INITIAL_COLUMN_FILTERS
+            }
             initialColumnVisibility={AUDIT_INITIAL_COLUMN_VISIBILITY}
             getRowId={(row) => row.id}
             initialPageSize={10}
@@ -2011,6 +2195,26 @@ export function AuditoriaPage() {
           tenantId={sucursalId}
         />
       )}
+
+      {activeTab === 'events' &&
+        !auditQuery.isError &&
+        auditQuery.data &&
+        auditQuery.data.length >= FETCH_LIMIT && (
+          <p style={{ margin: '8px 0', color: 'var(--text-3)', fontSize: 12 }}>
+            Se cargaron hasta {FETCH_LIMIT.toLocaleString('es-AR')} eventos para
+            este período. Acotá las fechas si necesitás ver otros.
+          </p>
+        )}
+
+      {activeTab === 'lpr' &&
+        lprQuery.data &&
+        lprQuery.data.total > lprQuery.data.items.length && (
+          <p style={{ margin: '8px 0', color: 'var(--text-3)', fontSize: 12 }}>
+            Se cargaron {lprQuery.data.items.length.toLocaleString('es-AR')} de{' '}
+            {lprQuery.data.total.toLocaleString('es-AR')} descartes. Acotá las
+            fechas para ver otros.
+          </p>
+        )}
 
       <AuditDetailDrawer
         row={selected}

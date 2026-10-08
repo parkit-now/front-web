@@ -1,4 +1,4 @@
-import { fmtMoney0 } from '../../../../shared/utils/fmt';
+import { fmtMoney } from '../../../../shared/utils/fmt';
 import { Sparkline } from '../../../../shared/components/Sparkline';
 import { ProgressBar } from '../../../../shared/components/ProgressBar';
 import { Skeleton } from '../../../../shared/components/ui/Skeleton';
@@ -12,6 +12,7 @@ interface KpiCardsProps {
   kpis: OwnerKpis | undefined;
   loading: boolean;
   monthLoading?: boolean;
+  monthError?: boolean;
 }
 
 function ProjectionPill({
@@ -60,7 +61,7 @@ function ProjectionPill({
           overflowWrap: 'anywhere',
         }}
       >
-        {fmtMoney0(value)}
+        {fmtMoney(value)}
       </p>
       <p
         style={{
@@ -256,7 +257,7 @@ function KpiRecaudacionDia({ kpis, loading }: KpiCardsProps) {
               fontFamily: 'var(--mono)',
             }}
           >
-            {fmtMoney0(kpis?.today.revenue ?? 0)}
+            {kpis ? fmtMoney(kpis.today.revenue) : 'No disponible'}
           </span>
           <p style={{ margin: '4px 0 0', fontSize: 12, color: deltaColor }}>
             {noBaseline
@@ -296,7 +297,12 @@ function KpiRecaudacionDia({ kpis, loading }: KpiCardsProps) {
   );
 }
 
-function KpiRecaudacionMes({ kpis, loading, monthLoading }: KpiCardsProps) {
+function KpiRecaudacionMes({
+  kpis,
+  loading,
+  monthLoading,
+  monthError,
+}: KpiCardsProps) {
   return (
     <div className="pk-card" style={{ padding: '14px 16px' }}>
       <p className="pk-label" style={{ marginBottom: 6 }}>
@@ -327,7 +333,9 @@ function KpiRecaudacionMes({ kpis, loading, monthLoading }: KpiCardsProps) {
                 fontFamily: 'var(--mono)',
               }}
             >
-              {fmtMoney0(kpis?.month.revenue ?? 0)}
+              {monthError || kpis?.month.revenue == null
+                ? 'No disponible'
+                : fmtMoney(kpis.month.revenue)}
             </span>
             <Sparkline
               data={kpis?.month.sparkline ?? []}
@@ -338,8 +346,20 @@ function KpiRecaudacionMes({ kpis, loading, monthLoading }: KpiCardsProps) {
           <p
             style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-3)' }}
           >
-            Acumulado del mes en curso
+            Acumulado hasta la hora indicada
           </p>
+          {monthError && (
+            <p
+              role="alert"
+              style={{
+                margin: '4px 0 0',
+                color: 'var(--err-text)',
+                fontSize: 12,
+              }}
+            >
+              No se pudo cargar la recaudación del mes.
+            </p>
+          )}
           <ProjectionGrid>
             <ProjectionPill
               label="Proyección con autos en base"
@@ -373,12 +393,18 @@ function KpiRecaudacionMes({ kpis, loading, monthLoading }: KpiCardsProps) {
   );
 }
 
-export function KpiCards({ kpis, loading, monthLoading }: KpiCardsProps) {
+export function KpiCards({
+  kpis,
+  loading,
+  monthLoading,
+  monthError,
+}: KpiCardsProps) {
   return (
     <div
       style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
+        alignItems: 'start',
         gap: 10,
         marginBottom: 10,
       }}
@@ -389,6 +415,7 @@ export function KpiCards({ kpis, loading, monthLoading }: KpiCardsProps) {
         kpis={kpis}
         loading={loading}
         monthLoading={monthLoading}
+        monthError={monthError}
       />
     </div>
   );

@@ -4,7 +4,77 @@ import type {
   TopPlatesOrderBy,
   VehicleCategoryBreakdown,
 } from '../../services/metrics';
-import { AR_TZ, type Granularity } from '../../../../shared/utils/ar-datetime';
+import {
+  AR_TZ,
+  arDayKey,
+  type Granularity,
+} from '../../../../shared/utils/ar-datetime';
+
+export const WEEKDAYS = [
+  'Lunes',
+  'Martes',
+  'Miércoles',
+  'Jueves',
+  'Viernes',
+  'Sábado',
+  'Domingo',
+];
+export type WeekdayMode = 'total' | 'average';
+
+export function groupByWeekday(
+  buckets: {
+    key: string;
+    revenue: number;
+    vehiclesIn: number;
+    vehiclesOut: number;
+  }[],
+  mode: WeekdayMode,
+) {
+  if (buckets.length === 0) return [];
+  const grouped = WEEKDAYS.map((key) => ({
+    key,
+    revenue: 0,
+    vehiclesIn: 0,
+    vehiclesOut: 0,
+    days: 0,
+  }));
+  for (const bucket of buckets) {
+    const [year, month, day] = bucket.key.slice(0, 10).split('-').map(Number);
+    if (!year || !month || !day) continue;
+    const index =
+      (new Date(Date.UTC(year, month - 1, day)).getUTCDay() + 6) % 7;
+    const target = grouped[index];
+    target.revenue += bucket.revenue;
+    target.vehiclesIn += bucket.vehiclesIn;
+    target.vehiclesOut += bucket.vehiclesOut;
+    target.days += 1;
+  }
+  return grouped.map((bucket) => ({
+    ...bucket,
+    revenue:
+      mode === 'average' && bucket.days
+        ? bucket.revenue / bucket.days
+        : bucket.revenue,
+    vehiclesIn:
+      mode === 'average' && bucket.days
+        ? bucket.vehiclesIn / bucket.days
+        : bucket.vehiclesIn,
+    vehiclesOut:
+      mode === 'average' && bucket.days
+        ? bucket.vehiclesOut / bucket.days
+        : bucket.vehiclesOut,
+  }));
+}
+
+export function weekdayRangeTooLong(from: string, to: string) {
+  const start = arDayKey(new Date(from));
+  const end = arDayKey(new Date(to));
+  const days =
+    (Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) /
+      86_400_000 +
+    1;
+  return days > 1000;
+}
 
 const MONTHS_SHORT = [
   'Ene',

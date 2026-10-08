@@ -14,10 +14,12 @@ import {
   formatCashSessionLabel,
   formatMinutes,
   formatWindowLabel,
+  groupByWeekday,
   hasInconsistentUnallocated,
   hasUncategorizedStays,
   niceTicks,
   sortTopPlates,
+  weekdayRangeTooLong,
 } from './transform';
 
 function makeBreakdown(
@@ -399,5 +401,45 @@ describe('hasUncategorizedStays', () => {
         categories: [{ category: 'car', stays: 2, revenue: 0, share: 1 }],
       }),
     ).toBe(false);
+  });
+});
+describe('agrupación por día de semana', () => {
+  const buckets = [
+    { key: '2026-10-05', revenue: 100, vehiclesIn: 2, vehiclesOut: 1 },
+    { key: '2026-10-06', revenue: 0, vehiclesIn: 0, vehiclesOut: 0 },
+    { key: '2026-10-12', revenue: 300, vehiclesIn: 4, vehiclesOut: 3 },
+  ];
+  it('suma cada día y conserva días sin movimientos', () => {
+    const result = groupByWeekday(buckets, 'total');
+    expect(result).toHaveLength(7);
+    expect(result[0]).toMatchObject({
+      key: 'Lunes',
+      revenue: 400,
+      vehiclesIn: 6,
+      days: 2,
+    });
+    expect(result[1]).toMatchObject({ key: 'Martes', revenue: 0, days: 1 });
+  });
+  it('divide por todas las ocurrencias del día', () => {
+    expect(groupByWeekday(buckets, 'average')[0]).toMatchObject({
+      revenue: 200,
+      vehiclesIn: 3,
+      days: 2,
+    });
+  });
+  it('mantiene vacío el gráfico sin buckets y limita por fechas argentinas inclusivas', () => {
+    expect(groupByWeekday([], 'total')).toEqual([]);
+    expect(
+      weekdayRangeTooLong(
+        '2026-10-05T12:00:00-03:00',
+        '2026-10-06T12:00:00-03:00',
+      ),
+    ).toBe(false);
+    expect(
+      weekdayRangeTooLong(
+        '2024-01-01T12:00:00-03:00',
+        '2026-10-01T12:00:00-03:00',
+      ),
+    ).toBe(true);
   });
 });
