@@ -445,7 +445,7 @@ export function EstadisticasPage() {
                 value={cashSessionId}
                 onChange={(event) => setCashSessionId(event.target.value)}
                 disabled={cashSessionsQuery.isLoading}
-                style={{ width: 240, display: 'inline-block' }}
+                style={{ width: 240 }}
               >
                 <option value="">Elegí un turno</option>
                 {cashSessions.map((session) => (
@@ -486,7 +486,7 @@ export function EstadisticasPage() {
               className="pk-input"
               value={paymentMethod}
               onChange={(event) => setPaymentMethod(event.target.value)}
-              style={{ width: 180, display: 'inline-block' }}
+              style={{ width: 180 }}
             >
               <option value="">Todos</option>
               {(paymentMethodsQuery.data ?? []).map((method) => (
@@ -508,7 +508,7 @@ export function EstadisticasPage() {
                 )
               }
               disabled={categoriesLoading}
-              style={{ width: 180, display: 'inline-block' }}
+              style={{ width: 180 }}
             >
               <option value="">Todas</option>
               {categories.map((category) => (
@@ -529,7 +529,7 @@ export function EstadisticasPage() {
                   event.target.value as Granularity | 'weekday',
                 )
               }
-              style={{ width: 150, display: 'inline-block' }}
+              style={{ width: 150 }}
             >
               {GRANULARITIES.map((option) => {
                 const disabled = option === 'hour' && !hourAllowed;
