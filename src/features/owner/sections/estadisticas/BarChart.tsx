@@ -130,11 +130,6 @@ export function BarChart({
                   // Toda la columna es hoverable, no solo la parte pintada: si
                   // no, un bucket en cero no tendría cómo mostrar su valor.
                   onMouseEnter={() => setHovered(i)}
-                  title={
-                    labels
-                      ? `${labels[i]}: ${formatValue(value)}${tooltipDetails?.[i] ? ` · ${tooltipDetails[i]}` : ''}`
-                      : formatValue(value)
-                  }
                   style={{
                     flex: 1,
                     minWidth: 0,
