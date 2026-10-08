@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DataTable } from './DataTable';
 import {
+  readTableTemplateCollection,
   saveTableTemplate,
   type TableViewConfig,
 } from '../table-view-template';
@@ -193,6 +194,97 @@ it('conserva filtros independientes de marca, modelo y color en una sola columna
   expect(container.querySelector('.dt-filter-panel')?.textContent).toContain(
     'Color',
   );
+});
+
+it('recupera Vehículo de una plantilla antigua sin perder filtros ni una ocultación posterior', async () => {
+  const vehicles = [
+    { brand: 'Toyota', model: 'Etios', color: 'BLANCO' },
+    { brand: 'Ford', model: 'Focus', color: 'ROJO' },
+  ];
+  const vehicleColumns: ColumnDef<(typeof vehicles)[number], unknown>[] = [
+    {
+      id: 'vehicle',
+      header: 'Vehículo',
+      accessorFn: (row) => `${row.brand} ${row.model} ${row.color}`,
+    },
+    ...(['brand', 'model', 'color'] as const).map((key) => ({
+      accessorKey: key,
+      header: key,
+      enableHiding: false,
+      meta: { filterOnly: true, displayColumnId: 'vehicle' },
+    })),
+  ];
+  saveTableTemplate(scope, {
+    name: 'Vista antigua',
+    config: {
+      ...savedConfig,
+      columns: {
+        visibility: {
+          vehicle: false,
+          brand: false,
+          model: false,
+          color: false,
+        },
+        order: ['brand', 'model', 'color', 'vehicle'],
+        pinnedLeft: [],
+      },
+      filters: [{ id: 'brand', value: ['Toyota'] }],
+    },
+  });
+
+  const table = () => (
+    <DataTable
+      data={vehicles}
+      columns={vehicleColumns}
+      templateScope={scope}
+      filterableColumns={['brand', 'model', 'color']}
+    />
+  );
+  await act(() => Promise.resolve(root.render(table())));
+  expect(container.querySelector('thead')?.textContent).toContain('Vehículo');
+  expect(rows()).toHaveLength(1);
+  expect(rows()[0]).toContain('Toyota');
+
+  await act(() =>
+    Promise.resolve(
+      container
+        .querySelector<HTMLButtonElement>('[title="Columnas visibles"]')
+        ?.click(),
+    ),
+  );
+  const vehicleCheckbox =
+    container.querySelector<HTMLInputElement>('#dt-column-vehicle');
+  expect(vehicleCheckbox?.checked).toBe(true);
+  await act(() => Promise.resolve(vehicleCheckbox?.click()));
+  expect(container.querySelector('thead')?.textContent).not.toContain(
+    'Vehículo',
+  );
+
+  await act(() =>
+    Promise.resolve(
+      container
+        .querySelector<HTMLButtonElement>('[title="Plantillas de tabla"]')
+        ?.click(),
+    ),
+  );
+  await act(() =>
+    Promise.resolve(
+      [...container.querySelectorAll<HTMLButtonElement>('button')]
+        .find((button) => button.textContent?.includes('Actualizar actual'))
+        ?.click(),
+    ),
+  );
+  const savedVisibility =
+    readTableTemplateCollection(scope).templates[0]?.config.columns.visibility;
+  expect(savedVisibility).toEqual({ vehicle: false });
+
+  await act(() => Promise.resolve(root.unmount()));
+  root = createRoot(container);
+  await act(() => Promise.resolve(root.render(table())));
+  expect(container.querySelector('thead')?.textContent).not.toContain(
+    'Vehículo',
+  );
+  expect(rows()).toHaveLength(1);
 });
 
 it('mantiene el filtro de comprobante sin mostrar su columna en una vista guardada', async () => {
