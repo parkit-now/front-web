@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -45,7 +46,8 @@ import type { ArcaTaxCondition } from '../../services/arca';
 import { listPaymentMethods } from '../../services/entities';
 import { listAllCashSessions } from '../../services/cash-sessions';
 import {
-  issueInvoiceBatch,
+  getInvoicePreview,
+  issueConfirmedInvoiceBatch,
   listInvoices,
   type InvoiceBatchResult,
 } from '../../services/invoices';
@@ -59,6 +61,10 @@ import {
 } from '../../services/operations';
 import { plateOverlayStyle } from '../auditoria/lprImage';
 import { InvoiceBatchResultModal } from './InvoiceBatchResultModal';
+import {
+  InvoiceBatchConfirmModal,
+  type InvoiceBatchPreviewItem,
+} from './InvoiceBatchConfirmModal';
 import { InvoiceDetail, type ArcaInvoicing } from './InvoiceDetail';
 import {
   canIssueInvoice,
@@ -426,10 +432,18 @@ export function HistorialPage({
   const [photoRow, setPhotoRow] = useState<EntryHistoryRow | null>(null);
   const [visibleEntryIds, setVisibleEntryIds] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [batchPreparing, setBatchPreparing] = useState(false);
+  const [batchPreview, setBatchPreview] = useState<{
+    tenantId: string;
+    items: InvoiceBatchPreviewItem[];
+  } | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchResults, setBatchResults] = useState<InvoiceBatchResult[] | null>(
     null,
   );
+  const batchPreparingRef = useRef(false);
+  const batchRunningRef = useRef(false);
+  const batchGenerationRef = useRef(0);
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const arcaQuery = useArcaAccount(sucursalId);
@@ -583,6 +597,20 @@ export function HistorialPage({
     () => selectedIds.filter((id) => issuableIds.has(id)),
     [issuableIds, selectedIds],
   );
+
+  useEffect(() => {
+    batchGenerationRef.current += 1;
+    batchPreparingRef.current = false;
+    batchRunningRef.current = false;
+    setBatchPreparing(false);
+    setBatchPreview(null);
+    setBatchRunning(false);
+    setBatchResults(null);
+    setSelectedIds([]);
+    return () => {
+      batchGenerationRef.current += 1;
+    };
+  }, [sucursalId]);
 
   const cashSessionOptions = useMemo(
     () =>
@@ -874,7 +902,8 @@ export function HistorialPage({
     ]);
   }, [queryClient, sucursalId]);
 
-  async function issueSelected() {
+  async function prepareSelected() {
+    if (batchPreparingRef.current || batchRunningRef.current) return;
     // En el orden de la tabla (el más reciente primero), no en el de los clics.
     const ordered = rows
       .map((row) => row.id)
@@ -883,18 +912,82 @@ export function HistorialPage({
       ...ordered,
       ...selectedIssuable.filter((id) => !ordered.includes(id)),
     ];
-    if (ids.length === 0) return;
+    const rowById = new Map(baseRows.map((row) => [row.id, row]));
+    const selectedRows = ids
+      .map((id) => rowById.get(id))
+      .filter((row): row is EntryHistoryRow => Boolean(row));
+    if (selectedRows.length === 0) return;
+    batchPreparingRef.current = true;
+    setBatchPreparing(true);
+    const generation = batchGenerationRef.current;
+    try {
+      const items: InvoiceBatchPreviewItem[] = [];
+      for (let start = 0; start < selectedRows.length; start += 5) {
+        const page = selectedRows.slice(start, start + 5);
+        const previews = await Promise.all(
+          page.map((row) => getInvoicePreview(sucursalId, row.id)),
+        );
+        page.forEach((row, index) => {
+          items.push({
+            entryId: row.id,
+            plate: row.plate,
+            ticketNumber: row.ticketNumber ?? null,
+            amount: previews[index].amount,
+          });
+        });
+      }
+      if (batchGenerationRef.current === generation) {
+        setBatchPreview({ tenantId: sucursalId, items });
+      }
+    } catch (error) {
+      if (batchGenerationRef.current === generation)
+        showToast({
+          message: translateApiError(error, { endpoint: 'invoices.issue' }),
+          kind: 'error',
+        });
+    } finally {
+      if (batchGenerationRef.current === generation) {
+        batchPreparingRef.current = false;
+        setBatchPreparing(false);
+      }
+    }
+  }
+
+  async function issueSelected() {
+    if (
+      !batchPreview ||
+      batchRunningRef.current ||
+      batchPreview.items.length === 0
+    )
+      return;
+    const confirmed = batchPreview;
+    const generation = batchGenerationRef.current;
+    batchRunningRef.current = true;
     setBatchRunning(true);
     try {
-      setBatchResults(await issueInvoiceBatch(sucursalId, ids));
+      const results = await issueConfirmedInvoiceBatch(
+        confirmed.tenantId,
+        confirmed.items.map((item) => ({
+          entryId: item.entryId,
+          expectedAmount: item.amount,
+        })),
+      );
+      if (batchGenerationRef.current !== generation) return;
+      setBatchResults(results);
+      setBatchPreview(null);
       setSelectedIds([]);
     } catch (error) {
+      if (batchGenerationRef.current !== generation) return;
+      setBatchPreview(null);
       showToast({
-        message: translateApiError(error, { endpoint: 'invoices.batch' }),
+        message: `${translateApiError(error, { endpoint: 'invoices.issue' })} Revisá el estado de las facturas antes de reintentar.`,
         kind: 'error',
       });
     } finally {
-      setBatchRunning(false);
+      if (batchGenerationRef.current === generation) {
+        batchRunningRef.current = false;
+        setBatchRunning(false);
+      }
       void refreshInvoicing();
     }
   }
@@ -1034,9 +1127,9 @@ export function HistorialPage({
                       actions: (
                         <Button
                           size="sm"
-                          loading={batchRunning}
+                          loading={batchPreparing || batchRunning}
                           disabled={selectedIssuable.length === 0}
-                          onClick={() => void issueSelected()}
+                          onClick={() => void prepareSelected()}
                         >
                           Emitir a consumidor final ({selectedIssuable.length})
                         </Button>
@@ -1078,7 +1171,7 @@ export function HistorialPage({
             />
           </>
         ),
-        Boolean(selectedId || photoRow || batchResults),
+        Boolean(selectedId || photoRow || batchPreview || batchResults),
       )}
 
       <EntryDetailDrawer
@@ -1106,6 +1199,12 @@ export function HistorialPage({
         results={batchResults}
         plateByEntryId={plateByEntryId}
         onClose={() => setBatchResults(null)}
+      />
+      <InvoiceBatchConfirmModal
+        items={batchPreview?.items ?? null}
+        loading={batchRunning}
+        onClose={() => setBatchPreview(null)}
+        onConfirm={() => void issueSelected()}
       />
     </div>
   );

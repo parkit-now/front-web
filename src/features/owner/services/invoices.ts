@@ -1,5 +1,5 @@
 import type { components } from '../../../generated/api-types';
-import { apiRequest } from '../../../lib/api/client';
+import { ApiError, apiRequest } from '../../../lib/api/client';
 import { getSession } from '../../../lib/supabase/session';
 
 export type Invoice = components['schemas']['InvoiceDto'];
@@ -154,6 +154,51 @@ export async function issueInvoiceBatch(
       bearer: token,
     });
     results.push(...page.results);
+  }
+  return results;
+}
+
+// El endpoint batch no acepta expectedAmount; cada POST individual respeta el importe confirmado.
+export async function issueConfirmedInvoiceBatch(
+  tenantId: string,
+  entries: readonly { entryId: string; expectedAmount: number }[],
+): Promise<InvoiceBatchResult[]> {
+  const results: InvoiceBatchResult[] = [];
+  for (const [index, entry] of entries.entries()) {
+    let errorCode: string | null;
+    try {
+      const invoice = await issueInvoice(
+        tenantId,
+        entry.entryId,
+        undefined,
+        entry.expectedAmount,
+      );
+      errorCode =
+        invoice.status === 'issued'
+          ? null
+          : (invoice.errorCode ?? 'INTERNAL_ERROR');
+      results.push({ entryId: entry.entryId, invoice, errorCode });
+    } catch (error) {
+      if (
+        !(error instanceof ApiError) ||
+        ![404, 409, 422].includes(error.status) ||
+        !error.problem?.code
+      ) {
+        throw error;
+      }
+      errorCode = error.problem.code;
+      results.push({ entryId: entry.entryId, invoice: null, errorCode });
+    }
+    if (errorCode === 'ARCA_UNAVAILABLE') {
+      results.push(
+        ...entries.slice(index + 1).map((remaining) => ({
+          entryId: remaining.entryId,
+          invoice: null,
+          errorCode,
+        })),
+      );
+      break;
+    }
   }
   return results;
 }
