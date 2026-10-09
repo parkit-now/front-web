@@ -706,6 +706,57 @@
   font-weight: 700;
 }
 
+.operation-batch-confirm-intro {
+  margin: 0 0 12px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.operation-batch-confirm-list {
+  border-top: 1px solid var(--border-soft);
+}
+
+.operation-batch-confirm-row,
+.operation-batch-confirm-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 14px;
+}
+
+.operation-batch-confirm-row > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.operation-batch-confirm-row span {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.operation-batch-confirm-row > strong,
+.operation-batch-confirm-total > strong:last-child {
+  flex: none;
+  text-align: right;
+}
+
+.operation-batch-confirm-total {
+  border-bottom: 0;
+  color: var(--text-1);
+}
+
+.operation-batch-confirm-note {
+  margin: 8px 0 0;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .operation-batch-list {
   display: grid;
   gap: 8px;
