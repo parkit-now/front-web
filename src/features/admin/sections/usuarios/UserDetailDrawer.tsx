@@ -327,6 +327,11 @@ export function UserDetailDrawer({
                 {user.memberships.map((m) => {
                   const otherRole: MembershipRole =
                     m.role === 'owner' ? 'operator' : 'owner';
+                  // El estacionamiento está dado de baja pero todavía no
+                  // purgado. La membresía se muestra igual —esconderla diría
+                  // que esta persona no tiene acceso, y no es cierto: vuelve
+                  // sola si se restaura— pero marcada y sin acciones.
+                  const eliminado = Boolean(m.parkingDeletedAt);
                   return (
                     <div
                       key={m.parkingId}
@@ -338,6 +343,7 @@ export function UserDetailDrawer({
                         background: 'var(--bg-b)',
                         border: '1px solid var(--border-soft)',
                         borderRadius: 'var(--r-md)',
+                        opacity: eliminado ? 0.65 : 1,
                       }}
                     >
                       <div
@@ -361,47 +367,68 @@ export function UserDetailDrawer({
                         >
                           {m.parkingName}
                         </span>
+                        {eliminado ? (
+                          <Badge variant="err">Eliminado</Badge>
+                        ) : null}
                         <Badge
                           variant={m.role === 'owner' ? 'brand' : 'default'}
                         >
                           {roleLabel(m.role)}
                         </Badge>
                       </div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'flex-end',
-                          gap: 8,
-                        }}
-                      >
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setPending({
-                              kind: 'changeMembership',
-                              parkingId: m.parkingId,
-                              parkingName: m.parkingName,
-                              nextRole: otherRole,
-                            })
-                          }
+                      {eliminado ? (
+                        /* Sin acciones mientras está dado de baja. Cambiarle el
+                           rol a alguien en un estacionamiento que no existe no
+                           significa nada, y quitarle el acceso es peor: si
+                           después se restaura, esa persona lo perdió sin que
+                           nadie lo decidiera. El camino correcto es restaurar
+                           primero. */
+                        <span
+                          style={{
+                            fontSize: 12,
+                            color: 'var(--text-3)',
+                            textAlign: 'right',
+                          }}
                         >
-                          Pasar a {roleLabel(otherRole).toLowerCase()}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setPending({
-                              kind: 'removeMembership',
-                              parkingId: m.parkingId,
-                              parkingName: m.parkingName,
-                            })
-                          }
+                          Restaurá el estacionamiento para gestionar su personal
+                        </span>
+                      ) : (
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: 8,
+                          }}
                         >
-                          Quitar
-                        </Button>
-                      </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setPending({
+                                kind: 'changeMembership',
+                                parkingId: m.parkingId,
+                                parkingName: m.parkingName,
+                                nextRole: otherRole,
+                              })
+                            }
+                          >
+                            Pasar a {roleLabel(otherRole).toLowerCase()}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setPending({
+                                kind: 'removeMembership',
+                                parkingId: m.parkingId,
+                                parkingName: m.parkingName,
+                              })
+                            }
+                          >
+                            Quitar
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
