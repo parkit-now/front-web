@@ -53,6 +53,13 @@ describe('diffInvoiceModes', () => {
       { id: 'a', invoiceMode: 'auto' },
     ]);
   });
+
+  it('incluye Manual con pendiente entre los cambios para guardar', () => {
+    const methods = [makeMethod({ invoiceMode: 'manual' })];
+    expect(diffInvoiceModes(methods, { '1': 'manual_pending' })).toEqual([
+      { id: '1', invoiceMode: 'manual_pending' },
+    ]);
+  });
 });
 
 describe('didIvaRateChange', () => {
@@ -71,12 +78,12 @@ describe('didIvaRateChange', () => {
 });
 
 describe('describeInvoiceEffect', () => {
-  it('describe los tres modos', () => {
-    expect(describeInvoiceEffect('none')).toContain('No se factura');
+  it('describe los cuatro modos', () => {
+    expect(describeInvoiceEffect('none')).toContain('No se puede emitir');
     expect(describeInvoiceEffect('auto')).toContain('al confirmar el pago');
-    expect(describeInvoiceEffect('manual')).toContain(
-      'No se factura al cobrar',
+    expect(describeInvoiceEffect('manual')).toContain('queda no facturada');
+    expect(describeInvoiceEffect('manual_pending')).toContain(
+      'queda pendiente',
     );
-    expect(describeInvoiceEffect('manual')).toContain('Historial');
   });
 });

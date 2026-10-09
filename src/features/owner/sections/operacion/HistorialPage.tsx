@@ -42,6 +42,7 @@ import { fmtDateTimeAr, fmtMoney } from '../../../../shared/utils/fmt';
 import { useSucursal } from '../../context/SucursalContext';
 import { useArcaAccount } from '../../hooks/useArcaAccount';
 import type { ArcaTaxCondition } from '../../services/arca';
+import { listPaymentMethods } from '../../services/entities';
 import { listAllCashSessions } from '../../services/cash-sessions';
 import {
   issueInvoiceBatch,
@@ -61,6 +62,7 @@ import { InvoiceBatchResultModal } from './InvoiceBatchResultModal';
 import { InvoiceDetail, type ArcaInvoicing } from './InvoiceDetail';
 import {
   canIssueInvoice,
+  formatExternalInvoice,
   INVOICE_STATE_LABEL,
   INVOICE_STATE_ORDER,
   INVOICE_STATE_VARIANT,
@@ -152,7 +154,7 @@ function InvoiceCell({ row }: { row: EntryHistoryRow }) {
       ) : null}
       {row.invoiceState === 'manual' && row.manualInvoiceNumber ? (
         <span className="operation-invoice-number">
-          N° {row.manualInvoiceNumber}
+          {formatExternalInvoice(row)}
         </span>
       ) : null}
     </div>
@@ -177,7 +179,7 @@ function invoiceExportValue(row: EntryHistoryRow): string {
   return [
     INVOICE_STATE_LABEL[row.invoiceState],
     row.invoiceState === 'manual' && row.manualInvoiceNumber
-      ? `Número ${row.manualInvoiceNumber}`
+      ? formatExternalInvoice(row)
       : null,
     letter ? `Factura ${letter}` : invoice ? voucherLabel(invoice) : null,
     number,
@@ -316,6 +318,7 @@ function EntryDetailDrawer({
   tenantId,
   arca,
   emitter,
+  paymentModeAllowed,
   onInvoiceChanged,
   onClose,
 }: {
@@ -324,6 +327,7 @@ function EntryDetailDrawer({
   tenantId: string;
   arca: ArcaInvoicing;
   emitter: ArcaTaxCondition | null;
+  paymentModeAllowed: boolean;
   onInvoiceChanged: () => void;
   onClose: () => void;
 }) {
@@ -387,6 +391,7 @@ function EntryDetailDrawer({
               tenantId={tenantId}
               arca={arca}
               emitter={emitter}
+              paymentModeAllowed={paymentModeAllowed}
               onChanged={onInvoiceChanged}
             />
           ) : null}
@@ -452,6 +457,11 @@ export function HistorialPage({
   const paymentsQuery = useQuery({
     queryKey: ['owner-operations', sucursalId, 'payment-transactions'],
     queryFn: () => listPaymentTransactions(sucursalId),
+    enabled: Boolean(sucursalId),
+  });
+  const paymentMethodsQuery = useQuery({
+    queryKey: ['owner-operations', sucursalId, 'payment-methods'],
+    queryFn: () => listPaymentMethods(sucursalId),
     enabled: Boolean(sucursalId),
   });
   const invoicesQuery = useQuery({
@@ -538,14 +548,34 @@ export function HistorialPage({
     () => new Map(baseRows.map((row) => [row.id, row.plate])),
     [baseRows],
   );
+  const invoiceModeByMethodId = useMemo(
+    () =>
+      new Map(
+        (paymentMethodsQuery.data ?? []).map((method) => [
+          method.id,
+          method.invoiceMode,
+        ]),
+      ),
+    [paymentMethodsQuery.data],
+  );
   const issuableIds = useMemo(
     () =>
       new Set(
         baseRows
-          .filter((row) => canIssueInvoice(row.invoiceState, arca !== 'none'))
+          .filter(
+            (row) =>
+              canIssueInvoice(row.invoiceState, arca !== 'none') &&
+              row.paymentLines.length > 0 &&
+              row.paymentLines.every((line) => {
+                const mode = line.paymentMethodId
+                  ? invoiceModeByMethodId.get(line.paymentMethodId)
+                  : undefined;
+                return mode !== undefined && mode !== 'none';
+              }),
+          )
           .map((row) => row.id),
       ),
-    [arca, baseRows],
+    [arca, baseRows, invoiceModeByMethodId],
   );
   // Lo elegido que ya no se puede emitir (se emitió, o cambió el filtro de
   // ARCA) sale solo de la selección.
@@ -814,29 +844,34 @@ export function HistorialPage({
     entriesQuery.isLoading ||
     sessionsQuery.isLoading ||
     paymentsQuery.isLoading ||
+    paymentMethodsQuery.isLoading ||
     invoicesQuery.isLoading;
   const isError =
     entriesQuery.isError ||
     sessionsQuery.isError ||
     paymentsQuery.isError ||
+    paymentMethodsQuery.isError ||
     invoicesQuery.isError;
 
   function refreshAll() {
     void entriesQuery.refetch();
     void sessionsQuery.refetch();
     void paymentsQuery.refetch();
+    void paymentMethodsQuery.refetch();
     void invoicesQuery.refetch();
     void lprEventsQuery.refetch();
   }
 
   /** Después de emitir o marcar: facturas y estadías (por la `version`). */
-  const refreshInvoicing = useCallback(() => {
-    void queryClient.invalidateQueries({
-      queryKey: ['owner-operations', sucursalId, 'invoices'],
-    });
-    void queryClient.invalidateQueries({
-      queryKey: ['owner-operations', sucursalId, 'entries'],
-    });
+  const refreshInvoicing = useCallback(async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: ['owner-operations', sucursalId, 'invoices'],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ['owner-operations', sucursalId, 'entries'],
+      }),
+    ]);
   }, [queryClient, sucursalId]);
 
   async function issueSelected() {
@@ -860,7 +895,7 @@ export function HistorialPage({
       });
     } finally {
       setBatchRunning(false);
-      refreshInvoicing();
+      void refreshInvoicing();
     }
   }
 
@@ -1056,7 +1091,8 @@ export function HistorialPage({
         tenantId={sucursalId}
         arca={arca}
         emitter={arcaQuery.data?.condicionIva ?? null}
-        onInvoiceChanged={refreshInvoicing}
+        paymentModeAllowed={selected ? issuableIds.has(selected.id) : false}
+        onInvoiceChanged={() => void refreshInvoicing()}
         onClose={() => setSelectedId(null)}
       />
 

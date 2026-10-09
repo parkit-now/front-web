@@ -204,3 +204,23 @@ export async function setEntryManualInvoiceNumber(
     bearer: await bearer(),
   });
 }
+
+export async function setEntryExternalInvoice(
+  tenantId: string,
+  entry: Pick<Entry, 'id' | 'version'>,
+  details: {
+    manualInvoiceType: 'A' | 'B' | 'C';
+    manualInvoicePointOfSale: string;
+    manualInvoiceNumber: string;
+  } | null,
+): Promise<Entry> {
+  const body: components['schemas']['CorrectEntryDto'] = details
+    ? { manuallyInvoiced: true, ...details }
+    : { manuallyInvoiced: false };
+  return apiRequest<Entry>({
+    method: 'PATCH',
+    path: `/tenants/${encodeURIComponent(tenantId)}/entries/${encodeURIComponent(entry.id)}/correction?expectedVersion=${entry.version}`,
+    body,
+    bearer: await bearer(),
+  });
+}

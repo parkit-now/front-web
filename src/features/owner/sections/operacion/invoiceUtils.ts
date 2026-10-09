@@ -27,7 +27,7 @@ export const INVOICE_STATE_LABEL: Record<InvoiceState, string> = {
   issuing: 'Emitiendo',
   error: 'Con error',
   pending: 'Pendiente',
-  manual: 'Facturada a mano',
+  manual: 'Facturada',
   none: 'No facturado',
   na: 'No aplica',
 };
@@ -77,6 +77,18 @@ export function formatVoucherNumber(
   return `${String(ptoVta).padStart(4, '0')}-${String(cbteNro).padStart(8, '0')}`;
 }
 
+export function formatExternalInvoice(input: {
+  manualInvoiceType?: string | null;
+  manualInvoicePointOfSale?: string | null;
+  manualInvoiceNumber?: string | null;
+}): string | null {
+  if (!input.manualInvoiceNumber) return null;
+  if (!input.manualInvoiceType || !input.manualInvoicePointOfSale) {
+    return input.manualInvoiceNumber;
+  }
+  return `Factura ${input.manualInvoiceType} ${input.manualInvoicePointOfSale.padStart(5, '0')}-${input.manualInvoiceNumber.padStart(8, '0')}`;
+}
+
 /** Sin extension: el navegador la agrega al guardar como PDF. */
 export function invoicePdfTitle(input: {
   plate: string;
@@ -109,9 +121,11 @@ export function resolveInvoiceState(
   },
   invoice: Pick<Invoice, 'status'> | undefined,
 ): InvoiceState {
+  if (invoice?.status === 'issued' || invoice?.status === 'issuing') {
+    return invoice.status;
+  }
+  if (entry.manuallyInvoiced) return 'manual';
   switch (invoice?.status) {
-    case 'issued':
-    case 'issuing':
     case 'error':
     case 'pending':
       return invoice.status;

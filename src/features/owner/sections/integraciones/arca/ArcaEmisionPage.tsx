@@ -52,12 +52,11 @@ const TH_STYLE: React.CSSProperties = {
   color: 'var(--text-3)',
 };
 
-/** El selector de modo va chico: dos opciones cortas en una fila de tabla. */
 const MODE_SELECT_STYLE: React.CSSProperties = {
-  width: 'auto',
-  minWidth: 130,
-  height: 32,
-  padding: '4px 8px',
+  width: 210,
+  maxWidth: '100%',
+  height: 38,
+  padding: '6px 10px',
   fontSize: 13,
 };
 
@@ -169,7 +168,7 @@ export function ArcaEmisionPage() {
   const header = (
     <SectionHeader
       title="Configurar emisión"
-      subtitle="Elegí qué medios de pago pueden facturar manual o automáticamente al cobrar."
+      subtitle="Elegí cuándo y cómo se factura cada medio de pago."
     />
   );
 
@@ -269,7 +268,7 @@ export function ArcaEmisionPage() {
         next[m.id] = 'none';
       } else if (next[m.id] === 'none') {
         // Se marca todo: los que estaban apagados arrancan en automática, y
-        // los que ya tenían un modo elegido (auto/manual) lo conservan.
+        // los que ya tenían un modo elegido lo conservan.
         next[m.id] = 'auto';
       }
     }
@@ -287,9 +286,7 @@ export function ArcaEmisionPage() {
     inicioDraft !== (account.inicioActividad ?? '');
   const invoiceDataMissing = isArcaInvoiceDataMissing(account);
 
-  const facturaLetra = isResponsableInscripto
-    ? 'Factura B a consumidor final'
-    : 'Factura C';
+  const facturaLetra = isResponsableInscripto ? 'Factura B' : 'Factura C';
 
   return (
     <div>
@@ -320,7 +317,7 @@ export function ArcaEmisionPage() {
             {isResponsableInscripto
               ? 'Responsable Inscripto'
               : 'Monotributo/Exento'}
-            ), al cobrar se emite automáticamente{' '}
+            ), los comprobantes a consumidor final que emita Parkit serán{' '}
             <strong>{facturaLetra}</strong>.
           </p>
 
@@ -379,25 +376,25 @@ export function ArcaEmisionPage() {
                         </td>
                         <td style={TD_STYLE}>{m.name}</td>
                         <td style={TD_STYLE}>
-                          {checked ? (
-                            <select
-                              className="pk-input"
-                              style={MODE_SELECT_STYLE}
-                              value={mode}
-                              onChange={(e) =>
-                                setMode(
-                                  m.id,
-                                  e.target.value as PaymentMethodInvoiceMode,
-                                )
-                              }
-                              disabled={!canManage || saveMutation.isPending}
-                            >
-                              <option value="auto">Automática</option>
-                              <option value="manual">Manual</option>
-                            </select>
-                          ) : (
-                            <span style={{ color: 'var(--text-3)' }}>—</span>
-                          )}
+                          <select
+                            className="pk-input"
+                            style={MODE_SELECT_STYLE}
+                            value={mode}
+                            onChange={(e) =>
+                              setMode(
+                                m.id,
+                                e.target.value as PaymentMethodInvoiceMode,
+                              )
+                            }
+                            disabled={!canManage || saveMutation.isPending}
+                          >
+                            <option value="none">Desactivado</option>
+                            <option value="manual">Manual</option>
+                            <option value="manual_pending">
+                              Manual con pendiente
+                            </option>
+                            <option value="auto">Automática</option>
+                          </select>
                         </td>
                         <td style={{ ...TD_STYLE, color: 'var(--text-2)' }}>
                           {describeInvoiceEffect(mode)}

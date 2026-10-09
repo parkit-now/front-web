@@ -16,15 +16,19 @@ import { Switch } from '../../../../shared/components/ui/Switch';
 import type { ArcaTaxCondition } from '../../services/arca';
 import {
   getInvoiceDocument,
+  setEntryExternalInvoice,
   setEntryManualInvoiceNumber,
   setEntryManuallyInvoiced,
+  type Invoice,
 } from '../../services/invoices';
+import type { Entry } from '../../services/operations';
 import { renderInvoiceHtml } from './invoiceDocument';
 import { InvoiceReceiverChooser } from './InvoiceReceiverChooser';
 import {
   canIssueInvoice,
   describeIssueConfirmation,
   expectedLetter,
+  formatExternalInvoice,
   invoicePdfTitle,
   formatIsoDay,
   INVOICE_STATE_LABEL,
@@ -66,6 +70,7 @@ export function InvoiceDetail({
   tenantId,
   arca,
   emitter,
+  paymentModeAllowed,
   onChanged,
 }: {
   row: EntryHistoryRow;
@@ -73,7 +78,8 @@ export function InvoiceDetail({
   arca: ArcaInvoicing;
   /** Condición IVA de la sede: decide la letra a consumidor final. */
   emitter: ArcaTaxCondition | null;
-  onChanged: () => void;
+  paymentModeAllowed: boolean;
+  onChanged: () => void | Promise<void>;
 }) {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
@@ -81,10 +87,29 @@ export function InvoiceDetail({
   const [manualNumberDraft, setManualNumberDraft] = useState(
     row.manualInvoiceNumber ?? '',
   );
+  const [externalOpen, setExternalOpen] = useState(false);
+  const [removeExternalOpen, setRemoveExternalOpen] = useState(false);
+  const [externalType, setExternalType] = useState<'A' | 'B' | 'C'>(
+    (row.manualInvoiceType as 'A' | 'B' | 'C') ?? 'C',
+  );
+  const [externalPoint, setExternalPoint] = useState(
+    row.manualInvoicePointOfSale ?? '',
+  );
+  const [externalNumber, setExternalNumber] = useState(
+    row.manualInvoiceNumber ?? '',
+  );
 
   useEffect(() => {
     setManualNumberDraft(row.manualInvoiceNumber ?? '');
-  }, [row.id, row.manualInvoiceNumber]);
+    setExternalType((row.manualInvoiceType as 'A' | 'B' | 'C') ?? 'C');
+    setExternalPoint(row.manualInvoicePointOfSale ?? '');
+    setExternalNumber(row.manualInvoiceNumber ?? '');
+  }, [
+    row.id,
+    row.manualInvoiceNumber,
+    row.manualInvoiceType,
+    row.manualInvoicePointOfSale,
+  ]);
   const confirmation = useInvoiceConfirmation(tenantId, row.id);
   const actionBusy = busy !== null || confirmation.busy;
   // «Emitir factura» abre primero el receptor (consumidor final o CUIT).
@@ -126,7 +151,7 @@ export function InvoiceDetail({
         });
       }
     });
-    onChanged();
+    void onChanged();
   }
 
   async function downloadPdf() {
@@ -174,7 +199,7 @@ export function InvoiceDetail({
       });
     } finally {
       setBusy(null);
-      onChanged();
+      await onChanged();
     }
   }
 
@@ -192,7 +217,7 @@ export function InvoiceDetail({
         manualNumberDraft.trim(),
       );
       showToast({ message: 'Número de factura guardado.', kind: 'success' });
-      onChanged();
+      await onChanged();
     } catch (error) {
       showToast({
         message: translateApiError(error, {
@@ -205,11 +230,100 @@ export function InvoiceDetail({
     }
   }
 
+  async function saveExternalInvoice() {
+    if (
+      actionBusy ||
+      !/^\d{1,5}$/.test(externalPoint) ||
+      !/^\d{1,8}$/.test(externalNumber)
+    )
+      return;
+    setBusy('manual');
+    try {
+      const updated = await setEntryExternalInvoice(tenantId, row, {
+        manualInvoiceType: externalType,
+        manualInvoicePointOfSale: externalPoint,
+        manualInvoiceNumber: externalNumber,
+      });
+      applyExternalInvoiceResult(updated);
+      setExternalOpen(false);
+      showToast({ message: 'Factura externa registrada.', kind: 'success' });
+      await onChanged();
+    } catch (error) {
+      showToast({
+        message: translateApiError(error, {
+          endpoint: 'entries.setManuallyInvoiced',
+        }),
+        kind: 'error',
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function removeExternalInvoice() {
+    setBusy('manual');
+    try {
+      const updated = await setEntryExternalInvoice(tenantId, row, null);
+      applyExternalInvoiceResult(updated);
+      setRemoveExternalOpen(false);
+      setExternalOpen(false);
+      showToast({
+        message: 'Registro de factura externa quitado.',
+        kind: 'success',
+      });
+      await onChanged();
+    } catch (error) {
+      showToast({
+        message: translateApiError(error, {
+          endpoint: 'entries.setManuallyInvoiced',
+        }),
+        kind: 'error',
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function applyExternalInvoiceResult(updated: Entry) {
+    queryClient.setQueryData<Entry[]>(
+      ['owner-operations', tenantId, 'entries'],
+      (entries) =>
+        entries?.map((entry) => (entry.id === updated.id ? updated : entry)),
+    );
+    queryClient.setQueryData<Invoice[]>(
+      ['owner-operations', tenantId, 'invoices'],
+      (invoices) =>
+        invoices?.map((item) =>
+          item.entryId === updated.id &&
+          item.status !== 'issued' &&
+          item.status !== 'issuing'
+            ? {
+                ...item,
+                status: 'not_required',
+                errorCode: null,
+                errorMessage: null,
+              }
+            : item,
+        ),
+    );
+  }
+
   // Sin ARCA, lo único que hay es el checkbox «Facturada» (lo que el dueño
   // facturó por su cuenta). Con una factura de ARCA de por medio, no se ofrece.
   const showManual =
     arca === 'none' && (invoiceState === 'none' || invoiceState === 'manual');
-  const showIssue = canIssueInvoice(invoiceState, arca !== 'none');
+  const showExternal =
+    arca !== 'none' &&
+    (invoiceState === 'none' ||
+      invoiceState === 'pending' ||
+      invoiceState === 'error' ||
+      invoiceState === 'manual');
+  const externalSaved = showExternal && row.manuallyInvoiced;
+  const showIssue =
+    canIssueInvoice(invoiceState, arca !== 'none') &&
+    paymentModeAllowed &&
+    !row.manuallyInvoiced &&
+    !externalOpen;
 
   return (
     <div className="operation-invoice">
@@ -239,6 +353,11 @@ export function InvoiceDetail({
         ) : null}
         {invoice && hasVoucher ? (
           <Item label="Receptor">{receiverDescription(invoice)}</Item>
+        ) : null}
+        {externalSaved ? (
+          <Item label="Comprobante externo">
+            {formatExternalInvoice(row) ?? 'Registrado fuera de Parkit'}
+          </Item>
         ) : null}
       </div>
       {invoiceState === 'issued' ? (
@@ -353,7 +472,101 @@ export function InvoiceDetail({
             Facturada
           </label>
         ) : null}
+        {showExternal && !externalOpen ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={actionBusy}
+            onClick={() => {
+              setIssueOpen(false);
+              setExternalOpen(true);
+            }}
+          >
+            {externalSaved
+              ? 'Editar factura externa'
+              : 'Registrar factura externa'}
+          </Button>
+        ) : null}
+        {externalSaved && !externalOpen ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={actionBusy}
+            onClick={() => setRemoveExternalOpen(true)}
+          >
+            Quitar registro
+          </Button>
+        ) : null}
       </div>
+      {showExternal && externalOpen ? (
+        <div className="operation-external-invoice">
+          <div className="operation-external-invoice-fields">
+            <label>
+              Tipo
+              <select
+                className="pk-input"
+                value={externalType}
+                disabled={actionBusy}
+                onChange={(event) =>
+                  setExternalType(event.target.value as 'A' | 'B' | 'C')
+                }
+              >
+                <option value="A">Factura A</option>
+                <option value="B">Factura B</option>
+                <option value="C">Factura C</option>
+              </select>
+            </label>
+            <label>
+              Punto de venta
+              <input
+                className="pk-input"
+                inputMode="numeric"
+                maxLength={5}
+                value={externalPoint}
+                disabled={actionBusy}
+                onChange={(event) =>
+                  setExternalPoint(event.target.value.replace(/\D/g, ''))
+                }
+              />
+            </label>
+            <label>
+              Número
+              <input
+                className="pk-input"
+                inputMode="numeric"
+                maxLength={8}
+                value={externalNumber}
+                disabled={actionBusy}
+                onChange={(event) =>
+                  setExternalNumber(event.target.value.replace(/\D/g, ''))
+                }
+              />
+            </label>
+          </div>
+          <div className="operation-invoice-actions">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={actionBusy}
+              onClick={() => setExternalOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              loading={busy === 'manual'}
+              disabled={
+                actionBusy ||
+                !/^\d{1,5}$/.test(externalPoint) ||
+                !/^\d{1,8}$/.test(externalNumber)
+              }
+              onClick={() => void saveExternalInvoice()}
+            >
+              Guardar factura externa
+            </Button>
+          </div>
+        </div>
+      ) : null}
       {showManual && invoiceState === 'manual' ? (
         <div className="operation-manual-invoice-number">
           <label htmlFor={`manual-invoice-number-${row.id}`}>
@@ -402,6 +615,16 @@ export function InvoiceDetail({
           onConfirm={() => void issue()}
         />
       ) : null}
+      <ConfirmDialog
+        open={removeExternalOpen}
+        title="Quitar factura externa"
+        message="Parkit volverá a mostrar esta estadía como no facturada. Esto no modifica la factura emitida en ARCA."
+        confirmLabel="Quitar registro"
+        destructive
+        loading={busy === 'manual'}
+        onClose={() => setRemoveExternalOpen(false)}
+        onConfirm={() => void removeExternalInvoice()}
+      />
     </div>
   );
 }

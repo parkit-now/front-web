@@ -102,6 +102,7 @@ beforeEach(() => {
     entries,
     'cash-sessions': sessions,
     'payment-transactions': [],
+    'payment-methods': [],
     invoices: [],
   })) {
     client.setQueryData(['owner-operations', 'tenant', key], value);

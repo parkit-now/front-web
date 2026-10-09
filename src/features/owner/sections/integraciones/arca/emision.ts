@@ -70,10 +70,12 @@ export function didIvaRateChange(
 export function describeInvoiceEffect(mode: PaymentMethodInvoiceMode): string {
   switch (mode) {
     case 'none':
-      return 'No se factura automáticamente; se puede emitir a pedido.';
+      return 'No se puede emitir una factura al cobrar ni desde el Historial.';
     case 'auto':
-      return 'Se emite la factura al confirmar el pago.';
+      return 'Se intenta emitir al confirmar el pago; si falla, queda pendiente.';
     case 'manual':
-      return 'No se factura al cobrar; se puede emitir desde el Historial.';
+      return 'Se puede emitir al cobrar o después; si no se emite, queda no facturada.';
+    case 'manual_pending':
+      return 'Se puede emitir al cobrar o después; si no se emite, queda pendiente.';
   }
 }
