@@ -320,6 +320,64 @@
   overflow-wrap: anywhere;
 }
 
+.operation-notes {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.operation-notes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.operation-notes > p {
+  margin: 0;
+  color: var(--text-1);
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.operation-notes > p.operation-muted {
+  color: var(--text-3);
+}
+
+.operation-notes-edit {
+  display: grid;
+  gap: 8px;
+}
+
+.operation-notes-edit label {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.operation-notes-edit textarea {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+}
+
+.operation-notes-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.operation-notes-actions > span {
+  margin-right: auto;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
 .operation-payment-lines {
   display: grid;
   gap: 6px;
@@ -568,6 +626,69 @@
 
 .operation-invoice {
   margin-top: 22px;
+}
+
+.operation-invoice-reminder {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+
+.operation-invoice-reminder > span {
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.operation-invoice-reminder > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.operation-invoice-reminder button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.operation-invoice-reminder button.active {
+  border-color: var(--border);
+  background: var(--card);
+  color: var(--brand);
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08);
+}
+
+.operation-invoice-reminder button:hover:not(:disabled):not(.active) {
+  background: var(--card);
+}
+
+.operation-invoice-reminder button:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.operation-invoice-reminder button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .operation-manual-invoice-number {

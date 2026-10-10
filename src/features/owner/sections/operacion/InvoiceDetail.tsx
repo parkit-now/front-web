@@ -1,7 +1,7 @@
 import QRCode from 'qrcode';
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Save } from 'lucide-react';
+import { Bell, BellOff, Save } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
   translateApiError,
@@ -21,7 +21,7 @@ import {
   setEntryManuallyInvoiced,
   type Invoice,
 } from '../../services/invoices';
-import type { Entry } from '../../services/operations';
+import { correctEntry, type Entry } from '../../services/operations';
 import { renderInvoiceHtml } from './invoiceDocument';
 import { InvoiceReceiverChooser } from './InvoiceReceiverChooser';
 import {
@@ -71,6 +71,7 @@ export function InvoiceDetail({
   arca,
   emitter,
   paymentModeAllowed,
+  canManage = false,
   onChanged,
 }: {
   row: EntryHistoryRow;
@@ -79,11 +80,14 @@ export function InvoiceDetail({
   /** Condición IVA de la sede: decide la letra a consumidor final. */
   emitter: ArcaTaxCondition | null;
   paymentModeAllowed: boolean;
+  canManage?: boolean;
   onChanged: () => void | Promise<void>;
 }) {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
-  const [busy, setBusy] = useState<'pdf' | 'manual' | 'number' | null>(null);
+  const [busy, setBusy] = useState<
+    'pdf' | 'manual' | 'number' | 'reminder' | null
+  >(null);
   const [manualNumberDraft, setManualNumberDraft] = useState(
     row.manualInvoiceNumber ?? '',
   );
@@ -308,11 +312,32 @@ export function InvoiceDetail({
     );
   }
 
+  async function setInvoicePending(next: boolean) {
+    if (actionBusy || !showReminder || next === (invoiceState === 'pending'))
+      return;
+    setBusy('reminder');
+    try {
+      await correctEntry(tenantId, row, { invoicePending: next });
+      await onChanged();
+      showToast({
+        message: next
+          ? 'Factura marcada como pendiente.'
+          : 'Factura marcada como no facturada.',
+        kind: 'success',
+      });
+    } catch (error) {
+      showToast({ message: translateApiError(error), kind: 'error' });
+    } finally {
+      setBusy(null);
+    }
+  }
+
   // Sin ARCA, lo único que hay es el checkbox «Facturada» (lo que el dueño
   // facturó por su cuenta). Con una factura de ARCA de por medio, no se ofrece.
   const showManual =
     arca === 'none' && (invoiceState === 'none' || invoiceState === 'manual');
   const showExternal =
+    canManage &&
     arca !== 'none' &&
     (invoiceState === 'none' ||
       invoiceState === 'pending' ||
@@ -324,6 +349,12 @@ export function InvoiceDetail({
     paymentModeAllowed &&
     !row.manuallyInvoiced &&
     !externalOpen;
+  const showReminder =
+    canManage &&
+    Boolean(row.leftAt) &&
+    (row.paidTotal ?? 0) > 0 &&
+    !row.manuallyInvoiced &&
+    (invoiceState === 'none' || invoiceState === 'pending');
 
   return (
     <div className="operation-invoice">
@@ -360,6 +391,34 @@ export function InvoiceDetail({
           </Item>
         ) : null}
       </div>
+      {showReminder ? (
+        <div
+          className="operation-invoice-reminder"
+          aria-label="Seguimiento de factura"
+        >
+          <span>Seguimiento</span>
+          <div role="group" aria-label="Estado de seguimiento">
+            <button
+              type="button"
+              className={invoiceState === 'none' ? 'active' : ''}
+              aria-pressed={invoiceState === 'none'}
+              disabled={actionBusy}
+              onClick={() => void setInvoicePending(false)}
+            >
+              <BellOff size={15} aria-hidden="true" /> No facturado
+            </button>
+            <button
+              type="button"
+              className={invoiceState === 'pending' ? 'active' : ''}
+              aria-pressed={invoiceState === 'pending'}
+              disabled={actionBusy}
+              onClick={() => void setInvoicePending(true)}
+            >
+              <Bell size={15} aria-hidden="true" /> Pendiente
+            </button>
+          </div>
+        </div>
+      ) : null}
       {invoiceState === 'issued' ? (
         <ClientContact
           tenantId={tenantId}

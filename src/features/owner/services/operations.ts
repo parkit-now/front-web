@@ -6,6 +6,7 @@ export type Entry = components['schemas']['EntryDto'];
 export type PaymentTransaction = components['schemas']['PaymentTransactionDto'];
 export type PaymentTransactionChangesResponse =
   components['schemas']['PaymentTransactionChangesResponseDto'];
+type CorrectEntryBody = components['schemas']['CorrectEntryDto'];
 
 const CHANGES_PAGE_SIZE = 500;
 
@@ -21,6 +22,19 @@ export async function listEntries(tenantId: string): Promise<Entry[]> {
   return apiRequest<Entry[]>({
     method: 'GET',
     path: `/tenants/${encodeURIComponent(tenantId)}/entries`,
+    bearer: await bearer(),
+  });
+}
+
+export async function correctEntry(
+  tenantId: string,
+  entry: Pick<Entry, 'id' | 'version'>,
+  body: CorrectEntryBody,
+): Promise<Entry> {
+  return apiRequest<Entry>({
+    method: 'PATCH',
+    path: `/tenants/${encodeURIComponent(tenantId)}/entries/${encodeURIComponent(entry.id)}/correction?expectedVersion=${entry.version}`,
+    body,
     bearer: await bearer(),
   });
 }

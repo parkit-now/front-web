@@ -66,6 +66,7 @@ import {
   type InvoiceBatchPreviewItem,
 } from './InvoiceBatchConfirmModal';
 import { InvoiceDetail, type ArcaInvoicing } from './InvoiceDetail';
+import { EntryNotesEditor } from './EntryNotesEditor';
 import {
   canIssueInvoice,
   formatExternalInvoice,
@@ -325,6 +326,7 @@ function EntryDetailDrawer({
   arca,
   emitter,
   paymentModeAllowed,
+  canManage,
   onInvoiceChanged,
   onClose,
 }: {
@@ -334,7 +336,8 @@ function EntryDetailDrawer({
   arca: ArcaInvoicing;
   emitter: ArcaTaxCondition | null;
   paymentModeAllowed: boolean;
-  onInvoiceChanged: () => void;
+  canManage: boolean;
+  onInvoiceChanged: () => void | Promise<void>;
   onClose: () => void;
 }) {
   return (
@@ -378,8 +381,15 @@ function EntryDetailDrawer({
             <DetailItem label="Cochera">
               {row.cochera || <MutedDash />}
             </DetailItem>
-            <DetailItem label="Notas">{row.notes || <MutedDash />}</DetailItem>
           </div>
+
+          <EntryNotesEditor
+            key={row.id}
+            entry={row}
+            tenantId={tenantId}
+            canEdit={canManage}
+            onChanged={onInvoiceChanged}
+          />
 
           <div style={{ marginTop: 22 }}>
             <h3 className="operation-panel-title" style={{ fontSize: 15 }}>
@@ -398,6 +408,7 @@ function EntryDetailDrawer({
               arca={arca}
               emitter={emitter}
               paymentModeAllowed={paymentModeAllowed}
+              canManage={canManage}
               onChanged={onInvoiceChanged}
             />
           ) : null}
@@ -1185,7 +1196,8 @@ export function HistorialPage({
         arca={arca}
         emitter={arcaQuery.data?.condicionIva ?? null}
         paymentModeAllowed={selected ? issuableIds.has(selected.id) : false}
-        onInvoiceChanged={() => void refreshInvoicing()}
+        canManage={sucursal?.role === 'owner'}
+        onInvoiceChanged={refreshInvoicing}
         onClose={() => setSelectedId(null)}
       />
 

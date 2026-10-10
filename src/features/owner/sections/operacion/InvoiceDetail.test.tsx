@@ -6,6 +6,7 @@ import { InvoiceDetail } from './InvoiceDetail';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { EntryHistoryRow } from './operationUtils';
 import { setEntryExternalInvoice } from '../../services/invoices';
+import { correctEntry } from '../../services/operations';
 
 vi.mock('../../../../lib/notifications/ToastProvider', () => ({
   useToast: () => ({ showToast: vi.fn() }),
@@ -15,6 +16,9 @@ vi.mock('../../services/invoices', () => ({
   setEntryManualInvoiceNumber: vi.fn(),
   setEntryManuallyInvoiced: vi.fn(),
   setEntryExternalInvoice: vi.fn(),
+}));
+vi.mock('../../services/operations', () => ({
+  correctEntry: vi.fn(),
 }));
 vi.mock('./useInvoiceReceiver', () => ({
   useInvoiceReceiver: () => ({
@@ -101,6 +105,7 @@ it('con ARCA ofrece registrar una pendiente y no emitir si ya es externa', () =>
           arca="linked"
           emitter="monotributo"
           paymentModeAllowed={paymentModeAllowed}
+          canManage
           onChanged={vi.fn()}
         />
       </QueryClientProvider>,
@@ -152,6 +157,7 @@ it('guarda tipo, punto de venta y número de una factura externa', async () => {
           arca="linked"
           emitter="monotributo"
           paymentModeAllowed
+          canManage
           onChanged={vi.fn()}
         />
       </QueryClientProvider>,
@@ -172,4 +178,96 @@ it('guarda tipo, punto de venta y número de una factura externa', async () => {
     manualInvoicePointOfSale: '7',
     manualInvoiceNumber: '42',
   });
+});
+
+it('el dueño puede alternar Pendiente y No facturado, también sin ARCA', async () => {
+  const onChanged = vi.fn().mockResolvedValue(undefined);
+  const row = {
+    id: 'entry-4',
+    version: 5,
+    plate: 'ABC123',
+    leftAt: '2026-10-10T10:00:00Z',
+    paidTotal: 5000,
+    invoice: null,
+    invoiceState: 'none',
+    manuallyInvoiced: false,
+  } as EntryHistoryRow;
+  vi.mocked(correctEntry).mockResolvedValue(row);
+  const renderRow = (current: EntryHistoryRow) =>
+    root.render(
+      <QueryClientProvider client={new QueryClient()}>
+        <InvoiceDetail
+          row={current}
+          tenantId="tenant-1"
+          arca="none"
+          emitter={null}
+          paymentModeAllowed={false}
+          canManage
+          onChanged={onChanged}
+        />
+      </QueryClientProvider>,
+    );
+
+  act(() => renderRow(row));
+  const reminder = container.querySelector('.operation-invoice-reminder')!;
+  expect(reminder).toBeTruthy();
+  const pendingButton = [...reminder.querySelectorAll('button')].find(
+    (button) => button.textContent?.trim() === 'Pendiente',
+  )!;
+  await act(async () => {
+    pendingButton.click();
+    await Promise.resolve();
+  });
+  expect(correctEntry).toHaveBeenCalledWith('tenant-1', row, {
+    invoicePending: true,
+  });
+  expect(onChanged).toHaveBeenCalledOnce();
+
+  const pendingRow = {
+    ...row,
+    version: 6,
+    invoiceState: 'pending' as const,
+    invoice: { status: 'pending' } as EntryHistoryRow['invoice'],
+  };
+  act(() => renderRow(pendingRow));
+  const noInvoiceButton = [...reminder.querySelectorAll('button')].find(
+    (button) => button.textContent?.trim() === 'No facturado',
+  )!;
+  await act(async () => {
+    noInvoiceButton.click();
+    await Promise.resolve();
+  });
+  expect(correctEntry).toHaveBeenLastCalledWith('tenant-1', pendingRow, {
+    invoicePending: false,
+  });
+});
+
+it('oculta el seguimiento a no dueños y en facturas ya emitidas', () => {
+  const row = {
+    id: 'entry-5',
+    version: 1,
+    plate: 'ABC123',
+    leftAt: '2026-10-10T10:00:00Z',
+    paidTotal: 5000,
+    invoiceState: 'pending',
+    invoice: { status: 'pending' },
+  } as EntryHistoryRow;
+  const renderRow = (canManage: boolean, invoiceState = row.invoiceState) =>
+    root.render(
+      <QueryClientProvider client={new QueryClient()}>
+        <InvoiceDetail
+          row={{ ...row, invoiceState }}
+          tenantId="tenant-1"
+          arca="linked"
+          emitter={null}
+          paymentModeAllowed
+          canManage={canManage}
+          onChanged={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+  act(() => renderRow(false));
+  expect(container.querySelector('.operation-invoice-reminder')).toBeNull();
+  act(() => renderRow(true, 'issued'));
+  expect(container.querySelector('.operation-invoice-reminder')).toBeNull();
 });
