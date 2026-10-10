@@ -86,6 +86,7 @@ export async function issueInvoice(
   entryId: string,
   receiverCuit?: string,
   expectedAmount?: number,
+  arcaAccountId?: string,
 ): Promise<InvoiceSummary> {
   return apiRequest<InvoiceSummary>({
     method: 'POST',
@@ -93,6 +94,7 @@ export async function issueInvoice(
     body: {
       receiverCuit,
       expectedAmount,
+      arcaAccountId,
     } satisfies components['schemas']['IssueInvoiceDto'],
     bearer: await bearer(),
   });
@@ -101,10 +103,11 @@ export async function issueInvoice(
 export async function getInvoicePreview(
   tenantId: string,
   entryId: string,
+  arcaAccountId?: string,
 ): Promise<InvoicePreview> {
   return apiRequest<InvoicePreview>({
     method: 'GET',
-    path: `/tenants/${encodeURIComponent(tenantId)}/entries/${encodeURIComponent(entryId)}/invoice/preview`,
+    path: `/tenants/${encodeURIComponent(tenantId)}/entries/${encodeURIComponent(entryId)}/invoice/preview${arcaAccountId ? `?${new URLSearchParams({ arcaAccountId })}` : ''}`,
     bearer: await bearer(),
   });
 }
@@ -117,10 +120,11 @@ export async function getInvoicePreview(
 export async function lookupTaxpayer(
   tenantId: string,
   cuit: string,
+  arcaAccountId?: string,
 ): Promise<Taxpayer> {
   return apiRequest<Taxpayer>({
     method: 'GET',
-    path: `/tenants/${encodeURIComponent(tenantId)}/arca/taxpayers/${encodeURIComponent(cuit)}`,
+    path: `/tenants/${encodeURIComponent(tenantId)}/arca/taxpayers/${encodeURIComponent(cuit)}${arcaAccountId ? `?${new URLSearchParams({ arcaAccountId })}` : ''}`,
     bearer: await bearer(),
   });
 }
@@ -143,6 +147,7 @@ export async function listInvoiceReceivers(
 export async function issueInvoiceBatch(
   tenantId: string,
   entryIds: readonly string[],
+  arcaAccountId?: string,
 ): Promise<InvoiceBatchResult[]> {
   const token = await bearer();
   const results: InvoiceBatchResult[] = [];
@@ -150,7 +155,10 @@ export async function issueInvoiceBatch(
     const page = await apiRequest<InvoiceBatchResponse>({
       method: 'POST',
       path: `/tenants/${encodeURIComponent(tenantId)}/invoices/batch`,
-      body: { entryIds: entryIds.slice(start, start + INVOICE_BATCH_MAX) },
+      body: {
+        entryIds: entryIds.slice(start, start + INVOICE_BATCH_MAX),
+        arcaAccountId,
+      },
       bearer: token,
     });
     results.push(...page.results);
@@ -162,6 +170,7 @@ export async function issueInvoiceBatch(
 export async function issueConfirmedInvoiceBatch(
   tenantId: string,
   entries: readonly { entryId: string; expectedAmount: number }[],
+  arcaAccountId?: string,
 ): Promise<InvoiceBatchResult[]> {
   const results: InvoiceBatchResult[] = [];
   for (const [index, entry] of entries.entries()) {
@@ -172,6 +181,7 @@ export async function issueConfirmedInvoiceBatch(
         entry.entryId,
         undefined,
         entry.expectedAmount,
+        arcaAccountId,
       );
       errorCode =
         invoice.status === 'issued'
@@ -253,11 +263,18 @@ export async function setEntryManualInvoiceNumber(
 export async function setEntryExternalInvoice(
   tenantId: string,
   entry: Pick<Entry, 'id' | 'version'>,
-  details: {
-    manualInvoiceType: 'A' | 'B' | 'C';
-    manualInvoicePointOfSale: string;
-    manualInvoiceNumber: string;
-  } | null,
+  details:
+    | ({
+        manualInvoiceType: 'A' | 'B' | 'C';
+        manualInvoicePointOfSale: string;
+        manualInvoiceNumber: string;
+      } & Pick<
+        components['schemas']['CorrectEntryDto'],
+        | 'manualInvoiceArcaAccountId'
+        | 'manualInvoiceIssuerCuit'
+        | 'manualInvoiceIssuerName'
+      >)
+    | null,
 ): Promise<Entry> {
   const body: components['schemas']['CorrectEntryDto'] = details
     ? { manuallyInvoiced: true, ...details }

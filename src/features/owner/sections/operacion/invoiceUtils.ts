@@ -217,6 +217,7 @@ export function describeIssueConfirmation(input: {
   cuit: string | null | undefined;
   receiverName?: string | null;
   amount: string;
+  issuerLabel?: string;
 }): { title: string; message: string; confirmLabel: string } {
   const to = input.cuit
     ? input.receiverName
@@ -226,7 +227,7 @@ export function describeIssueConfirmation(input: {
   const name = input.letter ? `la Factura ${input.letter}` : 'la factura';
   return {
     title: `¿Emitir ${name}?`,
-    message: `Se emite ${to} por ${input.amount}. Una factura emitida no se puede anular desde Parkit.`,
+    message: `${input.issuerLabel ? `Emisor: ${input.issuerLabel}. ` : ''}Se emite ${to} por ${input.amount}. Una factura emitida no se puede anular desde Parkit.`,
     confirmLabel: input.letter ? `Emitir Factura ${input.letter}` : 'Emitir',
   };
 }

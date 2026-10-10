@@ -1,6 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { ApiError } from '../../../lib/api/client';
-import { getArcaAccount, type ArcaAccount } from '../services/arca';
+import {
+  getArcaAccount,
+  listArcaAccounts,
+  type ArcaAccount,
+} from '../services/arca';
 
 /**
  * Clave de la cuenta de ARCA de la sede.
@@ -9,8 +13,10 @@ import { getArcaAccount, type ArcaAccount } from '../services/arca';
  * cada mutación (crear, subir certificado, punto de venta, desvincular...):
  * una clave escrita dos veces se desincroniza al primer cambio.
  */
-export function arcaAccountQueryKey(tenantId: string) {
-  return ['arca', 'account', tenantId] as const;
+export function arcaAccountQueryKey(tenantId: string, accountId?: string) {
+  return accountId
+    ? (['arca', 'account', tenantId, accountId] as const)
+    : (['arca', 'account', tenantId] as const);
 }
 
 /**
@@ -22,12 +28,12 @@ export function arcaAccountQueryKey(tenantId: string) {
  * acá y lo devolvemos como `null`, que es lo que la UI entiende por "todavía
  * no vinculaste".
  */
-export function useArcaAccount(tenantId: string) {
+export function useArcaAccount(tenantId: string, accountId?: string) {
   return useQuery<ArcaAccount | null>({
-    queryKey: arcaAccountQueryKey(tenantId),
+    queryKey: arcaAccountQueryKey(tenantId, accountId),
     queryFn: async () => {
       try {
-        return await getArcaAccount(tenantId);
+        return await getArcaAccount(tenantId, accountId);
       } catch (error) {
         if (error instanceof ApiError && error.status === 404) return null;
         throw error;
@@ -40,5 +46,16 @@ export function useArcaAccount(tenantId: string) {
       error instanceof ApiError && error.status >= 400 && error.status < 500
         ? false
         : failureCount < 2,
+  });
+}
+
+export const arcaAccountsQueryKey = (tenantId: string) =>
+  ['arca', 'accounts', tenantId] as const;
+export function useArcaAccounts(tenantId: string) {
+  return useQuery({
+    queryKey: arcaAccountsQueryKey(tenantId),
+    queryFn: () => listArcaAccounts(tenantId),
+    enabled: Boolean(tenantId),
+    staleTime: 30_000,
   });
 }

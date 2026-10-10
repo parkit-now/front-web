@@ -14,13 +14,28 @@ import { listEntries } from '../../services/operations';
 import { HistorialPage } from './HistorialPage';
 
 vi.mock('../../context/SucursalContext', () => ({
-  useSucursal: () => ({ sucursalId: 'tenant', sucursal: { nombre: 'Apex' } }),
+  useSucursal: () => ({
+    sucursalId: 'tenant',
+    sucursal: { nombre: 'Apex', role: 'owner' },
+  }),
 }));
 vi.mock('../../../../lib/supabase/useCurrentUserId', () => ({
   useCurrentUserId: () => 'owner',
 }));
 vi.mock('../../hooks/useArcaAccount', () => ({
   useArcaAccount: () => ({ data: { status: 'linked' } }),
+  useArcaAccounts: () => ({
+    data: [
+      {
+        id: 'primary',
+        role: 'primary',
+        status: 'linked',
+        condicionIva: 'monotributo',
+        cuit: '20123456786',
+        ptoVta: 1,
+      },
+    ],
+  }),
 }));
 vi.mock('../../services/operations', () => ({
   listEntries: vi.fn(),
@@ -180,8 +195,37 @@ it('muestra comprobantes y montos antes de emitir; cancelar no factura', async (
     'Emitir 2 facturas',
     container.querySelector('[aria-label="Confirmar emisión"]')!,
   );
-  expect(issueConfirmedInvoiceBatch).toHaveBeenCalledWith('tenant', [
-    { entryId: 'first', expectedAmount: 1250.25 },
-    { entryId: 'second', expectedAmount: 200 },
-  ]);
+  expect(issueConfirmedInvoiceBatch).toHaveBeenCalledWith(
+    'tenant',
+    [
+      { entryId: 'first', expectedAmount: 1250.25 },
+      { entryId: 'second', expectedAmount: 200 },
+    ],
+    'primary',
+  );
+});
+
+it('permite abrir las notas del movimiento en el drawer del dueño', async () => {
+  await act(() =>
+    Promise.resolve(
+      root.render(
+        <QueryClientProvider client={client}>
+          <ToastProvider>
+            <MemoryRouter>
+              <HistorialPage />
+            </MemoryRouter>
+          </ToastProvider>
+        </QueryClientProvider>,
+      ),
+    ),
+  );
+  await act(() =>
+    Promise.resolve(
+      container.querySelector<HTMLTableRowElement>('tbody tr')!.click(),
+    ),
+  );
+  const drawer = container.querySelector('[role="dialog"]')!;
+  expect(drawer.textContent).toContain('Notas');
+  await clickButton('Editar', drawer);
+  expect(drawer.querySelector('textarea')).toBeTruthy();
 });

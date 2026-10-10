@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '../../../../../lib/api/client';
 import { Alert } from '../../../../../shared/components/ui/Alert';
@@ -24,7 +24,8 @@ import { translateApiError } from '../../../../../lib/api/translate';
 import { useSucursal } from '../../../context/SucursalContext';
 import {
   arcaAccountQueryKey,
-  useArcaAccount,
+  useArcaAccounts,
+  arcaAccountsQueryKey,
 } from '../../../hooks/useArcaAccount';
 import {
   createArcaAccount,
@@ -38,6 +39,7 @@ import {
   type ArcaCertificateResult,
   type ArcaCsr,
   type ArcaEnvironment,
+  type ArcaReusableCertificate,
   type ArcaTaxCondition,
 } from '../../../services/arca';
 import { fmtDateTimeAr } from '../../../../../shared/utils/fmt';
@@ -128,8 +130,16 @@ export function ArcaWizardPage() {
   const queryClient = useQueryClient();
   const canManage = sucursal?.role === 'owner';
 
-  const accountQuery = useArcaAccount(sucursalId);
-  const account = accountQuery.data ?? null;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const role =
+    searchParams.get('role') === 'secondary' ? 'secondary' : 'primary';
+  const accountQuery = useArcaAccounts(sucursalId);
+  const account =
+    (accountQuery.data ?? []).find((a) =>
+      searchParams.get('accountId')
+        ? a.id === searchParams.get('accountId')
+        : a.role === role,
+    ) ?? null;
 
   // Sólo mientras se está subiendo el certificado: pausa el paso 2 en la
   // confirmación del padrón (o el formulario de datos fiscales) hasta que el
@@ -212,7 +222,17 @@ export function ArcaWizardPage() {
   // mostrando el formulario de subida un instante (con el estado viejo en
   // caché) en vez de saltar al resumen del padrón.
   function syncAccount(next: ArcaAccount) {
-    queryClient.setQueryData(arcaAccountQueryKey(sucursalId), next);
+    queryClient.setQueryData(arcaAccountQueryKey(sucursalId, next.id), next);
+    if (next.role === 'primary')
+      queryClient.setQueryData(arcaAccountQueryKey(sucursalId), next);
+    queryClient.setQueryData<ArcaAccount[]>(
+      arcaAccountsQueryKey(sucursalId),
+      (previous) => [
+        ...(previous ?? []).filter((a) => a.role !== next.role),
+        next,
+      ],
+    );
+    setSearchParams({ role: next.role, accountId: next.id }, { replace: true });
   }
 
   function onMutationError(endpoint: Parameters<typeof translateApiError>[1]) {
@@ -226,6 +246,7 @@ export function ArcaWizardPage() {
       createArcaAccount(sucursalId, {
         cuit: input.cuit,
         iibb: input.iibb.trim(),
+        role,
       }),
     // Toda solicitud nueva (primera vez, "Cambiar CUIT" o volver a vincular
     // después de desvincular) arranca el paso 2 de cero. Al re-vincular el
@@ -245,8 +266,8 @@ export function ArcaWizardPage() {
   // necesita para el textarea de "pegar en ARCA", que es el camino principal
   // ahí, no un extra detrás de un click.
   const csrQuery = useQuery({
-    queryKey: ['arca', 'csr', sucursalId],
-    queryFn: () => getArcaCsr(sucursalId),
+    queryKey: ['arca', 'csr', sucursalId, account?.id],
+    queryFn: () => getArcaCsr(sucursalId, account?.id),
     // También mientras se "carga otro certificado" desde el recap del paso
     // 2: ahí también se puede reabrir el sub-paso 3, que necesita el CSR.
     enabled:
@@ -255,14 +276,14 @@ export function ArcaWizardPage() {
   });
 
   const reusableQuery = useQuery({
-    queryKey: ['arca', 'reusable-certificates', sucursalId],
-    queryFn: () => listArcaReusableCertificates(sucursalId),
+    queryKey: ['arca', 'reusable-certificates', sucursalId, account?.id],
+    queryFn: () => listArcaReusableCertificates(sucursalId, account?.id),
     enabled: Boolean(sucursalId) && account?.status === 'pending_certificate',
   });
 
   const reuseMutation = useMutation({
-    mutationFn: (fromTenantId: string) =>
-      reuseArcaCertificate(sucursalId, { fromTenantId }),
+    mutationFn: (fromAccountId: string) =>
+      reuseArcaCertificate(sucursalId, { fromAccountId }, account?.id),
     onSuccess: (result) => {
       syncAccount(result);
       showToast({
@@ -275,7 +296,7 @@ export function ArcaWizardPage() {
 
   const uploadCertMutation = useMutation({
     mutationFn: (certificate: string) =>
-      uploadArcaCertificate(sucursalId, { certificate }),
+      uploadArcaCertificate(sucursalId, { certificate }, account?.id),
     onSuccess: (result) => {
       if (reissuingCertificate) {
         // El backend acepta un certificado nuevo con la cuenta ya en
@@ -311,7 +332,7 @@ export function ArcaWizardPage() {
       razonSocial: string;
       condicionIva: ArcaTaxCondition;
       domicilioFiscal: string;
-    }) => updateArcaAccount(sucursalId, input),
+    }) => updateArcaAccount(sucursalId, input, account?.id),
     onSuccess: (result) => {
       setCertResult(null);
       syncAccount(result);
@@ -322,7 +343,7 @@ export function ArcaWizardPage() {
   // ── Paso 3: punto de venta ───────────────────────────────────────────────────
   const salesPointMutation = useMutation({
     mutationFn: (input: { ptoVta: number; inicioActividad: string }) =>
-      setArcaSalesPoint(sucursalId, input),
+      setArcaSalesPoint(sucursalId, input, account?.id),
     onSuccess: (result) => {
       syncAccount(result);
       showToast({ message: 'ARCA quedó vinculada.', kind: 'success' });
@@ -398,7 +419,11 @@ export function ArcaWizardPage() {
   return (
     <div>
       <SectionHeader
-        title="Vincular ARCA"
+        title={
+          role === 'secondary'
+            ? 'Vincular ARCA · Secundaria'
+            : 'Vincular ARCA · Primaria'
+        }
         subtitle="Facturación electrónica automática al cobrar."
       />
 
@@ -427,7 +452,7 @@ export function ArcaWizardPage() {
 
       <Card padding="lg">
         {naturalStep === 'done' ? (
-          <WizardDone />
+          <WizardDone account={account} />
         ) : (
           <>
             {displayStep === 1 &&
@@ -1189,7 +1214,7 @@ function Step2Upload({
   account: { certAlias: string; environment: ArcaEnvironment; cuit: string };
   csr: ArcaCsr | null;
   csrLoading: boolean;
-  reusable: readonly { tenantId: string; tenantName: string }[];
+  reusable: readonly ArcaReusableCertificate[];
   reusing: boolean;
   verifying: boolean;
   progress: CertProgress;
@@ -1769,13 +1794,13 @@ function Step2Upload({
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {reusable.map((r) => (
                 <Button
-                  key={r.tenantId}
+                  key={r.accountId}
                   variant="secondary"
                   size="sm"
                   loading={reusing}
-                  onClick={() => onReuse(r.tenantId)}
+                  onClick={() => onReuse(r.accountId)}
                 >
-                  {`Usar el certificado de ${r.tenantName}`}
+                  {`Usar el certificado de ${r.tenantName}${r.role ? ` · ${r.role === 'secondary' ? 'Secundaria' : 'Primaria'} · PV ${r.ptoVta ?? '—'}` : ''}`}
                 </Button>
               ))}
             </div>
@@ -2171,14 +2196,18 @@ function Step3Form({
 
 // ── Pantalla final ───────────────────────────────────────────────────────────
 
-function WizardDone() {
+function WizardDone({ account }: { account: ArcaAccount | null }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Alert
         variant="info"
         icon={<IconCheckCircle size={18} />}
         title="ARCA quedó vinculada"
-        description="Ya podés configurar qué medios de pago facturan automáticamente al cobrar."
+        description={
+          account?.role === 'secondary'
+            ? 'La cuenta secundaria ya está disponible. Los modos por medio de pago son compartidos con la primaria.'
+            : 'Ya podés configurar qué medios de pago facturan automáticamente al cobrar.'
+        }
       />
       <div style={ROW}>
         <Link
@@ -2189,7 +2218,7 @@ function WizardDone() {
           Volver a integraciones
         </Link>
         <Link
-          to="../integraciones/arca/emision"
+          to={`../integraciones/arca/emision${account ? `?accountId=${account.id}` : ''}`}
           className="pk-btn pk-btn-primary"
           style={{ textDecoration: 'none' }}
         >

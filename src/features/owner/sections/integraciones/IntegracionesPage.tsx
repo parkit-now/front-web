@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert } from '../../../../shared/components/ui/Alert';
 import { Badge } from '../../../../shared/components/ui/Badge';
@@ -12,7 +12,8 @@ import { useSucursal } from '../../context/SucursalContext';
 import { mpAccountQueryKey, useMpAccount } from '../../hooks/useMpAccount';
 import {
   arcaAccountQueryKey,
-  useArcaAccount,
+  useArcaAccounts,
+  arcaAccountsQueryKey,
 } from '../../hooks/useArcaAccount';
 import { getEntityProfile } from '../../services/entities';
 import {
@@ -115,13 +116,16 @@ export function IntegracionesPage() {
   });
 
   // ── ARCA (facturación electrónica) ────────────────────────────────────────
-  const arcaAccountQuery = useArcaAccount(sucursalId);
+  const arcaAccountQuery = useArcaAccounts(sucursalId);
 
   const arcaUnlinkMutation = useMutation({
-    mutationFn: () => unlinkArcaAccount(sucursalId),
+    mutationFn: (accountId: string) => unlinkArcaAccount(sucursalId, accountId),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: arcaAccountQueryKey(sucursalId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: arcaAccountsQueryKey(sucursalId),
       });
       // También cambia lo que muestra la tabla de "Configurar emisión" (todos
       // los medios vuelven a `invoiceMode: 'none'`), así que su caché se cae.
@@ -140,7 +144,10 @@ export function IntegracionesPage() {
       }),
   });
 
-  const arcaAccount = arcaAccountQuery.data ?? null;
+  const arcaAccounts = arcaAccountQuery.data ?? [];
+  const arcaAccount = arcaAccounts.find((a) => a.role === 'primary') ?? null;
+  const secondaryAccount =
+    arcaAccounts.find((a) => a.role === 'secondary') ?? null;
   const arcaState = useMemo(
     () => resolveArcaCardState(arcaAccount),
     [arcaAccount],
@@ -271,13 +278,42 @@ export function IntegracionesPage() {
             }
           />
         ) : (
-          <ArcaCard
-            state={arcaState}
-            account={arcaAccount}
-            canManage={canManage}
-            unlinking={arcaUnlinkMutation.isPending}
-            onUnlink={() => arcaUnlinkMutation.mutate()}
-          />
+          <>
+            <ArcaCard
+              state={arcaState}
+              account={arcaAccount}
+              canManage={canManage}
+              unlinking={arcaUnlinkMutation.isPending}
+              hasSecondary={Boolean(secondaryAccount)}
+              onUnlink={() =>
+                arcaAccount && arcaUnlinkMutation.mutate(arcaAccount.id)
+              }
+            />
+            {secondaryAccount ? (
+              <div style={{ marginTop: 16 }}>
+                <ArcaCard
+                  account={secondaryAccount}
+                  state={resolveArcaCardState(secondaryAccount)}
+                  canManage={canManage}
+                  unlinking={arcaUnlinkMutation.isPending}
+                  onUnlink={() =>
+                    arcaUnlinkMutation.mutate(secondaryAccount.id)
+                  }
+                />
+              </div>
+            ) : canManage &&
+              arcaAccount &&
+              ['linked', 'cert_expired'].includes(arcaAccount.status) ? (
+              <div style={{ marginTop: 16 }}>
+                <Link
+                  className="pk-btn pk-btn-secondary"
+                  to="arca/vincular?role=secondary"
+                >
+                  Agregar cuenta secundaria
+                </Link>
+              </div>
+            ) : null}
+          </>
         )}
       </div>
     </div>

@@ -315,6 +315,7 @@ describe('attachPaymentsToEntries — factura', () => {
           receptorDocNro: '30712345671',
           receptorNombre: 'EMPRESA SA',
           impTotal: 1000,
+          selectedPaymentIds: [],
           syncSeq: 1,
           version: 1,
           updatedAt: '2026-09-21T12:00:00.000Z',

@@ -16,6 +16,7 @@ vi.mock('../../../../lib/supabase/useCurrentUserId', () => ({
 }));
 vi.mock('../../hooks/useArcaAccount', () => ({
   useArcaAccount: () => ({ data: null }),
+  useArcaAccounts: () => ({ data: [] }),
 }));
 vi.mock('../../services/operations', () => ({
   listEntries: vi.fn(),

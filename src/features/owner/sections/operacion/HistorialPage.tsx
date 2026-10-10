@@ -41,7 +41,11 @@ import {
 } from '../../../../shared/components/icons';
 import { fmtDateTimeAr, fmtMoney } from '../../../../shared/utils/fmt';
 import { useSucursal } from '../../context/SucursalContext';
-import { useArcaAccount } from '../../hooks/useArcaAccount';
+import { useArcaAccount, useArcaAccounts } from '../../hooks/useArcaAccount';
+import {
+  InvoiceAccountSelector,
+  invoiceAccountLabel,
+} from './InvoiceAccountSelector';
 import type { ArcaTaxCondition } from '../../services/arca';
 import { listPaymentMethods } from '../../services/entities';
 import { listAllCashSessions } from '../../services/cash-sessions';
@@ -66,6 +70,7 @@ import {
   type InvoiceBatchPreviewItem,
 } from './InvoiceBatchConfirmModal';
 import { InvoiceDetail, type ArcaInvoicing } from './InvoiceDetail';
+import { EntryNotesEditor } from './EntryNotesEditor';
 import {
   canIssueInvoice,
   formatExternalInvoice,
@@ -325,6 +330,7 @@ function EntryDetailDrawer({
   arca,
   emitter,
   paymentModeAllowed,
+  canManage,
   onInvoiceChanged,
   onClose,
 }: {
@@ -334,7 +340,8 @@ function EntryDetailDrawer({
   arca: ArcaInvoicing;
   emitter: ArcaTaxCondition | null;
   paymentModeAllowed: boolean;
-  onInvoiceChanged: () => void;
+  canManage: boolean;
+  onInvoiceChanged: () => void | Promise<void>;
   onClose: () => void;
 }) {
   return (
@@ -378,8 +385,15 @@ function EntryDetailDrawer({
             <DetailItem label="Cochera">
               {row.cochera || <MutedDash />}
             </DetailItem>
-            <DetailItem label="Notas">{row.notes || <MutedDash />}</DetailItem>
           </div>
+
+          <EntryNotesEditor
+            key={row.id}
+            entry={row}
+            tenantId={tenantId}
+            canEdit={canManage}
+            onChanged={onInvoiceChanged}
+          />
 
           <div style={{ marginTop: 22 }}>
             <h3 className="operation-panel-title" style={{ fontSize: 15 }}>
@@ -398,6 +412,7 @@ function EntryDetailDrawer({
               arca={arca}
               emitter={emitter}
               paymentModeAllowed={paymentModeAllowed}
+              canManage={canManage}
               onChanged={onInvoiceChanged}
             />
           ) : null}
@@ -436,6 +451,9 @@ export function HistorialPage({
   const [batchPreview, setBatchPreview] = useState<{
     tenantId: string;
     items: InvoiceBatchPreviewItem[];
+    arcaAccountId?: string;
+    issuerLabel?: string;
+    letter?: 'B' | 'C';
   } | null>(null);
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchResults, setBatchResults] = useState<InvoiceBatchResult[] | null>(
@@ -447,6 +465,8 @@ export function HistorialPage({
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const arcaQuery = useArcaAccount(sucursalId);
+  const accountsQuery = useArcaAccounts(sucursalId);
+  const accounts = accountsQuery.data ?? [];
   const arcaStatus = arcaQuery.data?.status;
   const arca: ArcaInvoicing =
     arcaStatus === 'linked' || arcaStatus === 'cert_expired'
@@ -902,8 +922,18 @@ export function HistorialPage({
     ]);
   }, [queryClient, sucursalId]);
 
-  async function prepareSelected() {
+  async function prepareSelected(
+    arcaAccountId = accounts.find((a) => a.role === 'primary')?.id,
+  ) {
     if (batchPreparingRef.current || batchRunningRef.current) return;
+    if (accountsQuery.isLoading || accountsQuery.isError || !arcaAccountId) {
+      showToast({
+        message:
+          'No se pudo confirmar la cuenta de facturación. Volvé a intentar.',
+        kind: 'error',
+      });
+      return;
+    }
     // En el orden de la tabla (el más reciente primero), no en el de los clics.
     const ordered = rows
       .map((row) => row.id)
@@ -925,7 +955,9 @@ export function HistorialPage({
       for (let start = 0; start < selectedRows.length; start += 5) {
         const page = selectedRows.slice(start, start + 5);
         const previews = await Promise.all(
-          page.map((row) => getInvoicePreview(sucursalId, row.id)),
+          page.map((row) =>
+            getInvoicePreview(sucursalId, row.id, arcaAccountId),
+          ),
         );
         page.forEach((row, index) => {
           items.push({
@@ -937,7 +969,18 @@ export function HistorialPage({
         });
       }
       if (batchGenerationRef.current === generation) {
-        setBatchPreview({ tenantId: sucursalId, items });
+        const account = accounts.find((item) => item.id === arcaAccountId);
+        setBatchPreview({
+          tenantId: sucursalId,
+          items,
+          arcaAccountId,
+          issuerLabel: account ? invoiceAccountLabel(account) : undefined,
+          letter: account?.condicionIva
+            ? account.condicionIva === 'responsable_inscripto'
+              ? 'B'
+              : 'C'
+            : undefined,
+        });
       }
     } catch (error) {
       if (batchGenerationRef.current === generation)
@@ -956,6 +999,7 @@ export function HistorialPage({
   async function issueSelected() {
     if (
       !batchPreview ||
+      batchPreparingRef.current ||
       batchRunningRef.current ||
       batchPreview.items.length === 0
     )
@@ -971,6 +1015,7 @@ export function HistorialPage({
           entryId: item.entryId,
           expectedAmount: item.amount,
         })),
+        confirmed.arcaAccountId,
       );
       if (batchGenerationRef.current !== generation) return;
       setBatchResults(results);
@@ -1185,7 +1230,8 @@ export function HistorialPage({
         arca={arca}
         emitter={arcaQuery.data?.condicionIva ?? null}
         paymentModeAllowed={selected ? issuableIds.has(selected.id) : false}
-        onInvoiceChanged={() => void refreshInvoicing()}
+        canManage={sucursal?.role === 'owner'}
+        onInvoiceChanged={refreshInvoicing}
         onClose={() => setSelectedId(null)}
       />
 
@@ -1202,7 +1248,20 @@ export function HistorialPage({
       />
       <InvoiceBatchConfirmModal
         items={batchPreview?.items ?? null}
-        loading={batchRunning}
+        loading={batchRunning || batchPreparing}
+        letter={batchPreview?.letter}
+        issuerSelection={
+          sucursal?.role === 'owner' && accounts.length > 1 ? (
+            <InvoiceAccountSelector
+              accounts={accounts}
+              value={batchPreview?.arcaAccountId}
+              disabled={batchRunning || batchPreparing}
+              onChange={(id) => void prepareSelected(id)}
+            />
+          ) : batchPreview?.issuerLabel ? (
+            <p className="operation-muted">{batchPreview.issuerLabel}</p>
+          ) : null
+        }
         onClose={() => setBatchPreview(null)}
         onConfirm={() => void issueSelected()}
       />

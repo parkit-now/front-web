@@ -157,7 +157,7 @@ describe('useInvoiceReceiver: pagador QR', () => {
     expect(receiver.ready).toBe(false);
     await act(() => vi.advanceTimersByTimeAsync(300));
     await act(() => vi.advanceTimersByTimeAsync(1));
-    expect(mock.lookup).toHaveBeenCalledWith('tenant', CUIT);
+    expect(mock.lookup).toHaveBeenCalledWith('tenant', CUIT, undefined);
     expect(receiver.cuitToSend).toBe(CUIT);
     expect(receiver.ready).toBe(true);
   });
