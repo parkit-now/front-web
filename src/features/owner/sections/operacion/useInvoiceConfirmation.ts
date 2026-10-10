@@ -13,6 +13,8 @@ type ReceiverSnapshot = {
   letter: InvoiceLetter | null;
   cuit: string | null | undefined;
   receiverName?: string | null;
+  arcaAccountId?: string;
+  issuerLabel?: string;
 };
 
 export function useInvoiceConfirmation(tenantId: string, entryId: string) {
@@ -36,7 +38,11 @@ export function useInvoiceConfirmation(tenantId: string, entryId: string) {
 
   async function prepare(receiver: ReceiverSnapshot, active: number) {
     setSnapshot(null);
-    const preview = await getInvoicePreview(tenantId, entryId);
+    const preview = await getInvoicePreview(
+      tenantId,
+      entryId,
+      receiver.arcaAccountId,
+    );
     if (generation.current === active)
       setSnapshot({ ...receiver, amount: preview.amount });
   }
@@ -76,6 +82,7 @@ export function useInvoiceConfirmation(tenantId: string, entryId: string) {
         entryId,
         confirmed.cuit ?? undefined,
         confirmed.amount,
+        confirmed.arcaAccountId,
       );
       if (generation.current !== active) return;
       setSnapshot(null);

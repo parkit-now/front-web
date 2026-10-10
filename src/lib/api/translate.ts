@@ -325,6 +325,13 @@ const CODE_MESSAGES: Record<string, string> = {
   ARCA_UNAVAILABLE: 'ARCA no responde. Intentalo más tarde.',
   ARCA_CERT_EXPIRED: 'El certificado de ARCA está vencido. Generá uno nuevo.',
   ARCA_ALREADY_LINKED: 'Esta sede ya tiene ARCA vinculada.',
+  ARCA_PRIMARY_REQUIRED: 'Primero vinculá la cuenta primaria de ARCA.',
+  ARCA_ACCOUNT_DUPLICATE:
+    'Ya existe una cuenta con ese CUIT, entorno y punto de venta.',
+  ARCA_ACCOUNT_UNAVAILABLE:
+    'La cuenta elegida ya no está disponible. La factura conserva su emisor y queda pendiente.',
+  INVOICE_EMITTER_LOCKED:
+    'La emisión anterior debe resolverse con su cuenta original antes de cambiar el emisor.',
   ARCA_LINK_STEP_INVALID:
     'Ese paso ya no corresponde. Recargá la página para seguir desde donde quedaste.',
   ARCA_CUIT_INVALID: 'El CUIT no es válido.',

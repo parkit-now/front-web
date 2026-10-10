@@ -38,9 +38,15 @@ import {
 } from './invoiceUtils';
 import type { EntryHistoryRow } from './operationUtils';
 import { printInvoice } from './printInvoice';
+import { isValidArcaCuit, normalizeArcaCuit } from '../integraciones/arca/cuit';
 import { useInvoiceReceiver } from './useInvoiceReceiver';
 import { useInvoiceConfirmation } from './useInvoiceConfirmation';
 import { ClientContact } from '../clientes/ClientContact';
+import {
+  InvoiceAccountSelector,
+  invoiceAccountLabel,
+  useInvoiceAccountSelection,
+} from './InvoiceAccountSelector';
 
 /** Cómo factura la sede: con ARCA (vinculada o con el certificado vencido) o no. */
 export type ArcaInvoicing = 'linked' | 'cert_expired' | 'none';
@@ -85,6 +91,24 @@ export function InvoiceDetail({
 }) {
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const accountSelection = useInvoiceAccountSelection(
+    tenantId,
+    row.invoice?.arcaAccountId,
+    row.id,
+  );
+  const selectedAccount = accountSelection.account;
+  const selectedEmitter =
+    selectedAccount?.condicionIva ??
+    (accountSelection.accountId ? null : emitter);
+  const emitterLocked = invoiceEmitterLocked(row);
+  const [externalAccountChoice, setExternalAccountChoice] = useState<string>();
+  useEffect(() => {
+    setExternalAccountChoice(undefined);
+  }, [row.id, tenantId]);
+  const externalAccountId =
+    externalAccountChoice ??
+    row.manualInvoiceArcaAccountId ??
+    accountSelection.accounts.find((a) => a.role === 'primary')?.id;
   const [busy, setBusy] = useState<
     'pdf' | 'manual' | 'number' | 'reminder' | null
   >(null);
@@ -92,6 +116,21 @@ export function InvoiceDetail({
     row.manualInvoiceNumber ?? '',
   );
   const [externalOpen, setExternalOpen] = useState(false);
+  const [externalOtherIssuer, setExternalOtherIssuer] = useState(
+    !row.manualInvoiceArcaAccountId &&
+      Boolean(row.manualInvoiceIssuerCuit || row.manualInvoiceIssuerName),
+  );
+  const [externalIssuerCuit, setExternalIssuerCuit] = useState(
+    row.manualInvoiceIssuerCuit ?? '',
+  );
+  const [externalIssuerName, setExternalIssuerName] = useState(
+    row.manualInvoiceIssuerName ?? '',
+  );
+  const normalizedIssuerCuit = normalizeArcaCuit(externalIssuerCuit);
+  const externalIssuerValid =
+    !externalOtherIssuer ||
+    (Boolean(normalizedIssuerCuit || externalIssuerName.trim()) &&
+      (!normalizedIssuerCuit || isValidArcaCuit(normalizedIssuerCuit)));
   const [removeExternalOpen, setRemoveExternalOpen] = useState(false);
   const [externalType, setExternalType] = useState<'A' | 'B' | 'C'>(
     (row.manualInvoiceType as 'A' | 'B' | 'C') ?? 'C',
@@ -124,9 +163,10 @@ export function InvoiceDetail({
     plate: row.plate,
     suggestionEnabled: issueOpen,
     frozen: actionBusy || confirmation.snapshot !== null,
+    arcaAccountId: accountSelection.accountId,
   });
   const letter = expectedLetter({
-    emitter,
+    emitter: selectedEmitter,
     choice: receiver.choice,
     lookup: receiver.lookup,
   });
@@ -237,6 +277,7 @@ export function InvoiceDetail({
   async function saveExternalInvoice() {
     if (
       actionBusy ||
+      !externalIssuerValid ||
       !/^\d{1,5}$/.test(externalPoint) ||
       !/^\d{1,8}$/.test(externalNumber)
     )
@@ -247,6 +288,13 @@ export function InvoiceDetail({
         manualInvoiceType: externalType,
         manualInvoicePointOfSale: externalPoint,
         manualInvoiceNumber: externalNumber,
+        ...(externalOtherIssuer
+          ? {
+              manualInvoiceArcaAccountId: null,
+              manualInvoiceIssuerCuit: normalizedIssuerCuit || null,
+              manualInvoiceIssuerName: externalIssuerName.trim() || null,
+            }
+          : { manualInvoiceArcaAccountId: externalAccountId }),
       });
       applyExternalInvoiceResult(updated);
       setExternalOpen(false);
@@ -348,7 +396,8 @@ export function InvoiceDetail({
     canIssueInvoice(invoiceState, arca !== 'none') &&
     paymentModeAllowed &&
     !row.manuallyInvoiced &&
-    !externalOpen;
+    !externalOpen &&
+    (!selectedAccount || selectedAccount.role !== 'secondary' || canManage);
   const showReminder =
     canManage &&
     Boolean(row.leftAt) &&
@@ -391,6 +440,36 @@ export function InvoiceDetail({
           </Item>
         ) : null}
       </div>
+      {row.manuallyInvoiced &&
+      (row.manualInvoiceIssuerCuit || row.manualInvoiceIssuerName) ? (
+        <p className="operation-muted">
+          Emisor: {row.manualInvoiceIssuerName ?? ''}
+          {row.manualInvoiceIssuerCuit ? (
+            <> · CUIT {row.manualInvoiceIssuerCuit}</>
+          ) : null}
+        </p>
+      ) : row.invoice?.emisorCuit ? (
+        <p className="operation-muted">
+          Emisor: {row.invoice.emisorRazonSocial ?? ''} · CUIT{' '}
+          {row.invoice.emisorCuit}
+        </p>
+      ) : null}
+      {canManage &&
+      (showIssue || invoiceState === 'issuing') &&
+      (accountSelection.accounts.length > 1 ||
+        (accountSelection.accountId && !selectedAccount)) ? (
+        <InvoiceAccountSelector
+          accounts={accountSelection.accounts}
+          value={accountSelection.accountId}
+          disabled={
+            actionBusy || emitterLocked || confirmation.snapshot !== null
+          }
+          onChange={(id) => {
+            confirmation.close();
+            accountSelection.select(id);
+          }}
+        />
+      ) : null}
       {showReminder ? (
         <div
           className="operation-invoice-reminder"
@@ -454,7 +533,7 @@ export function InvoiceDetail({
         <div className="operation-invoice-issue">
           <InvoiceReceiverChooser
             receiver={receiver}
-            emitter={emitter}
+            emitter={selectedEmitter}
             disabled={actionBusy}
           />
           {(receiver.choice === 'final' || receiver.cuitToSend) && (
@@ -476,10 +555,20 @@ export function InvoiceDetail({
             <Button
               size="sm"
               loading={confirmation.busy}
-              disabled={actionBusy || !receiver.ready}
+              disabled={
+                actionBusy ||
+                !receiver.ready ||
+                accountSelection.loading ||
+                !selectedAccount ||
+                selectedAccount.status !== 'linked'
+              }
               onClick={() =>
                 void confirmation.open({
                   letter,
+                  arcaAccountId: accountSelection.accountId,
+                  issuerLabel: selectedAccount
+                    ? invoiceAccountLabel(selectedAccount)
+                    : undefined,
                   cuit: receiver.cuitToSend,
                   receiverName:
                     receiver.lookup.status === 'done'
@@ -538,6 +627,15 @@ export function InvoiceDetail({
             disabled={actionBusy}
             onClick={() => {
               setIssueOpen(false);
+              setExternalOtherIssuer(
+                !row.manualInvoiceArcaAccountId &&
+                  Boolean(
+                    row.manualInvoiceIssuerCuit || row.manualInvoiceIssuerName,
+                  ),
+              );
+              setExternalIssuerCuit(row.manualInvoiceIssuerCuit ?? '');
+              setExternalIssuerName(row.manualInvoiceIssuerName ?? '');
+              setExternalAccountChoice(undefined);
               setExternalOpen(true);
             }}
           >
@@ -559,6 +657,62 @@ export function InvoiceDetail({
       </div>
       {showExternal && externalOpen ? (
         <div className="operation-external-invoice">
+          <label className="operation-external-issuer-toggle">
+            <input
+              type="checkbox"
+              checked={externalOtherIssuer}
+              disabled={actionBusy}
+              onChange={(event) => setExternalOtherIssuer(event.target.checked)}
+            />
+            Factura de otro emisor
+          </label>
+          {externalOtherIssuer ? (
+            <div className="operation-external-issuer-fields">
+              <label>
+                CUIT del emisor
+                <input
+                  className="pk-input"
+                  value={externalIssuerCuit}
+                  inputMode="numeric"
+                  maxLength={32}
+                  placeholder="20-12345678-6"
+                  disabled={actionBusy}
+                  aria-invalid={Boolean(
+                    normalizedIssuerCuit &&
+                    !isValidArcaCuit(normalizedIssuerCuit),
+                  )}
+                  onChange={(event) =>
+                    setExternalIssuerCuit(event.target.value)
+                  }
+                />
+              </label>
+              <label>
+                Nombre o razón social
+                <input
+                  className="pk-input"
+                  value={externalIssuerName}
+                  maxLength={180}
+                  disabled={actionBusy}
+                  onChange={(event) =>
+                    setExternalIssuerName(event.target.value)
+                  }
+                />
+              </label>
+              {normalizedIssuerCuit &&
+              !isValidArcaCuit(normalizedIssuerCuit) ? (
+                <p className="operation-external-issuer-error" role="alert">
+                  El CUIT no es válido.
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <InvoiceAccountSelector
+              accounts={accountSelection.accounts}
+              value={externalAccountId}
+              disabled={actionBusy}
+              onChange={setExternalAccountChoice}
+            />
+          )}
           <div className="operation-external-invoice-fields">
             <label>
               Tipo
@@ -616,8 +770,13 @@ export function InvoiceDetail({
               loading={busy === 'manual'}
               disabled={
                 actionBusy ||
+                !externalIssuerValid ||
                 !/^\d{1,5}$/.test(externalPoint) ||
-                !/^\d{1,8}$/.test(externalNumber)
+                !/^\d{1,8}$/.test(externalNumber) ||
+                (!externalOtherIssuer &&
+                  !accountSelection.accounts.some(
+                    (a) => a.id === externalAccountId,
+                  ))
               }
               onClick={() => void saveExternalInvoice()}
             >
@@ -685,5 +844,13 @@ export function InvoiceDetail({
         onConfirm={() => void removeExternalInvoice()}
       />
     </div>
+  );
+}
+
+function invoiceEmitterLocked(row: EntryHistoryRow): boolean {
+  return (
+    row.invoiceState === 'issued' ||
+    row.invoiceState === 'issuing' ||
+    row.invoice?.cbteNro != null
   );
 }

@@ -731,7 +731,36 @@
   gap: 10px;
 }
 
-.operation-external-invoice-fields label {
+.operation-external-issuer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-1);
+  font-size: 13px;
+}
+
+.operation-external-issuer-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--brand);
+}
+
+.operation-external-issuer-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 10px;
+}
+
+.operation-external-issuer-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--err-text);
+  font-size: 12px;
+}
+
+.operation-external-invoice-fields label,
+.operation-external-issuer-fields label {
   display: grid;
   gap: 5px;
   min-width: 0;
@@ -739,13 +768,15 @@
   font-size: 12px;
 }
 
-.operation-external-invoice-fields .pk-input {
+.operation-external-invoice-fields .pk-input,
+.operation-external-issuer-fields .pk-input {
   width: 100%;
   min-width: 0;
 }
 
 @media (max-width: 560px) {
-  .operation-external-invoice-fields {
+  .operation-external-invoice-fields,
+  .operation-external-issuer-fields {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -901,4 +932,21 @@
 .operation-batch-error {
   color: var(--text-2);
   text-align: right;
+}
+.operation-invoice-account {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.operation-invoice-account select {
+  width: 100%;
+  min-width: 0;
+}
+.operation-invoice-account small {
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }

@@ -25,6 +25,7 @@ interface ArcaCardProps {
   canManage: boolean;
   unlinking?: boolean;
   onUnlink: () => void;
+  hasSecondary?: boolean;
 }
 
 const ROW: React.CSSProperties = {
@@ -61,8 +62,12 @@ export function ArcaCard({
   canManage,
   unlinking = false,
   onUnlink,
+  hasSecondary = false,
 }: ArcaCardProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const suffix = account
+    ? `?accountId=${encodeURIComponent(account.id)}&role=${account.role}`
+    : '';
 
   const linkedLike =
     state.kind === 'linked' ||
@@ -102,7 +107,8 @@ export function ArcaCard({
                   color: 'var(--text-1)',
                 }}
               >
-                Facturación electrónica (ARCA)
+                Facturación electrónica (ARCA) ·{' '}
+                {account?.role === 'secondary' ? 'Secundaria' : 'Primaria'}
               </h2>
               <p style={{ margin: 0, fontSize: 13, color: 'var(--text-3)' }}>
                 Emití el comprobante automáticamente al cobrar
@@ -127,7 +133,7 @@ export function ArcaCard({
             {canManage ? (
               <div style={ROW}>
                 <Link
-                  to="arca/vincular"
+                  to={`arca/vincular${suffix}`}
                   className="pk-btn pk-btn-primary"
                   style={{ textDecoration: 'none' }}
                 >
@@ -147,7 +153,7 @@ export function ArcaCard({
             {canManage ? (
               <div style={ROW}>
                 <Link
-                  to="arca/vincular"
+                  to={`arca/vincular${suffix}`}
                   className="pk-btn pk-btn-primary"
                   style={{ textDecoration: 'none' }}
                 >
@@ -177,7 +183,7 @@ export function ArcaCard({
                   state.daysLeft === 1 ? 'día' : 'días'
                 }).`}
                 description="Renovalo para seguir facturando. Hasta que venza seguís facturando normal."
-                action={canManage ? <RenewLink /> : undefined}
+                action={canManage ? <RenewLink suffix={suffix} /> : undefined}
               />
             )}
             {state.kind !== 'broken' && isArcaInvoiceDataMissing(account) && (
@@ -189,7 +195,7 @@ export function ArcaCard({
                 action={
                   canManage ? (
                     <Link
-                      to="arca/emision"
+                      to={`arca/emision${suffix}`}
                       className="pk-btn pk-btn-secondary pk-btn-sm"
                       style={{ textDecoration: 'none' }}
                     >
@@ -205,7 +211,7 @@ export function ArcaCard({
                 icon={<IconAlert size={18} />}
                 title="La facturación está pausada: el certificado venció"
                 description="Los cobros se siguen registrando normal, pero no se factura hasta que renueves el certificado."
-                action={canManage ? <RenewLink /> : undefined}
+                action={canManage ? <RenewLink suffix={suffix} /> : undefined}
               />
             )}
 
@@ -254,7 +260,7 @@ export function ArcaCard({
             {canManage ? (
               <div style={ROW}>
                 <Link
-                  to="arca/emision"
+                  to={`arca/emision${suffix}`}
                   className="pk-btn pk-btn-secondary"
                   style={{ textDecoration: 'none' }}
                 >
@@ -285,8 +291,12 @@ export function ArcaCard({
           ) : (
             <>
               <p style={{ margin: 0 }}>
-                Las facturas emitidas se conservan. Los cobros nuevos no se
-                facturan.
+                {account?.role === 'secondary'
+                  ? 'Se desvinculará la cuenta secundaria. La primaria seguirá disponible.'
+                  : hasSecondary
+                    ? 'Se desvincularán la primaria y la secundaria y se desactivará la facturación.'
+                    : 'Los cobros nuevos no se facturan.'}{' '}
+                Las facturas emitidas se conservan.
               </p>
               <p style={{ margin: '16px 0 0', color: 'var(--text-3)' }}>
                 Podés volver a vincular cuando quieras, pero vas a tener que
@@ -308,10 +318,10 @@ export function ArcaCard({
   );
 }
 
-function RenewLink() {
+function RenewLink({ suffix }: { suffix: string }) {
   return (
     <Link
-      to="arca/renovar"
+      to={`arca/renovar${suffix}`}
       className="pk-btn pk-btn-primary pk-btn-sm"
       style={{ textDecoration: 'none' }}
     >

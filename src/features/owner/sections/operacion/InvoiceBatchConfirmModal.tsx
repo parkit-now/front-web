@@ -1,6 +1,7 @@
 import { Button } from '../../../../shared/components/ui/Button';
 import { Modal } from '../../../../shared/components/ui/Modal';
 import { fmtMoney } from '../../../../shared/utils/fmt';
+import type { ReactNode } from 'react';
 
 export type InvoiceBatchPreviewItem = {
   entryId: string;
@@ -14,11 +15,15 @@ export function InvoiceBatchConfirmModal({
   loading,
   onClose,
   onConfirm,
+  issuerSelection,
+  letter,
 }: {
   items: readonly InvoiceBatchPreviewItem[] | null;
   loading: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  issuerSelection?: ReactNode;
+  letter?: 'B' | 'C';
 }) {
   const total = items?.reduce((sum, item) => sum + item.amount, 0) ?? 0;
   return (
@@ -42,8 +47,10 @@ export function InvoiceBatchConfirmModal({
         </>
       }
     >
+      {issuerSelection}
       <p className="operation-batch-confirm-intro">
-        Se emitirán a consumidor final las siguientes facturas:
+        Se emitirán a consumidor final las siguientes facturas
+        {letter ? ` ${letter}` : ''}:
       </p>
       <div className="operation-batch-confirm-list" role="list">
         {items?.map((item) => (

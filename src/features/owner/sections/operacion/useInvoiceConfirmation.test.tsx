@@ -59,6 +59,7 @@ describe('confirmacion del importe fiscal', () => {
       'entry',
       '20427205208',
       10,
+      undefined,
     );
     expect(result).toHaveBeenCalledOnce();
     expect(controller.snapshot).toBeNull();

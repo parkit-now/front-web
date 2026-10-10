@@ -34,6 +34,7 @@ export function useInvoiceReceiver(input: {
   plate?: string;
   suggestionEnabled: boolean;
   frozen?: boolean;
+  arcaAccountId?: string;
 }) {
   const {
     tenantId,
@@ -205,8 +206,8 @@ export function useInvoiceReceiver(input: {
   const lookupEnabled =
     wantsCuit && isValidArcaCuit(digits) && debounced === digits;
   const taxpayerQuery = useQuery({
-    queryKey: ['arca', 'taxpayer', tenantId, debounced],
-    queryFn: () => lookupTaxpayer(tenantId, debounced),
+    queryKey: ['arca', 'taxpayer', tenantId, debounced, input.arcaAccountId],
+    queryFn: () => lookupTaxpayer(tenantId, debounced, input.arcaAccountId),
     enabled: Boolean(tenantId) && lookupEnabled,
     retry: false,
     staleTime: 5 * 60_000,

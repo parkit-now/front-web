@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert } from '../../../../../shared/components/ui/Alert';
 import { Button } from '../../../../../shared/components/ui/Button';
@@ -16,6 +16,7 @@ import { useSucursal } from '../../../context/SucursalContext';
 import {
   arcaAccountQueryKey,
   useArcaAccount,
+  arcaAccountsQueryKey,
 } from '../../../hooks/useArcaAccount';
 import { updateArcaAccount } from '../../../services/arca';
 import {
@@ -77,7 +78,9 @@ export function ArcaEmisionPage() {
   const navigate = useNavigate();
   const canManage = sucursal?.role === 'owner';
 
-  const arcaQuery = useArcaAccount(sucursalId);
+  const [searchParams] = useSearchParams();
+  const accountId = searchParams.get('accountId') ?? undefined;
+  const arcaQuery = useArcaAccount(sucursalId, accountId);
   const account = arcaQuery.data ?? null;
 
   const methodsQuery = useQuery({
@@ -117,6 +120,9 @@ export function ArcaEmisionPage() {
       queryClient.invalidateQueries({
         queryKey: arcaAccountQueryKey(sucursalId),
       }),
+      queryClient.invalidateQueries({
+        queryKey: arcaAccountsQueryKey(sucursalId),
+      }),
     ]);
   }
 
@@ -140,11 +146,15 @@ export function ArcaEmisionPage() {
       const iibbChanged = iibb !== (account.iibb ?? '');
       const inicioChanged = inicioDraft !== (account.inicioActividad ?? '');
       if (ivaChanged || iibbChanged || inicioChanged) {
-        await updateArcaAccount(sucursalId, {
-          ...(ivaChanged ? { ivaRate: Number(ivaRateDraft) } : {}),
-          ...(iibbChanged ? { iibb } : {}),
-          ...(inicioChanged ? { inicioActividad: inicioDraft } : {}),
-        });
+        await updateArcaAccount(
+          sucursalId,
+          {
+            ...(ivaChanged ? { ivaRate: Number(ivaRateDraft) } : {}),
+            ...(iibbChanged ? { iibb } : {}),
+            ...(inicioChanged ? { inicioActividad: inicioDraft } : {}),
+          },
+          accountId,
+        );
       }
     },
     onSuccess: async () => {
@@ -219,7 +229,7 @@ export function ArcaEmisionPage() {
           description="Renová el certificado para volver a facturar y configurar la emisión."
           action={
             <Link
-              to="../integraciones/arca/renovar"
+              to={`../integraciones/arca/renovar${accountId ? `?accountId=${accountId}` : ''}`}
               className="pk-btn pk-btn-primary pk-btn-sm"
               style={{ textDecoration: 'none' }}
             >

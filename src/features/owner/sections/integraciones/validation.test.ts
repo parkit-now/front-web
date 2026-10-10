@@ -142,6 +142,7 @@ describe('resolveMpCardState', () => {
 
 function makeArcaAccount(overrides: Partial<ArcaAccount> = {}): ArcaAccount {
   return {
+    role: 'primary',
     id: '9f1c2b3a-4d5e-4f6a-8b9c-0d1e2f3a4b5c',
     certAlias: 'parkit1a2b3c4d',
     certExpiresAt: daysFromNow(365),

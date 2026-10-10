@@ -19,6 +19,18 @@ export type UploadArcaCertificateInput =
   components['schemas']['UploadArcaCertificateDto'];
 export type SetArcaSalesPointInput =
   components['schemas']['SetArcaSalesPointDto'];
+const accountPath = (tenantId: string, accountId?: string) =>
+  `/tenants/${encodeURIComponent(tenantId)}/arca/${accountId ? `accounts/${encodeURIComponent(accountId)}` : 'account'}`;
+
+export async function listArcaAccounts(
+  tenantId: string,
+): Promise<ArcaAccount[]> {
+  return apiRequest({
+    method: 'GET',
+    path: `/tenants/${encodeURIComponent(tenantId)}/arca/accounts`,
+    bearer: await bearer(),
+  });
+}
 export type ReuseArcaCertificateInput =
   components['schemas']['ReuseArcaCertificateDto'];
 
@@ -40,10 +52,13 @@ async function bearer(): Promise<string> {
  * son el mismo 404. Quien consuma esto tiene que atrapar el `ApiError` y
  * tratar el 404 como estado vacío (ver `useArcaAccount`).
  */
-export async function getArcaAccount(tenantId: string): Promise<ArcaAccount> {
+export async function getArcaAccount(
+  tenantId: string,
+  accountId?: string,
+): Promise<ArcaAccount> {
   return apiRequest<ArcaAccount>({
     method: 'GET',
-    path: `/tenants/${tenantId}/arca/account`,
+    path: accountPath(tenantId, accountId),
     bearer: await bearer(),
   });
 }
@@ -62,7 +77,10 @@ export async function createArcaAccount(
 ): Promise<ArcaAccount> {
   return apiRequest<ArcaAccount>({
     method: 'POST',
-    path: `/tenants/${tenantId}/arca/account`,
+    path:
+      body.role === 'secondary'
+        ? `/tenants/${encodeURIComponent(tenantId)}/arca/accounts`
+        : accountPath(tenantId),
     body,
     bearer: await bearer(),
   });
@@ -73,10 +91,13 @@ export async function createArcaAccount(
  * (o cancela un wizard a medias) y responde **204 sin body**. Pone todos los
  * medios de pago en `invoiceMode: 'none'` y conserva las facturas ya emitidas.
  */
-export async function unlinkArcaAccount(tenantId: string): Promise<void> {
+export async function unlinkArcaAccount(
+  tenantId: string,
+  accountId?: string,
+): Promise<void> {
   await apiRequest<void>({
     method: 'DELETE',
-    path: `/tenants/${tenantId}/arca/account`,
+    path: accountPath(tenantId, accountId),
     bearer: await bearer(),
   });
 }
@@ -90,10 +111,11 @@ export async function unlinkArcaAccount(tenantId: string): Promise<void> {
 export async function updateArcaAccount(
   tenantId: string,
   body: UpdateArcaAccountInput,
+  accountId?: string,
 ): Promise<ArcaAccount> {
   return apiRequest<ArcaAccount>({
     method: 'PATCH',
-    path: `/tenants/${tenantId}/arca/account`,
+    path: accountPath(tenantId, accountId),
     body,
     bearer: await bearer(),
   });
@@ -103,10 +125,13 @@ export async function updateArcaAccount(
  * GET /tenants/:tenantId/arca/account/csr — la solicitud de certificado (CSR)
  * a subir en ARCA. 409 `ARCA_LINK_STEP_INVALID` si la cuenta ya pasó este paso.
  */
-export async function getArcaCsr(tenantId: string): Promise<ArcaCsr> {
+export async function getArcaCsr(
+  tenantId: string,
+  accountId?: string,
+): Promise<ArcaCsr> {
   return apiRequest<ArcaCsr>({
     method: 'GET',
-    path: `/tenants/${tenantId}/arca/account/csr`,
+    path: `${accountPath(tenantId, accountId)}/csr`,
     bearer: await bearer(),
   });
 }
@@ -123,10 +148,11 @@ export async function getArcaCsr(tenantId: string): Promise<ArcaCsr> {
 export async function uploadArcaCertificate(
   tenantId: string,
   body: UploadArcaCertificateInput,
+  accountId?: string,
 ): Promise<ArcaCertificateResult> {
   return apiRequest<ArcaCertificateResult>({
     method: 'POST',
-    path: `/tenants/${tenantId}/arca/account/certificate`,
+    path: `${accountPath(tenantId, accountId)}/certificate`,
     body,
     bearer: await bearer(),
   });
@@ -139,10 +165,11 @@ export async function uploadArcaCertificate(
  */
 export async function listArcaReusableCertificates(
   tenantId: string,
+  accountId?: string,
 ): Promise<ArcaReusableCertificate[]> {
   return apiRequest<ArcaReusableCertificate[]>({
     method: 'GET',
-    path: `/tenants/${tenantId}/arca/account/reusable-certificates`,
+    path: `${accountPath(tenantId, accountId)}/reusable-certificates`,
     bearer: await bearer(),
   });
 }
@@ -155,10 +182,11 @@ export async function listArcaReusableCertificates(
 export async function reuseArcaCertificate(
   tenantId: string,
   body: ReuseArcaCertificateInput,
+  accountId?: string,
 ): Promise<ArcaAccount> {
   return apiRequest<ArcaAccount>({
     method: 'POST',
-    path: `/tenants/${tenantId}/arca/account/reuse-certificate`,
+    path: `${accountPath(tenantId, accountId)}/reuse-certificate`,
     body,
     bearer: await bearer(),
   });
@@ -173,10 +201,11 @@ export async function reuseArcaCertificate(
 export async function setArcaSalesPoint(
   tenantId: string,
   body: SetArcaSalesPointInput,
+  accountId?: string,
 ): Promise<ArcaAccount> {
   return apiRequest<ArcaAccount>({
     method: 'POST',
-    path: `/tenants/${tenantId}/arca/account/sales-point`,
+    path: `${accountPath(tenantId, accountId)}/sales-point`,
     body,
     bearer: await bearer(),
   });
@@ -189,10 +218,13 @@ export async function setArcaSalesPoint(
  * asociados. Si el job diario todavía no la preparó, se genera en el momento.
  * 409 `ARCA_LINK_STEP_INVALID` si la cuenta no está vinculada.
  */
-export async function getArcaRenewalCsr(tenantId: string): Promise<ArcaCsr> {
+export async function getArcaRenewalCsr(
+  tenantId: string,
+  accountId?: string,
+): Promise<ArcaCsr> {
   return apiRequest<ArcaCsr>({
     method: 'GET',
-    path: `/tenants/${tenantId}/arca/account/renewal/csr`,
+    path: `${accountPath(tenantId, accountId)}/renewal/csr`,
     bearer: await bearer(),
   });
 }
@@ -206,10 +238,11 @@ export async function getArcaRenewalCsr(tenantId: string): Promise<ArcaCsr> {
 export async function uploadArcaRenewalCertificate(
   tenantId: string,
   body: UploadArcaCertificateInput,
+  accountId?: string,
 ): Promise<ArcaAccount> {
   return apiRequest<ArcaAccount>({
     method: 'POST',
-    path: `/tenants/${tenantId}/arca/account/renewal/certificate`,
+    path: `${accountPath(tenantId, accountId)}/renewal/certificate`,
     body,
     bearer: await bearer(),
   });

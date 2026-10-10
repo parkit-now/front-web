@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert } from '../../../../../shared/components/ui/Alert';
 import { Button } from '../../../../../shared/components/ui/Button';
@@ -15,6 +15,7 @@ import { useSucursal } from '../../../context/SucursalContext';
 import {
   arcaAccountQueryKey,
   useArcaAccount,
+  arcaAccountsQueryKey,
 } from '../../../hooks/useArcaAccount';
 import {
   getArcaRenewalCsr,
@@ -56,7 +57,9 @@ export function ArcaRenovarPage() {
   const navigate = useNavigate();
   const canManage = sucursal?.role === 'owner';
 
-  const accountQuery = useArcaAccount(sucursalId);
+  const [searchParams] = useSearchParams();
+  const accountId = searchParams.get('accountId') ?? undefined;
+  const accountQuery = useArcaAccount(sucursalId, accountId);
   const account = accountQuery.data ?? null;
   const renewable =
     account?.status === 'linked' || account?.status === 'cert_expired';
@@ -67,8 +70,8 @@ export function ArcaRenovarPage() {
   const [renewed, setRenewed] = useState(false);
 
   const csrQuery = useQuery({
-    queryKey: ['arca', 'renewal-csr', sucursalId],
-    queryFn: () => getArcaRenewalCsr(sucursalId),
+    queryKey: ['arca', 'renewal-csr', sucursalId, accountId],
+    queryFn: () => getArcaRenewalCsr(sucursalId, accountId),
     enabled: Boolean(sucursalId) && renewable && canManage && !renewed,
     // Es la misma solicitud hasta que se renueva: no hay nada que refrescar.
     staleTime: Infinity,
@@ -76,10 +79,19 @@ export function ArcaRenovarPage() {
 
   const verify = useMutation({
     mutationFn: (certificate: string) =>
-      uploadArcaRenewalCertificate(sucursalId, { certificate }),
+      uploadArcaRenewalCertificate(sucursalId, { certificate }, accountId),
     onSuccess: async (updated) => {
       setRenewed(true);
-      queryClient.setQueryData(arcaAccountQueryKey(sucursalId), updated);
+      queryClient.setQueryData(
+        arcaAccountQueryKey(sucursalId, accountId),
+        updated,
+      );
+      void queryClient.invalidateQueries({
+        queryKey: arcaAccountQueryKey(sucursalId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: arcaAccountsQueryKey(sucursalId),
+      });
       const until = formatArcaCertDate(updated.certExpiresAt);
       showToast({
         kind: 'success',

@@ -24,6 +24,18 @@ vi.mock('../../../../lib/supabase/useCurrentUserId', () => ({
 }));
 vi.mock('../../hooks/useArcaAccount', () => ({
   useArcaAccount: () => ({ data: { status: 'linked' } }),
+  useArcaAccounts: () => ({
+    data: [
+      {
+        id: 'primary',
+        role: 'primary',
+        status: 'linked',
+        condicionIva: 'monotributo',
+        cuit: '20123456786',
+        ptoVta: 1,
+      },
+    ],
+  }),
 }));
 vi.mock('../../services/operations', () => ({
   listEntries: vi.fn(),
@@ -183,10 +195,14 @@ it('muestra comprobantes y montos antes de emitir; cancelar no factura', async (
     'Emitir 2 facturas',
     container.querySelector('[aria-label="Confirmar emisión"]')!,
   );
-  expect(issueConfirmedInvoiceBatch).toHaveBeenCalledWith('tenant', [
-    { entryId: 'first', expectedAmount: 1250.25 },
-    { entryId: 'second', expectedAmount: 200 },
-  ]);
+  expect(issueConfirmedInvoiceBatch).toHaveBeenCalledWith(
+    'tenant',
+    [
+      { entryId: 'first', expectedAmount: 1250.25 },
+      { entryId: 'second', expectedAmount: 200 },
+    ],
+    'primary',
+  );
 });
 
 it('permite abrir las notas del movimiento en el drawer del dueño', async () => {

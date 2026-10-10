@@ -29,6 +29,7 @@ function makeAccount(overrides: Partial<ArcaAccount> = {}): ArcaAccount {
     ptoVta: null,
     razonSocial: null,
     status: 'pending_certificate',
+    role: 'primary',
     ...overrides,
   };
 }
