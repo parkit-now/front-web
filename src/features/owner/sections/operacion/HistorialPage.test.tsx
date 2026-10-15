@@ -4,6 +4,8 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import ExcelJS from 'exceljs';
+import { saveBlob } from '../../../../shared/utils/download';
 import { ToastProvider } from '../../../../lib/notifications/ToastProvider';
 import {
   getInvoicePreview,
@@ -41,6 +43,7 @@ vi.mock('../../services/operations', () => ({
   listEntries: vi.fn(),
   listPaymentTransactions: vi.fn(),
 }));
+vi.mock('../../../../shared/utils/download', () => ({ saveBlob: vi.fn() }));
 vi.mock('../../services/cash-sessions', () => ({
   listAllCashSessions: vi.fn(),
 }));
@@ -150,6 +153,60 @@ afterEach(async () => {
   client.clear();
   container.remove();
   localStorage.clear();
+});
+
+it('descarga el historial con monto numerico, medios separados y total, sin desdoblar autos', async () => {
+  client.setQueryData(
+    ['owner-operations', 'tenant', 'payment-transactions'],
+    [
+      { ...transactions[0], amount: 700 },
+      {
+        ...transactions[0],
+        id: 'split',
+        paymentMethodId: 'transfer',
+        paymentMethodName: 'Transferencia',
+        amount: 300,
+      },
+      transactions[1],
+    ],
+  );
+  await act(() =>
+    Promise.resolve(
+      root.render(
+        <QueryClientProvider client={client}>
+          <ToastProvider>
+            <MemoryRouter>
+              <HistorialPage />
+            </MemoryRouter>
+          </ToastProvider>
+        </QueryClientProvider>,
+      ),
+    ),
+  );
+  expect(container.querySelector('thead')?.textContent).toContain('Cobrado');
+  await act(async () => {
+    container
+      .querySelector<HTMLButtonElement>('[aria-label="Descargar Excel"]')!
+      .click();
+    await vi.waitFor(() => expect(saveBlob).toHaveBeenCalledOnce());
+  });
+  const [blob] = vi.mocked(saveBlob).mock.calls[0];
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(await blob.arrayBuffer());
+  const sheet = workbook.getWorksheet('Historial')!;
+  const headers = sheet.getRow(1).values as ExcelJS.CellValue[];
+  const amountColumn = headers.indexOf('Monto');
+  const methodColumn = headers.indexOf('Medio de pago');
+  expect(amountColumn).toBeGreaterThan(0);
+  expect(methodColumn).toBe(amountColumn + 1);
+  expect(sheet.rowCount).toBe(4);
+  expect([
+    sheet.getCell(2, amountColumn).value,
+    sheet.getCell(3, amountColumn).value,
+  ]).toEqual([1000, 200]);
+  expect(sheet.getCell(2, methodColumn).value).toBe('Efectivo + Transferencia');
+  expect(sheet.getCell(4, amountColumn).result).toBe(1200);
+  expect(sheet.getCell(4, 1).value).toBe('Total');
 });
 
 it('muestra comprobantes y montos antes de emitir; cancelar no factura', async () => {

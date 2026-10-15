@@ -803,10 +803,21 @@ export function HistorialPage({
         sortingFn: moneySorting,
         meta: {
           filterLabel: 'Medio de pago',
-          exportValue: (row) =>
-            row.paidTotal == null
-              ? ''
-              : `${fmtMoney(row.paidTotal)}\n${compactPaymentMethods(row)}`,
+          exportColumns: [
+            {
+              header: 'Monto',
+              value: (row) => row.paidTotal,
+              numFmt: '#,##0.00',
+              sum: true,
+              width: 18,
+            },
+            {
+              header: 'Medio de pago',
+              value: (row) =>
+                row.paidTotal == null ? '' : compactPaymentMethods(row),
+              width: 30,
+            },
+          ],
         },
         cell: ({ row }) => <PaymentSummary row={row.original} />,
       },
