@@ -17,6 +17,11 @@ export default mergeConfig(
       // test que alcance `supabase/client.ts` —aunque sea por una cadena de
       // imports— falla al CARGARSE en CI, donde no existe el `.env`.
       setupFiles: ['./src/test/setup.ts'],
+      coverage: {
+        provider: 'v8',
+        include: ['src/**/*.{ts,tsx}'],
+        exclude: ['src/**/*.test.{ts,tsx}', 'src/test/**', 'src/generated/**'],
+      },
     },
   }),
 );
