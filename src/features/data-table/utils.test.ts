@@ -74,6 +74,17 @@ describe('data-table utils', () => {
       ]);
     });
 
+    it('ordena por valor los numeros guardados como texto', () => {
+      // Los precios de las tarifas viajan como `string` desde Dexie y el
+      // accessor los entrega sin convertir. Como texto, '900' iba al final.
+      expect(['1500', '900', '10000', '2000'].sort(sort)).toEqual([
+        '900',
+        '1500',
+        '2000',
+        '10000',
+      ]);
+    });
+
     it('ordena fechas por instante', () => {
       const antes = new Date('2026-01-01T00:00:00Z');
       const despues = new Date('2026-08-28T00:00:00Z');

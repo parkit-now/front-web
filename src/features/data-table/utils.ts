@@ -96,7 +96,13 @@ export const caseInsensitiveSort: SortingFn<unknown> = (
     return left === right ? 0 : left ? 1 : -1;
   }
 
-  return normalizeText(left).localeCompare(normalizeText(right), 'es');
+  // `numeric: true` para los números guardados como texto: los precios de las
+  // tarifas viajan como `string` desde Dexie y llegan acá sin convertir, así
+  // que sin esto `'900'` quedaría después de `'10000'`. De paso ordena bien
+  // los tramos numéricos de las patentes (`AA2` antes que `AA10`).
+  return normalizeText(left).localeCompare(normalizeText(right), 'es', {
+    numeric: true,
+  });
 };
 
 export function defaultSortOrder(keys: string[]): SortingState {
