@@ -23,6 +23,7 @@ import {
 } from '../../../../features/data-table/components/StayDateCell';
 import {
   dateTimeSorting,
+  enumOrderSorting,
   textSorting,
 } from '../../../../features/data-table/utils';
 import { getDateRangeExcelFileName } from '../../../../features/data-table/excelExport';
@@ -130,6 +131,10 @@ const INVOICE_LETTER_OPTIONS = (['A', 'B', 'C'] as const).map((letter) => ({
 const moneySorting: SortingFn<EntryHistoryRow> = (left, right) => {
   return (left.original.paidTotal ?? -1) - (right.original.paidTotal ?? -1);
 };
+
+// A nivel de módulo: dentro del useMemo se recrearía en cada render.
+const invoiceStateSorting =
+  enumOrderSorting<EntryHistoryRow>(INVOICE_STATE_ORDER);
 
 type HistorialLocationState = {
   fromCaja?: boolean;
@@ -832,6 +837,7 @@ export function HistorialPage({
         meta: { exportValue: invoiceExportValue },
         size: 190,
         filterFn: 'includesSome',
+        sortingFn: invoiceStateSorting,
         cell: ({ row }) => <InvoiceCell row={row.original} />,
       },
       {
