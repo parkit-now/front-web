@@ -21,7 +21,10 @@ import {
   StayDateCell,
   TableDateTimeCell,
 } from '../../../../features/data-table/components/StayDateCell';
-import { dateTimeSorting } from '../../../../features/data-table/utils';
+import {
+  dateTimeSorting,
+  textSorting,
+} from '../../../../features/data-table/utils';
 import { getDateRangeExcelFileName } from '../../../../features/data-table/excelExport';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
@@ -720,6 +723,7 @@ export function HistorialPage({
       },
       {
         accessorKey: 'plate',
+        sortingFn: textSorting(),
         header: 'Patente',
         size: 120,
         cell: ({ row }) => <PlateCell plate={row.original.plate} />,
