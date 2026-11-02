@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Plus, Power, Trash2 } from 'lucide-react';
-import { DataTable } from '../../../data-table';
+import { createVehicleSearchModes, DataTable } from '../../../data-table';
 import { textSorting } from '../../../data-table/utils';
 import { PlateCell } from '../../../data-table/components/PlateCell';
 import { Button } from '../../../../shared/components/ui/Button';
@@ -38,6 +38,10 @@ const emptyForm = {
   validFrom: '',
   validUntil: '',
 };
+
+const SEARCH_MODES = createVehicleSearchModes<LprIgnoredPlate>({
+  plate: (row) => row.plate,
+});
 
 export function ListaBlancaPage() {
   const { sucursalId, sucursal } = useSucursal();
@@ -250,6 +254,7 @@ function WhitelistTenantPage({ tenantId }: { tenantId: string }) {
         }
         searchPlaceholder="Buscar por patente o nota..."
         searchableKeys={['plate', 'notes']}
+        searchModes={SEARCH_MODES}
         filterableColumns={['active', 'state', 'validFrom', 'validUntil']}
         getRowId={(row) => row.id}
         initialPageSize={10}

@@ -110,6 +110,31 @@ const failedRefund = reservation({
 let board: OwnerReservation[];
 
 describe('ReservasPage', () => {
+  it('permite buscar solo por patente sin coincidir con el código de reserva', async () => {
+    board = [
+      reservation({ id: 'uno', vehiclePlate: 'AB123CD', status: 'confirmed' }),
+      reservation({
+        id: 'dos',
+        vehiclePlate: 'XYZ999',
+        code: 'R-AB123',
+        status: 'confirmed',
+      }),
+    ];
+    const { container } = await mount(<ReservasPage />);
+    expect(container.querySelector('[title="Buscar en: Todos"]')).toBeTruthy();
+    await change(field('Buscar en la tabla'), 'ab123');
+    expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
+      2,
+    );
+    await click('Campo de búsqueda');
+    await click('Patente');
+    expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
+      1,
+    );
+    expect(container.querySelector('tbody')?.textContent).not.toContain(
+      'XYZ999',
+    );
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();

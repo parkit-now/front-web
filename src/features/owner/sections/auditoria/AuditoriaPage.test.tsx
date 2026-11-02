@@ -171,6 +171,34 @@ describe('AuditoriaPage', () => {
     );
   });
 
+  it('busca un ticket exacto sin coincidir con una patente o razón del evento', async () => {
+    services.listAuditEvents.mockResolvedValue([
+      event({
+        id: 'exacto',
+        action: 'entry.deleted',
+        metadata: { plate: 'EXACTA', ticketNumber: 66 },
+      }),
+      event({
+        id: 'parcial',
+        action: 'entry.deleted',
+        metadata: { plate: 'AB166CD', ticketNumber: 166, reason: '66' },
+      }),
+    ]);
+    const { container } = await mount(<AuditoriaPage />);
+    expect(container.querySelector('[title="Buscar en: Todos"]')).toBeTruthy();
+    await change(field('Buscar en la tabla'), '66');
+    expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
+      2,
+    );
+    await click('Campo de búsqueda');
+    await click('Ticket');
+    await change(field('Buscar en la tabla'), '#0066');
+    expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
+      1,
+    );
+    expect(container.querySelector('tbody')?.textContent).toContain('EXACTA');
+  });
+
   it('abre el detalle de una corrección con el antes y después', async () => {
     const { container } = await mount(<AuditoriaPage />);
 

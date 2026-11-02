@@ -20,6 +20,14 @@ export type DataTableServerState = {
   onGlobalFilterChange?: (value: string) => void;
 };
 
+export type DataTableSearchMode<TData> = {
+  id: string;
+  label: string;
+  placeholder?: string;
+  searchableKeys?: string[];
+  matches?: (row: TData, query: string) => boolean;
+};
+
 /**
  * Selección de filas (controlada). Con esto la tabla suma una columna de
  * checkboxes y, mientras haya algo elegido, una barra con `actions`.
@@ -41,6 +49,7 @@ export type DataTableProps<TData> = {
   emptyMessage?: string;
   searchPlaceholder?: string;
   searchableKeys?: string[];
+  searchModes?: readonly DataTableSearchMode<TData>[];
   filterableColumns?: string[];
   filterOptionsByColumn?: Record<string, DataTableFilterOption[]>;
   initialColumnFilters?: ColumnFiltersState;

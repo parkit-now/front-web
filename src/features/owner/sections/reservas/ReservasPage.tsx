@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { ColumnDef } from '@tanstack/react-table';
-import { DataTable } from '../../../data-table';
+import { createVehicleSearchModes, DataTable } from '../../../data-table';
 import { PlateCell } from '../../../data-table/components/PlateCell';
 import { dateTimeSorting } from '../../../data-table/utils';
 import { translateApiError } from '../../../../lib/api/translate';
@@ -75,6 +75,9 @@ const EMPTY_COPY: Record<
 };
 
 const SEARCHABLE_KEYS = ['vehiclePlate', 'driverName', 'code'];
+const SEARCH_MODES = createVehicleSearchModes<OwnerReservation>({
+  plate: (row) => row.vehiclePlate,
+});
 
 interface DialogState {
   kind: 'reject' | 'cancel';
@@ -595,6 +598,7 @@ export function ReservasPage() {
           emptyMessage={EMPTY_COPY[tab].title}
           searchPlaceholder="Buscar por patente, conductor o código"
           searchableKeys={SEARCHABLE_KEYS}
+          searchModes={SEARCH_MODES}
           getRowId={(row) => row.id}
           initialPageSize={20}
           pageSizeOptions={[10, 20, 50, 100]}

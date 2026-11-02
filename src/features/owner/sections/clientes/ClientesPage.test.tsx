@@ -97,6 +97,31 @@ describe('ClientesPage', () => {
     expect(clients.listClients).toHaveBeenCalledWith('tenant');
   });
 
+  it('ofrece Todos y Patente, incluida cualquier patente del cliente', async () => {
+    clients.listClients.mockResolvedValue([
+      client({ plates: ['AB123CD', 'XYZ999'] }),
+      client({ id: 'otro', name: 'AB123 comercial', plates: ['OTR111'] }),
+    ]);
+    const { container } = await mount(<ClientesPage />);
+    expect(container.querySelector('[title="Buscar en: Todos"]')).toBeTruthy();
+    await change(field('Buscar en la tabla'), 'AB123');
+    expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
+      3,
+    );
+    await click('Campo de búsqueda');
+    await click('Patente');
+    expect(container.querySelector('tbody')?.textContent).not.toContain(
+      'comercial',
+    );
+    await change(field('Buscar en la tabla'), 'xyz');
+    expect(container.querySelector('tbody')?.textContent).toContain(
+      'Ana Pérez',
+    );
+    expect(container.querySelector('tbody')?.textContent).not.toContain(
+      'comercial',
+    );
+  });
+
   it('agrega un cliente con dos patentes', async () => {
     await mount(<ClientesPage />);
 

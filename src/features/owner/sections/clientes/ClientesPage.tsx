@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ColumnDef } from '@tanstack/react-table';
 import { Pencil, Plus, Trash2, X } from 'lucide-react';
-import { DataTable } from '../../../data-table';
+import { createVehicleSearchModes, DataTable } from '../../../data-table';
 import { PlateCell } from '../../../data-table/components/PlateCell';
 import { Button } from '../../../../shared/components/ui/Button';
 import { Input } from '../../../../shared/components/ui/Input';
@@ -33,6 +33,9 @@ type Form = {
   email: string;
   phone: string;
 };
+const SEARCH_MODES = createVehicleSearchModes<Client>({
+  plate: (row) => row.plates,
+});
 const blank: Form = {
   plates: [''],
   cuit: '',
@@ -250,6 +253,7 @@ function ClientesTenantPage({ tenantId }: { tenantId: string }) {
         }
         searchPlaceholder="Buscar por nombre, patente, CUIT o contacto..."
         searchableKeys={['name', 'plates', 'cuit', 'email', 'phone']}
+        searchModes={SEARCH_MODES}
         filterableColumns={[
           'name',
           'plates',

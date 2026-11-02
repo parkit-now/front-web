@@ -13,7 +13,10 @@ import type {
   ColumnFiltersState,
   SortingFn,
 } from '@tanstack/react-table';
-import { DataTable } from '../../../../features/data-table';
+import {
+  createVehicleSearchModes,
+  DataTable,
+} from '../../../../features/data-table';
 import { VehicleCell } from '../../../../features/data-table/components/VehicleCell';
 import { PlateCell } from '../../../../features/data-table/components/PlateCell';
 import {
@@ -102,6 +105,10 @@ const SEARCHABLE_KEYS = [
   'invoiceReceiver',
   'notes',
 ];
+const SEARCH_MODES = createVehicleSearchModes<EntryHistoryRow>({
+  ticket: (row) => row.ticketNumber,
+  plate: (row) => row.plate,
+});
 const FILTERABLE_COLUMNS = [
   'enteredAtLocalDate',
   'leftAtLocalDate',
@@ -1155,6 +1162,7 @@ export function HistorialPage({
               emptyMessage="No hay movimientos registrados todavía."
               searchPlaceholder="Buscar por ticket, patente, vehículo o notas"
               searchableKeys={SEARCHABLE_KEYS}
+              searchModes={SEARCH_MODES}
               filterableColumns={FILTERABLE_COLUMNS}
               filterOptionsByColumn={{
                 cashSessionId: cashSessionOptions,
