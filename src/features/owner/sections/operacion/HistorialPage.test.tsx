@@ -205,10 +205,8 @@ it.each([false, true])(
     );
     expect(container.querySelector('tbody')?.textContent).toContain('ENBASE');
     expect(
-      container.querySelector<HTMLButtonElement>(
-        '.dt-filter-date-presence button',
-      )?.disabled,
-    ).toBe(true);
+      container.querySelector('.dt-filter-date-presence button'),
+    ).toBeNull();
     await act(async () => {
       container
         .querySelector<HTMLButtonElement>('[aria-label="Descargar Excel"]')!
