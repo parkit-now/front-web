@@ -207,7 +207,7 @@ export function DataTable<TData>({
   emptyMessage = 'No hay resultados para mostrar.',
   searchPlaceholder = 'Buscar...',
   searchableKeys,
-  searchModes,
+  searchModes: configuredSearchModes,
   filterableColumns = [],
   filterOptionsByColumn,
   initialColumnFilters,
@@ -232,6 +232,10 @@ export function DataTable<TData>({
   onVisibleRowIdsChange,
   rowSelection,
 }: DataTableProps<TData>) {
+  const searchModes =
+    (configuredSearchModes?.filter((mode) => mode.id !== 'all').length ?? 0) > 1
+      ? configuredSearchModes
+      : undefined;
   const [globalFilter, setGlobalFilter] = useState('');
   const [searchModeId, setSearchModeId] = useState<string>();
   const searchMode =
