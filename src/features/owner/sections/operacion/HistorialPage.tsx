@@ -457,7 +457,6 @@ export function HistorialPage({
   const [onlyCurrentSession, setOnlyCurrentSession] = useState(
     () => !focusedCashSessionId,
   );
-  const [includeInLot, setIncludeInLot] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [photoRow, setPhotoRow] = useState<EntryHistoryRow | null>(null);
   const [visibleEntryIds, setVisibleEntryIds] = useState<string[]>([]);
@@ -582,11 +581,10 @@ export function HistorialPage({
   const switchedRows = useMemo(
     () =>
       filterEntryHistoryRows(baseRows, {
-        includeInLot,
         onlyCurrentSession,
         activeCashSessionId: activeCashSession?.id,
       }),
-    [activeCashSession?.id, baseRows, includeInLot, onlyCurrentSession],
+    [activeCashSession?.id, baseRows, onlyCurrentSession],
   );
   const rows = switchedRows;
   const selected = useMemo(
@@ -799,6 +797,11 @@ export function HistorialPage({
         meta: {
           exportValue: (row) =>
             row.leftAt ? fmtDateTimeAr(row.leftAt) : 'En base',
+          datePresenceLabels: {
+            all: 'Todos',
+            present: 'Egresados',
+            missing: 'En base',
+          },
         },
         size: 160,
         filterFn: 'dateRange',
@@ -1220,14 +1223,6 @@ export function HistorialPage({
                       aria-label="Solo caja actual"
                     />
                     Solo caja actual
-                  </label>
-                  <label className="operation-quick-switch">
-                    <Switch
-                      checked={includeInLot}
-                      onChange={setIncludeInLot}
-                      aria-label="Incluir autos en base"
-                    />
-                    Incluir autos en base
                   </label>
                 </div>
               }

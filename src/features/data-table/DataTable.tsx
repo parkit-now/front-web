@@ -11,16 +11,16 @@ import {
   getSortedRowModel,
   type PaginationState,
   type RowSelectionState,
+  type RowData,
   type SortingFn,
   type SortingState,
   type Updater,
   useReactTable,
   type VisibilityState,
 } from '@tanstack/react-table';
-import { format } from 'date-fns';
 import { ArrowDown, ArrowUp, ArrowUpDown, RefreshCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { DateRange } from '../../shared/components/ui/DateRangeFilter';
+import { matchesDateFilter, type DatePresenceLabels } from './dateFilter';
 import {
   TemplateSelector,
   type TableViewConfig,
@@ -47,6 +47,10 @@ declare module '@tanstack/react-table' {
     includesSome: FilterFn<unknown>;
     dateRange: FilterFn<unknown>;
     numberRange: FilterFn<unknown>;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData extends RowData, TValue> {
+    datePresenceLabels?: DatePresenceLabels;
   }
 }
 
@@ -75,23 +79,15 @@ const includesSomeFilter: FilterFn<unknown> = (row, columnId, value) => {
 /** Row values may already be a `YYYY-MM-DD`-sliced string (the common
  * pattern for date columns in this codebase) or a full ISO/Date value —
  * both compare correctly once cut down to the 10-char calendar-day key. */
-function toDateKey(raw: unknown): string | null {
-  if (raw instanceof Date) {
-    return Number.isNaN(raw.getTime()) ? null : format(raw, 'yyyy-MM-dd');
-  }
-  if (typeof raw === 'string' && raw.length >= 10) return raw.slice(0, 10);
-  return null;
-}
-
-const dateRangeFilter: FilterFn<unknown> = (row, columnId, value) => {
-  const range = value as DateRange | undefined;
-  if (!range?.from) return true;
-  const key = toDateKey(row.getValue(columnId));
-  if (!key) return false;
-  const fromKey = format(range.from, 'yyyy-MM-dd');
-  const toKey = format(range.to ?? range.from, 'yyyy-MM-dd');
-  return key >= fromKey && key <= toKey;
-};
+const dateRangeFilter: FilterFn<unknown> = (row, columnId, value: unknown) =>
+  matchesDateFilter(
+    row.getValue(columnId),
+    value,
+    Boolean(
+      row.getAllCells().find((cell) => cell.column.id === columnId)?.column
+        .columnDef.meta?.datePresenceLabels,
+    ),
+  );
 
 const numberRangeFilter: FilterFn<unknown> = (row, columnId, value) =>
   inNumberRange(row.getValue(columnId), value as NumberRange | undefined);
