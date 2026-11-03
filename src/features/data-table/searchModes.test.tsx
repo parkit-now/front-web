@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import '../../test/templateServer';
 import { act } from 'react';
 import type { ColumnDef } from '@tanstack/react-table';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

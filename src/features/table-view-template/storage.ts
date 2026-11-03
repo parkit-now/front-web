@@ -56,7 +56,7 @@ function safeParseCollection(raw: string | null): TableViewTemplateCollection {
   }
 }
 
-function writeCollection(
+export function writeCollection(
   scope: TableTemplateScope,
   collection: TableViewTemplateCollection,
   storage: TableTemplateStorage | null = getBrowserStorage(),

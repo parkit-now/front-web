@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import '../../test/templateServer';
 import type { ColumnDef, ColumnFiltersState } from '@tanstack/react-table';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
