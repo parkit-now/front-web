@@ -238,6 +238,9 @@ describe('AuditoriaPage', () => {
 
   it('muestra las patentes descartadas en su pestaña', async () => {
     await mount(<AuditoriaPage />, { path: '/auditoria?tab=lpr' });
+    expect(
+      document.querySelector('.segmented-control[aria-label="Auditoría"]'),
+    ).not.toBeNull();
 
     expect(pageText()).toContain('AB123CD');
     expect(pageText()).toContain('ZZ999ZZ');

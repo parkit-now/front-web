@@ -2054,7 +2054,11 @@ export function AuditoriaPage() {
         onSelectMetric={handleSelectMetric}
       />
 
-      <div className="audit-tabs" role="tablist" aria-label="Auditoría">
+      <div
+        className="segmented-control audit-tabs"
+        role="tablist"
+        aria-label="Auditoría"
+      >
         <button
           type="button"
           className={activeTab === 'events' ? 'active' : undefined}

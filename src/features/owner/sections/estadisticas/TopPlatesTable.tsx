@@ -59,25 +59,18 @@ export function TopPlatesTable({ items, loading, error }: TopPlatesTableProps) {
         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
           Top de patentes
         </span>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <div
+          className="segmented-control"
+          role="group"
+          aria-label="Ordenar patentes"
+        >
           {ORDERS.map((option) => (
             <button
               key={option}
               type="button"
+              className={orderBy === option ? 'active' : ''}
+              aria-pressed={orderBy === option}
               onClick={() => setOrderBy(option)}
-              style={{
-                padding: '4px 12px',
-                borderRadius: 999,
-                border: '1px solid',
-                fontSize: 12,
-                fontWeight: 500,
-                cursor: 'pointer',
-                borderColor:
-                  orderBy === option ? 'var(--brand)' : 'var(--border)',
-                background:
-                  orderBy === option ? 'var(--brand-soft)' : 'transparent',
-                color: orderBy === option ? 'var(--brand)' : 'var(--text-2)',
-              }}
             >
               {ORDER_LABELS[option]}
             </button>
