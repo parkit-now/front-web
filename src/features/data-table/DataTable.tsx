@@ -11,16 +11,16 @@ import {
   getSortedRowModel,
   type PaginationState,
   type RowSelectionState,
+  type RowData,
   type SortingFn,
   type SortingState,
   type Updater,
   useReactTable,
   type VisibilityState,
 } from '@tanstack/react-table';
-import { format } from 'date-fns';
-import { ArrowUpDown, RefreshCcw, Search, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, RefreshCcw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { DateRange } from '../../shared/components/ui/DateRangeFilter';
+import { matchesDateFilter, type DatePresenceLabels } from './dateFilter';
 import {
   TemplateSelector,
   type TableViewConfig,
@@ -32,7 +32,8 @@ import { ColumnPicker } from './components/ColumnPicker';
 import { ExcelExportButton } from './components/ExcelExportButton';
 import { FilterPanel } from './components/FilterPanel';
 import { Pagination } from './components/Pagination';
-import type { DataTableProps } from './types';
+import { TableSearch } from './components/TableSearch';
+import type { DataTableProps, DataTableSearchMode } from './types';
 import {
   caseInsensitiveSort,
   getPaginationPageCount,
@@ -46,6 +47,10 @@ declare module '@tanstack/react-table' {
     includesSome: FilterFn<unknown>;
     dateRange: FilterFn<unknown>;
     numberRange: FilterFn<unknown>;
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData extends RowData, TValue> {
+    datePresenceLabels?: DatePresenceLabels;
   }
 }
 
@@ -74,23 +79,15 @@ const includesSomeFilter: FilterFn<unknown> = (row, columnId, value) => {
 /** Row values may already be a `YYYY-MM-DD`-sliced string (the common
  * pattern for date columns in this codebase) or a full ISO/Date value —
  * both compare correctly once cut down to the 10-char calendar-day key. */
-function toDateKey(raw: unknown): string | null {
-  if (raw instanceof Date) {
-    return Number.isNaN(raw.getTime()) ? null : format(raw, 'yyyy-MM-dd');
-  }
-  if (typeof raw === 'string' && raw.length >= 10) return raw.slice(0, 10);
-  return null;
-}
-
-const dateRangeFilter: FilterFn<unknown> = (row, columnId, value) => {
-  const range = value as DateRange | undefined;
-  if (!range?.from) return true;
-  const key = toDateKey(row.getValue(columnId));
-  if (!key) return false;
-  const fromKey = format(range.from, 'yyyy-MM-dd');
-  const toKey = format(range.to ?? range.from, 'yyyy-MM-dd');
-  return key >= fromKey && key <= toKey;
-};
+const dateRangeFilter: FilterFn<unknown> = (row, columnId, value: unknown) =>
+  matchesDateFilter(
+    row.getValue(columnId),
+    value,
+    Boolean(
+      row.getAllCells().find((cell) => cell.column.id === columnId)?.column
+        .columnDef.meta?.datePresenceLabels,
+    ),
+  );
 
 const numberRangeFilter: FilterFn<unknown> = (row, columnId, value) =>
   inNumberRange(row.getValue(columnId), value as NumberRange | undefined);
@@ -128,19 +125,28 @@ function selectionColumn<TData>(): ColumnDef<TData, unknown> {
   };
 }
 
-function makeGlobalFilter<TData>(searchableKeys?: string[]): FilterFn<TData> {
-  return (row, _columnId, value) => {
-    const query = normalizeText(value);
+function makeGlobalFilter<TData>(
+  searchableKeys?: string[],
+  searchMode?: DataTableSearchMode<TData>,
+): FilterFn<TData> {
+  return (row, _columnId, value: string | { query: string }) => {
+    const rawQuery = typeof value === 'string' ? value : value.query;
+    const query = normalizeText(rawQuery);
     if (!query) return true;
+    if (searchMode?.matches) return searchMode.matches(row.original, rawQuery);
 
     const original = row.original as Record<string, unknown>;
-    const keys = searchableKeys?.length
-      ? searchableKeys
+    const modeKeys = searchMode?.searchableKeys ?? searchableKeys;
+    const keys = modeKeys?.length
+      ? modeKeys
       : row.getAllCells().map((cell) => cell.column.id);
 
     return keys.some((key) => {
       const cellValue = key in original ? original[key] : row.getValue(key);
-      return normalizeText(cellValue).includes(query);
+      const values = Array.isArray(cellValue) ? cellValue : [cellValue];
+      return values.some((item: unknown) =>
+        normalizeText(item).includes(query),
+      );
     });
   };
 }
@@ -197,6 +203,7 @@ export function DataTable<TData>({
   emptyMessage = 'No hay resultados para mostrar.',
   searchPlaceholder = 'Buscar...',
   searchableKeys,
+  searchModes: configuredSearchModes,
   filterableColumns = [],
   filterOptionsByColumn,
   initialColumnFilters,
@@ -221,7 +228,23 @@ export function DataTable<TData>({
   onVisibleRowIdsChange,
   rowSelection,
 }: DataTableProps<TData>) {
+  const searchModes =
+    (configuredSearchModes?.filter((mode) => mode.id !== 'all').length ?? 0) > 1
+      ? configuredSearchModes
+      : undefined;
   const [globalFilter, setGlobalFilter] = useState('');
+  const [searchModeId, setSearchModeId] = useState<string>();
+  const searchMode =
+    searchModes?.find((mode) => mode.id === searchModeId) ?? searchModes?.[0];
+  const activeSearchModeId = searchMode?.id;
+  // TanStack invalidates filtered rows when the filter value changes.
+  const globalFilterValue = useMemo(
+    () =>
+      activeSearchModeId
+        ? { query: globalFilter, mode: activeSearchModeId }
+        : globalFilter,
+    [globalFilter, activeSearchModeId],
+  );
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
     initialColumnFilters ?? [],
   );
@@ -270,7 +293,7 @@ export function DataTable<TData>({
     setPagination((current) =>
       current.pageIndex === 0 ? current : { ...current, pageIndex: 0 },
     );
-  }, [columnFilters, globalFilter, sorting]);
+  }, [columnFilters, globalFilter, activeSearchModeId, sorting]);
 
   useEffect(() => {
     onColumnFiltersChange?.(columnFilters);
@@ -313,7 +336,7 @@ export function DataTable<TData>({
     state: {
       rowSelection: rowSelectionState,
       columnFilters,
-      globalFilter,
+      globalFilter: globalFilterValue,
       sorting,
       columnVisibility: effectiveColumnVisibility,
       columnOrder,
@@ -377,7 +400,7 @@ export function DataTable<TData>({
       filterFn: 'includesSome',
       sortingFn: caseInsensitiveSort as SortingFn<TData>,
     },
-    globalFilterFn: makeGlobalFilter(searchableKeys),
+    globalFilterFn: makeGlobalFilter(searchableKeys, searchMode),
     autoResetPageIndex: false,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -406,6 +429,7 @@ export function DataTable<TData>({
 
       if (!sanitized) {
         setGlobalFilter('');
+        setSearchModeId(undefined);
         setColumnFilters(initialColumnFilters ?? []);
         setSorting([]);
         setColumnVisibility(
@@ -418,6 +442,7 @@ export function DataTable<TData>({
       }
 
       setGlobalFilter(sanitized.globalSearch);
+      setSearchModeId(sanitized.globalSearchMode);
       setColumnFilters(sanitized.filters);
       setSorting(sanitized.sorting);
       setColumnVisibility({
@@ -459,6 +484,7 @@ export function DataTable<TData>({
             ...template.config,
             filters: initialColumnFilters ?? [],
             globalSearch: '',
+            globalSearchMode: undefined,
           }
         : template.config,
     );
@@ -485,6 +511,7 @@ export function DataTable<TData>({
       })),
       sorting,
       globalSearch: globalFilter,
+      ...(activeSearchModeId ? { globalSearchMode: activeSearchModeId } : {}),
       pagination: { pageSize: pagination.pageSize },
     };
   }, [
@@ -495,6 +522,7 @@ export function DataTable<TData>({
     columnVisibility,
     globalFilter,
     pagination.pageSize,
+    activeSearchModeId,
     sorting,
   ]);
 
@@ -547,25 +575,14 @@ export function DataTable<TData>({
 
       <div className="dt-toolbar">
         <div className="dt-search-cluster">
-          <label className="dt-search">
-            <Search size={17} />
-            <input
-              type="search"
-              value={globalFilter}
-              onChange={(event) => table.setGlobalFilter(event.target.value)}
-              placeholder={searchPlaceholder}
-            />
-            {globalFilter ? (
-              <button
-                type="button"
-                className="dt-search-clear"
-                onClick={() => table.setGlobalFilter('')}
-                title="Limpiar búsqueda"
-              >
-                <X size={15} />
-              </button>
-            ) : null}
-          </label>
+          <TableSearch
+            value={globalFilter}
+            onChange={(value) => table.setGlobalFilter(value)}
+            placeholder={searchPlaceholder}
+            modes={searchModes}
+            modeId={activeSearchModeId}
+            onModeChange={setSearchModeId}
+          />
           {onRefresh ? (
             <button
               type="button"
@@ -658,9 +675,19 @@ export function DataTable<TData>({
                 {headerGroup.headers.map((header) => {
                   const column = header.column;
                   const pinned = column.getIsPinned();
+                  const sorted = column.getIsSorted();
                   return (
                     <th
                       key={header.id}
+                      aria-sort={
+                        !column.getCanSort()
+                          ? undefined
+                          : sorted === 'asc'
+                            ? 'ascending'
+                            : sorted === 'desc'
+                              ? 'descending'
+                              : 'none'
+                      }
                       className={pinned === 'left' ? 'pinned-left' : undefined}
                       style={
                         pinned === 'left'
@@ -671,14 +698,24 @@ export function DataTable<TData>({
                       {header.isPlaceholder ? null : column.getCanSort() ? (
                         <button
                           type="button"
-                          className="dt-sort-button"
+                          className={
+                            sorted
+                              ? 'dt-sort-button is-sorted'
+                              : 'dt-sort-button'
+                          }
                           onClick={column.getToggleSortingHandler()}
                         >
                           {flexRender(
                             header.column.columnDef.header,
                             header.getContext(),
                           )}
-                          <ArrowUpDown size={14} />
+                          {sorted === 'asc' ? (
+                            <ArrowUp size={14} aria-hidden />
+                          ) : sorted === 'desc' ? (
+                            <ArrowDown size={14} aria-hidden />
+                          ) : (
+                            <ArrowUpDown size={14} aria-hidden />
+                          )}
                         </button>
                       ) : (
                         flexRender(

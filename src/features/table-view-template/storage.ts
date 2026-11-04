@@ -56,7 +56,7 @@ function safeParseCollection(raw: string | null): TableViewTemplateCollection {
   }
 }
 
-function writeCollection(
+export function writeCollection(
   scope: TableTemplateScope,
   collection: TableViewTemplateCollection,
   storage: TableTemplateStorage | null = getBrowserStorage(),
@@ -312,6 +312,9 @@ export function sanitizeTableViewConfig(
     filters,
     sorting,
     globalSearch: parsed.globalSearch,
+    ...(parsed.globalSearchMode !== undefined
+      ? { globalSearchMode: parsed.globalSearchMode }
+      : {}),
     pagination: parsed.pagination,
   };
 }

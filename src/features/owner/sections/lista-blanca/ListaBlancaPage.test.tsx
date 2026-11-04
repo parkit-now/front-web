@@ -92,6 +92,21 @@ describe('ListaBlancaPage', () => {
     expect(pageText()).toContain('Sin límite');
   });
 
+  it('oculta el selector y conserva la búsqueda por patente o nota', async () => {
+    plates.listLprIgnoredPlates.mockResolvedValue([
+      plate(),
+      plate({ id: 'otra', plate: 'XYZ999', notes: 'AB123' }),
+    ]);
+    const { container } = await mount(<ListaBlancaPage />);
+    await change(field('Buscar en la tabla'), 'ab123');
+    expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
+      2,
+    );
+    expect(
+      container.querySelector('[aria-label="Campo de búsqueda"]'),
+    ).toBeNull();
+  });
+
   it('agrega una patente con vigencia', async () => {
     await mount(<ListaBlancaPage />);
 

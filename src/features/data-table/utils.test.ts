@@ -7,6 +7,7 @@ import {
   getVisiblePageNumbers,
   inNumberRange,
   normalizeText,
+  textSorting,
 } from './utils';
 
 describe('data-table utils', () => {
@@ -51,6 +52,12 @@ describe('data-table utils', () => {
         { getValue: () => b } as never,
         'col',
       );
+    const sortText = (a: unknown, b: unknown) =>
+      textSorting()(
+        { getValue: () => a } as never,
+        { getValue: () => b } as never,
+        'col',
+      );
 
     it('ordena numeros por valor y no como texto', () => {
       expect(sort(2, 10)).toBeLessThan(0);
@@ -71,6 +78,27 @@ describe('data-table utils', () => {
         'Álamo',
         'estadia',
         'Ñandu',
+      ]);
+    });
+
+    it('ordena por valor los numeros guardados como texto', () => {
+      // Los precios de las tarifas viajan como `string` desde Dexie y el
+      // accessor los entrega sin convertir. Como texto, '900' iba al final.
+      expect(['1500', '900', '10000', '2000'].sort(sort)).toEqual([
+        '900',
+        '1500',
+        '2000',
+        '10000',
+      ]);
+    });
+
+    it('las patentes NO usan ese criterio: van por texto', () => {
+      // Una patente es un codigo, no una cantidad: se lee como cadena, igual
+      // que en el papel. Por eso las columnas de patente llevan `textSorting`.
+      expect(['AA10', 'AA2', 'AB1'].sort(sortText)).toEqual([
+        'AA10',
+        'AA2',
+        'AB1',
       ]);
     });
 

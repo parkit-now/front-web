@@ -1,5 +1,5 @@
 import { Bookmark, Info, Save, Trash2, X } from 'lucide-react';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useCloseOnOutsideClick } from '../../lib/ui/useCloseOnOutsideClick';
 import type {
   TableTemplateScope,
@@ -45,6 +45,17 @@ export function TemplateSelector({
     [selectedTemplateId, templatesApi.templates],
   );
 
+  useEffect(() => {
+    if (
+      !templatesApi.loading &&
+      selectedTemplateId &&
+      !templatesApi.templates.some((t) => t.id === selectedTemplateId)
+    ) {
+      onSelectedTemplateIdChange(null);
+      templatesApi.setLastUsed(null);
+    }
+  }, [templatesApi, selectedTemplateId, onSelectedTemplateIdChange]);
+
   if (!templatesApi.enabled) return null;
 
   function applyTemplate(templateId: string | null): void {
@@ -73,12 +84,14 @@ export function TemplateSelector({
     setSaveDialogOpen(true);
   }
 
-  function handleSaveTemplate(event: React.FormEvent<HTMLFormElement>): void {
+  async function handleSaveTemplate(
+    event: React.FormEvent<HTMLFormElement>,
+  ): Promise<void> {
     event.preventDefault();
     const trimmedName = saveName.trim();
     if (!trimmedName) return;
 
-    const template = templatesApi.save({
+    const template = await templatesApi.save({
       name: trimmedName,
       description: saveDescription.trim() || undefined,
       config: getCurrentConfig(),
@@ -89,9 +102,9 @@ export function TemplateSelector({
     setSaveDialogOpen(false);
   }
 
-  function handleOverwrite(): void {
+  async function handleOverwrite(): Promise<void> {
     if (!selectedTemplateId) return;
-    const updated = templatesApi.overwrite(
+    const updated = await templatesApi.overwrite(
       selectedTemplateId,
       getCurrentConfig(),
     );
@@ -105,11 +118,13 @@ export function TemplateSelector({
     setOpen(false);
   }
 
-  function handleSaveMetadata(event: React.FormEvent<HTMLFormElement>): void {
+  async function handleSaveMetadata(
+    event: React.FormEvent<HTMLFormElement>,
+  ): Promise<void> {
     event.preventDefault();
     if (!editingTemplate) return;
 
-    const updated = templatesApi.updateMetadata(editingTemplate.id, {
+    const updated = await templatesApi.updateMetadata(editingTemplate.id, {
       name: metadataName,
       description: metadataDescription,
     });
@@ -117,7 +132,7 @@ export function TemplateSelector({
     setEditingTemplate(null);
   }
 
-  function handleDelete(templateId: string): void {
+  async function handleDelete(templateId: string): Promise<void> {
     const template = templatesApi.templates.find(
       (item) => item.id === templateId,
     );
@@ -126,7 +141,8 @@ export function TemplateSelector({
     );
     if (!accepted) return;
 
-    templatesApi.remove(templateId);
+    const removed = await templatesApi.remove(templateId);
+    if (!removed) return;
     if (selectedTemplateId === templateId) {
       onSelectedTemplateIdChange(null);
       onApply(null);
@@ -141,7 +157,10 @@ export function TemplateSelector({
           className="dt-icon-button"
           title="Plantillas de tabla"
           aria-expanded={open}
-          onClick={() => setOpen((current) => !current)}
+          onClick={() => {
+            if (!open) void templatesApi.refresh();
+            setOpen((current) => !current);
+          }}
         >
           <Bookmark size={17} />
           <span className="dt-sr-only">Plantillas</span>
@@ -161,7 +180,12 @@ export function TemplateSelector({
               Sin plantilla
             </button>
 
-            <div className="dt-template-list">
+            {templatesApi.error ? (
+              <p className="dt-empty-note" role="alert">
+                {templatesApi.error}
+              </p>
+            ) : null}
+            <div className="dt-template-list" aria-busy={templatesApi.loading}>
               {templatesApi.templates.length === 0 ? (
                 <p className="dt-empty-note">No hay plantillas guardadas.</p>
               ) : (
@@ -185,7 +209,8 @@ export function TemplateSelector({
                     <button
                       type="button"
                       className="dt-mini-icon danger"
-                      onClick={() => handleDelete(template.id)}
+                      onClick={() => void handleDelete(template.id)}
+                      disabled={!templatesApi.canWrite}
                       title="Eliminar plantilla"
                     >
                       <Trash2 size={14} />
@@ -200,14 +225,15 @@ export function TemplateSelector({
                 type="button"
                 className="dt-primary-action"
                 onClick={openSaveDialog}
+                disabled={!templatesApi.canWrite}
               >
                 <Bookmark size={15} /> Guardar plantilla
               </button>
               <button
                 type="button"
                 className="dt-secondary-action"
-                onClick={handleOverwrite}
-                disabled={!selectedTemplateId}
+                onClick={() => void handleOverwrite()}
+                disabled={!selectedTemplateId || !templatesApi.canWrite}
               >
                 <Save size={15} /> Actualizar actual
               </button>
@@ -229,7 +255,7 @@ export function TemplateSelector({
             role="dialog"
             aria-modal="true"
             aria-label="Guardar plantilla"
-            onSubmit={handleSaveTemplate}
+            onSubmit={(event) => void handleSaveTemplate(event)}
           >
             <header>
               <div>
@@ -249,6 +275,7 @@ export function TemplateSelector({
               <span>Nombre</span>
               <input
                 type="text"
+                maxLength={150}
                 value={saveName}
                 onChange={(event) => setSaveName(event.target.value)}
                 placeholder="Ej. Operación diaria"
@@ -258,12 +285,18 @@ export function TemplateSelector({
             <label>
               <span>Descripción</span>
               <textarea
+                maxLength={1000}
                 value={saveDescription}
                 onChange={(event) => setSaveDescription(event.target.value)}
                 placeholder="Opcional"
                 rows={3}
               />
             </label>
+            {templatesApi.error ? (
+              <p className="dt-empty-note" role="alert">
+                {templatesApi.error}
+              </p>
+            ) : null}
             <div className="dt-dialog-actions">
               <button
                 type="button"
@@ -275,7 +308,7 @@ export function TemplateSelector({
               <button
                 type="submit"
                 className="dt-primary-action"
-                disabled={!saveName.trim()}
+                disabled={!saveName.trim() || !templatesApi.canWrite}
               >
                 Guardar
               </button>
@@ -297,7 +330,7 @@ export function TemplateSelector({
             role="dialog"
             aria-modal="true"
             aria-label="Editar descripción de plantilla"
-            onSubmit={handleSaveMetadata}
+            onSubmit={(event) => void handleSaveMetadata(event)}
           >
             <header>
               <div>
@@ -317,6 +350,7 @@ export function TemplateSelector({
               <span>Nombre</span>
               <input
                 type="text"
+                maxLength={150}
                 value={metadataName}
                 onChange={(event) => setMetadataName(event.target.value)}
                 autoFocus
@@ -325,12 +359,18 @@ export function TemplateSelector({
             <label>
               <span>Descripción</span>
               <textarea
+                maxLength={1000}
                 value={metadataDescription}
                 onChange={(event) => setMetadataDescription(event.target.value)}
                 placeholder="Sin descripción"
                 rows={3}
               />
             </label>
+            {templatesApi.error ? (
+              <p className="dt-empty-note" role="alert">
+                {templatesApi.error}
+              </p>
+            ) : null}
             <div className="dt-dialog-actions">
               <button
                 type="button"
@@ -342,7 +382,7 @@ export function TemplateSelector({
               <button
                 type="submit"
                 className="dt-primary-action"
-                disabled={!metadataName.trim()}
+                disabled={!metadataName.trim() || !templatesApi.canWrite}
               >
                 Guardar
               </button>

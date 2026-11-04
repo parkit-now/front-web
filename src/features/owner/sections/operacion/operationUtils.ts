@@ -178,14 +178,11 @@ export function attachPaymentsToEntries(
 export function filterEntryHistoryRows(
   rows: EntryHistoryRow[],
   options: {
-    includeInLot: boolean;
     onlyCurrentSession: boolean;
     activeCashSessionId?: string;
   },
 ): EntryHistoryRow[] {
-  let filtered = options.includeInLot
-    ? rows
-    : rows.filter((entry) => Boolean(entry.leftAt));
+  let filtered = rows;
 
   if (options.onlyCurrentSession) {
     filtered = options.activeCashSessionId
