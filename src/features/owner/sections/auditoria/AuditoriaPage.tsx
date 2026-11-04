@@ -86,25 +86,8 @@ const SEARCH_MODES = createVehicleSearchModes<AuditRow>({
   fields: [
     { id: 'actor', label: 'Actor', searchableKeys: ['actorName'] },
     { id: 'reason', label: 'Razón', searchableKeys: ['reason'] },
-    {
-      id: 'field',
-      label: 'Campo modificado',
-      searchableKeys: ['changedFieldLabels'],
-    },
-    {
-      id: 'event',
-      label: 'Evento',
-      searchableKeys: ['actionLabel'],
-    },
     { id: 'brand', label: 'Marca', searchableKeys: ['vehicleBrands'] },
     { id: 'model', label: 'Modelo', searchableKeys: ['vehicleModels'] },
-    { id: 'color', label: 'Color', searchableKeys: ['colors'] },
-    { id: 'rate', label: 'Tarifa', searchableKeys: ['rateNames'] },
-    {
-      id: 'paymentMethod',
-      label: 'Medio de pago',
-      searchableKeys: ['paymentMethodNames'],
-    },
   ],
 });
 const LPR_API_PAGE_SIZE = 100;
@@ -1953,6 +1936,12 @@ export function AuditoriaPage() {
         ),
       },
       {
+        accessorKey: 'changedFieldLabels',
+        header: 'Campo modificado',
+        enableHiding: false,
+        meta: { filterOnly: true },
+      },
+      {
         id: 'actorName',
         header: 'Actor',
         accessorKey: 'actorName',
@@ -2135,12 +2124,20 @@ export function AuditoriaPage() {
             columns={columns}
             isLoading={auditQuery.isLoading}
             emptyMessage="No hay eventos de auditoría para mostrar."
-            searchPlaceholder="Buscar por patente, actor, nro de ticket, razón o campo modificado"
-            searchableKeys={['searchText']}
+            searchPlaceholder="Buscar por patente, ticket, actor, razón, marca o modelo"
+            searchableKeys={[
+              'plate',
+              'ticketNumber',
+              'actorName',
+              'reason',
+              'vehicleBrands',
+              'vehicleModels',
+            ]}
             searchModes={SEARCH_MODES}
             filterableColumns={[
               'enteredAtLocalDate',
               'leftAtLocalDate',
+              'changedFieldLabels',
               'cashSessionId',
               'paymentMethodNames',
               'rateNames',
