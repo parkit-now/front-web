@@ -94,7 +94,7 @@ const SEARCH_MODES = createVehicleSearchModes<AuditRow>({
     {
       id: 'event',
       label: 'Evento',
-      searchableKeys: ['actionLabel', 'summary'],
+      searchableKeys: ['actionLabel'],
     },
     { id: 'brand', label: 'Marca', searchableKeys: ['vehicleBrands'] },
     { id: 'model', label: 'Modelo', searchableKeys: ['vehicleModels'] },
