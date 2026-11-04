@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../../../lib/api/client';
 import {
@@ -7,6 +8,7 @@ import {
   field,
   mount,
   pageText,
+  settle,
   unmountAll,
 } from '../../../../test/dom';
 import type { StaffMember } from '../../services/staff';
@@ -88,14 +90,30 @@ describe('PersonalPage', () => {
       if (call.method === 'GET') {
         const url = new URL(call.path, 'http://local');
         const role = url.searchParams.get('role');
-        const items = role
+        let items = role
           ? staff.filter((m) => m.memberships.some((x) => x.role === role))
           : staff;
+        const search = url.searchParams.get('search')?.trim().toLowerCase();
+        const searchField = url.searchParams.get('searchField');
+        if (search)
+          items = items.filter((item) => {
+            const values =
+              searchField === 'name'
+                ? [item.name]
+                : searchField === 'email'
+                  ? [item.email]
+                  : [item.name, item.email];
+            return values.some((value) =>
+              value?.toLowerCase().includes(search),
+            );
+          });
+        const page = Number(url.searchParams.get('page') ?? 1);
+        const pageSize = Number(url.searchParams.get('pageSize') ?? 10);
         return Promise.resolve({
-          items,
+          items: items.slice((page - 1) * pageSize, page * pageSize),
           total: items.length,
-          page: 1,
-          pageSize: 10,
+          page,
+          pageSize,
         });
       }
       if (call.method === 'POST') {
@@ -128,6 +146,53 @@ describe('PersonalPage', () => {
     await change(field<HTMLSelectElement>('Filtrar por rol'), 'owner');
 
     expect(calls('GET').at(-1)!.path).toContain('role=owner');
+  });
+
+  it('busca Nombre o Email en el servidor, vuelve a la primera página y conserva el total correcto', async () => {
+    staff = [
+      ...Array.from({ length: 11 }, (_, index) =>
+        member({
+          id: `other-${index}`,
+          name: `Persona ${index}`,
+          email: `persona${index}@parkit.test`,
+        }),
+      ),
+      member({ id: 'name', name: 'Ana Pérez', email: 'otro@parkit.test' }),
+      member({ id: 'email', name: 'Carla Gómez', email: 'ana@parkit.test' }),
+    ];
+    const { container } = await mount(<PersonalPage />);
+    await click('Siguiente');
+    expect(calls('GET').at(-1)!.path).toContain('page=2');
+    await change(field('Buscar en la tabla'), 'ana');
+    await act(() => new Promise((resolve) => setTimeout(resolve, 350)));
+    await settle();
+    const rows = () => container.querySelector('tbody')?.textContent;
+    expect(rows()).toContain('Ana Pérez');
+    expect(rows()).toContain('Carla Gómez');
+    await click('Campo de búsqueda');
+    await click('Nombre');
+    const query = new URL(calls('GET').at(-1)!.path, 'http://local')
+      .searchParams;
+    expect(query.get('searchField')).toBe('name');
+    expect(query.get('search')).toBe('ana');
+    expect(query.get('page')).toBe('1');
+    expect(query.get('tenantId')).toBe(CENTRO);
+    expect(rows()).toContain('Ana Pérez');
+    expect(rows()).not.toContain('Carla Gómez');
+    expect(
+      container.querySelector('.dt-pagination-summary')?.textContent,
+    ).toContain('de 1');
+    await click('Campo de búsqueda');
+    await click('Email');
+    expect(calls('GET').at(-1)!.path).toContain('searchField=email');
+    expect(rows()).toContain('Carla Gómez');
+    expect(rows()).not.toContain('Ana Pérez');
+    expect(field('Buscar en la tabla').value).toBe('ana');
+    await click('Campo de búsqueda');
+    await click('Todos');
+    expect(calls('GET').at(-1)!.path).not.toContain('searchField=');
+    expect(rows()).toContain('Ana Pérez');
+    expect(rows()).toContain('Carla Gómez');
   });
 
   it('agrega una persona por email', async () => {

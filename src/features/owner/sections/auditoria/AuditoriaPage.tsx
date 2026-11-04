@@ -83,6 +83,29 @@ const FETCH_LIMIT = 5_000;
 const SEARCH_MODES = createVehicleSearchModes<AuditRow>({
   ticket: (row) => row.ticketNumber,
   plate: (row) => row.plate,
+  fields: [
+    { id: 'actor', label: 'Actor', searchableKeys: ['actorName'] },
+    { id: 'reason', label: 'Razón', searchableKeys: ['reason'] },
+    {
+      id: 'field',
+      label: 'Campo modificado',
+      searchableKeys: ['changedFieldLabels'],
+    },
+    {
+      id: 'event',
+      label: 'Evento',
+      searchableKeys: ['actionLabel', 'summary'],
+    },
+    { id: 'brand', label: 'Marca', searchableKeys: ['vehicleBrands'] },
+    { id: 'model', label: 'Modelo', searchableKeys: ['vehicleModels'] },
+    { id: 'color', label: 'Color', searchableKeys: ['colors'] },
+    { id: 'rate', label: 'Tarifa', searchableKeys: ['rateNames'] },
+    {
+      id: 'paymentMethod',
+      label: 'Medio de pago',
+      searchableKeys: ['paymentMethodNames'],
+    },
+  ],
 });
 const LPR_API_PAGE_SIZE = 100;
 const LPR_PAGE_SIZE_OPTIONS = [12, 24, 48];

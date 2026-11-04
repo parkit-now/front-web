@@ -33,6 +33,7 @@ import { ExcelExportButton } from './components/ExcelExportButton';
 import { FilterPanel } from './components/FilterPanel';
 import { Pagination } from './components/Pagination';
 import { TableSearch } from './components/TableSearch';
+import { resolveSearchModes } from './searchModes';
 import type { DataTableProps, DataTableSearchMode } from './types';
 import {
   caseInsensitiveSort,
@@ -228,10 +229,10 @@ export function DataTable<TData>({
   onVisibleRowIdsChange,
   rowSelection,
 }: DataTableProps<TData>) {
-  const searchModes =
-    (configuredSearchModes?.filter((mode) => mode.id !== 'all').length ?? 0) > 1
-      ? configuredSearchModes
-      : undefined;
+  const searchModes = useMemo(
+    () => resolveSearchModes(columns, searchableKeys, configuredSearchModes),
+    [columns, searchableKeys, configuredSearchModes],
+  );
   const [globalFilter, setGlobalFilter] = useState('');
   const [searchModeId, setSearchModeId] = useState<string>();
   const searchMode =
@@ -312,8 +313,11 @@ export function DataTable<TData>({
   }, [pagination]);
 
   useEffect(() => {
-    serverStateRef.current?.onGlobalFilterChange?.(globalFilter);
-  }, [globalFilter]);
+    serverStateRef.current?.onGlobalFilterChange?.(
+      globalFilter,
+      activeSearchModeId,
+    );
+  }, [globalFilter, activeSearchModeId]);
 
   const selectable = Boolean(rowSelection);
   const tableColumns = useMemo(

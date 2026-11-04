@@ -9,6 +9,9 @@ export type PaginatedStaff = components['schemas']['PaginatedStaffDto'];
 export type StaffRole = NonNullable<
   operations['staffList']['parameters']['query']
 >['role'];
+export type StaffSearchField = NonNullable<
+  operations['staffList']['parameters']['query']
+>['searchField'];
 
 /**
  * El rol de una membresía concreta. No es `StaffRole`: ése sale de un query
@@ -49,6 +52,7 @@ async function bearer(): Promise<string> {
  */
 export async function listStaff(input: {
   search?: string;
+  searchField?: StaffSearchField;
   role?: StaffRole;
   tenantId?: string;
   page?: number;
@@ -56,6 +60,7 @@ export async function listStaff(input: {
 }): Promise<PaginatedStaff> {
   const params = new URLSearchParams();
   if (input.search) params.set('search', input.search);
+  if (input.searchField) params.set('searchField', input.searchField);
   if (input.role) params.set('role', input.role);
   if (input.tenantId) params.set('tenantId', input.tenantId);
   if (input.page !== undefined) params.set('page', String(input.page));

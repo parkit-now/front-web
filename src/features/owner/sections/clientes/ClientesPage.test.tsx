@@ -97,18 +97,25 @@ describe('ClientesPage', () => {
     expect(clients.listClients).toHaveBeenCalledWith('tenant');
   });
 
-  it('oculta el selector y busca en todas las patentes y datos del cliente', async () => {
+  it('busca en todos los campos por defecto y permite acotar a patentes', async () => {
     clients.listClients.mockResolvedValue([
       client({ plates: ['AB123CD', 'XYZ999'] }),
       client({ id: 'otro', name: 'AB123 comercial', plates: ['OTR111'] }),
     ]);
     const { container } = await mount(<ClientesPage />);
     expect(
-      container.querySelector('[aria-label="Campo de búsqueda"]'),
-    ).toBeNull();
+      container
+        .querySelector('[aria-label="Campo de búsqueda"]')
+        ?.getAttribute('title'),
+    ).toBe('Buscar en: Todos');
     await change(field('Buscar en la tabla'), 'AB123');
     expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
       3,
+    );
+    await click('Campo de búsqueda');
+    await click('Patente');
+    expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
+      2,
     );
     await change(field('Buscar en la tabla'), 'xyz');
     expect(container.querySelector('tbody')?.textContent).toContain(
@@ -117,6 +124,45 @@ describe('ClientesPage', () => {
     expect(container.querySelector('tbody')?.textContent).not.toContain(
       'comercial',
     );
+  });
+
+  it('distingue Nombre de Email cuando una consulta coincide en campos diferentes', async () => {
+    clients.listClients.mockResolvedValue([
+      client({ name: 'Ana Pérez', email: 'otro@parkit.test' }),
+      client({
+        id: 'email',
+        name: 'Carla Gómez',
+        email: 'ana@parkit.test',
+        plates: ['XY987ZZ'],
+      }),
+    ]);
+    const { container } = await mount(<ClientesPage />);
+    const rows = () => container.querySelector('tbody')?.textContent;
+    await change(field('Buscar en la tabla'), 'ana');
+    expect(rows()).toContain('Ana Pérez');
+    expect(rows()).toContain('Carla Gómez');
+    await click('Campo de búsqueda');
+    expect(
+      [...container.querySelectorAll('[role="menuitemradio"]')].map(
+        (item) => item.textContent,
+      ),
+    ).toEqual(['Todos', 'Patente', 'Nombre', 'CUIT', 'Email', 'Teléfono']);
+    await click('Nombre');
+    expect(rows()).toContain('Ana Pérez');
+    expect(rows()).not.toContain('Carla Gómez');
+    await click('Campo de búsqueda');
+    await click('Email');
+    expect(rows()).toContain('Carla Gómez');
+    expect(rows()).not.toContain('Ana Pérez');
+    expect(field('Buscar en la tabla').value).toBe('ana');
+    await click('Limpiar búsqueda');
+    expect(
+      container
+        .querySelector('[aria-label="Campo de búsqueda"]')
+        ?.getAttribute('title'),
+    ).toBe('Buscar en: Email');
+    expect(rows()).toContain('Ana Pérez');
+    expect(rows()).toContain('Carla Gómez');
   });
 
   it('agrega un cliente con dos patentes', async () => {

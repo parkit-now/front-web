@@ -110,7 +110,7 @@ const failedRefund = reservation({
 let board: OwnerReservation[];
 
 describe('ReservasPage', () => {
-  it('oculta el selector y conserva la búsqueda por patente o código de reserva', async () => {
+  it('conserva Todos por defecto y permite separar patente y código de reserva', async () => {
     board = [
       reservation({ id: 'uno', vehiclePlate: 'AB123CD', status: 'confirmed' }),
       reservation({
@@ -122,15 +122,26 @@ describe('ReservasPage', () => {
     ];
     const { container } = await mount(<ReservasPage />);
     expect(
-      container.querySelector('[aria-label="Campo de búsqueda"]'),
-    ).toBeNull();
+      container
+        .querySelector('[aria-label="Campo de búsqueda"]')
+        ?.getAttribute('title'),
+    ).toBe('Buscar en: Todos');
     await change(field('Buscar en la tabla'), 'ab123');
     expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
       2,
     );
-    expect(
-      container.querySelector('[aria-label="Campo de búsqueda"]'),
-    ).toBeNull();
+    await click('Campo de búsqueda');
+    await click('Patente');
+    expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
+      1,
+    );
+    expect(container.querySelector('tbody')?.textContent).toContain('AB123CD');
+    await click('Campo de búsqueda');
+    await click('Código');
+    expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
+      1,
+    );
+    expect(container.querySelector('tbody')?.textContent).toContain('XYZ999');
   });
   beforeEach(() => {
     vi.clearAllMocks();
