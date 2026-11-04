@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  button,
   change,
   click,
   field,
@@ -219,6 +220,62 @@ describe('EstadisticasPage', () => {
     expect(metrics.getRevenueSeries).toHaveBeenCalledWith(
       expect.objectContaining({ tenantId: 'tenant', granularity: 'day' }),
     );
+  });
+
+  it('separa el período principal de los filtros secundarios', async () => {
+    await mount(<EstadisticasPage />);
+    const panel = document.querySelector(
+      '[aria-label="Filtros de estadísticas"]',
+    )!;
+    expect(
+      panel.querySelector('.statistics-filters-primary [aria-label="Período"]'),
+    ).toBeTruthy();
+    expect(
+      panel.querySelectorAll('.statistics-filters-secondary select'),
+    ).toHaveLength(3);
+    expect(button('7 días').getAttribute('aria-pressed')).toBe('true');
+    await click('Personalizado');
+    expect(
+      panel.querySelector('.statistics-filters-primary .dr-filter'),
+    ).toBeTruthy();
+    expect(button('Personalizado').getAttribute('aria-pressed')).toBe('true');
+    await click('Por caja');
+    expect(
+      panel.querySelector('.statistics-filters-range select'),
+    ).toBeTruthy();
+    expect(panel.querySelector('.dr-filter')).toBeNull();
+  });
+
+  it('restablece período, caja, filtros, agrupación y horarios', async () => {
+    await mount(<EstadisticasPage />);
+    await change(field<HTMLSelectElement>('Método de pago'), 'Efectivo');
+    await change(field<HTMLSelectElement>('Categoría de vehículo'), 'car');
+    await click('Personalizado');
+    await change(field<HTMLInputElement>('Desde'), '09:00');
+    await change(field<HTMLInputElement>('Hasta'), '18:00');
+    await click('Por caja');
+    await change(field<HTMLSelectElement>('Caja'), 'caja-1');
+    await change(field<HTMLSelectElement>('Agrupar'), 'week');
+    await click('Restablecer filtros');
+    expect(button('7 días').getAttribute('aria-pressed')).toBe('true');
+    expect(field<HTMLSelectElement>('Método de pago').value).toBe('');
+    expect(field<HTMLSelectElement>('Categoría de vehículo').value).toBe('');
+    expect(field<HTMLSelectElement>('Agrupar').value).toBe('day');
+    expect(metrics.getRevenueSeries).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        paymentMethod: undefined,
+        vehicleCategory: undefined,
+        granularity: 'day',
+      }),
+    );
+    expect(metrics.getRevenueSeries.mock.calls.at(-1)![0]).not.toHaveProperty(
+      'cashSessionId',
+    );
+    await click('Personalizado');
+    expect(field<HTMLInputElement>('Desde').value).toBe('00:00');
+    expect(field<HTMLInputElement>('Hasta').value).toBe('23:59');
+    await click('Por caja');
+    expect(field<HTMLSelectElement>('Caja').value).toBe('');
   });
 
   it('cambia el período y la serie mostrada', async () => {
