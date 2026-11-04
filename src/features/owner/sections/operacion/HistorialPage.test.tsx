@@ -14,6 +14,7 @@ import {
 } from '../../services/invoices';
 import { listEntries } from '../../services/operations';
 import { HistorialPage } from './HistorialPage';
+import { click, field } from '../../../../test/dom';
 
 vi.mock('../../context/SucursalContext', () => ({
   useSucursal: () => ({
@@ -154,6 +155,76 @@ afterEach(async () => {
   container.remove();
   localStorage.clear();
 });
+
+it.each([false, true])(
+  'filtra por estado de egreso y exporta solo los autos en base (movimientos=%s)',
+  async (movements) => {
+    const active = {
+      ...entries[0],
+      id: 'active',
+      plate: 'ENBASE',
+      leftAt: undefined,
+    };
+    client.setQueryData(
+      ['owner-operations', 'tenant', 'entries'],
+      [...entries, active],
+    );
+    await act(() =>
+      Promise.resolve(
+        root.render(
+          <QueryClientProvider client={client}>
+            <ToastProvider>
+              <MemoryRouter>
+                <HistorialPage
+                  renderTable={
+                    movements ? (table) => <div>{table}</div> : undefined
+                  }
+                />
+              </MemoryRouter>
+            </ToastProvider>
+          </QueryClientProvider>,
+        ),
+      ),
+    );
+    expect(container.textContent).not.toContain('Incluir autos en base');
+    expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
+      3,
+    );
+    await click('Filtros');
+    const group = container.querySelector<HTMLElement>(
+      '[aria-label="Estado de egreso"]',
+    )!;
+    expect(field<HTMLInputElement>('Todos', group).checked).toBe(true);
+    await click(field('Egresados', group));
+    expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
+      2,
+    );
+    await click(field('En base', group));
+    expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
+      1,
+    );
+    expect(container.querySelector('tbody')?.textContent).toContain('ENBASE');
+    expect(
+      container.querySelector('.dt-filter-date-presence button'),
+    ).toBeNull();
+    await act(async () => {
+      container
+        .querySelector<HTMLButtonElement>('[aria-label="Descargar Excel"]')!
+        .click();
+      await vi.waitFor(() => expect(saveBlob).toHaveBeenCalledOnce());
+    });
+    const workbook = new ExcelJS.Workbook();
+    const [blob] = vi.mocked(saveBlob).mock.calls[0];
+    await workbook.xlsx.load(await blob.arrayBuffer());
+    expect(workbook.worksheets[0].getCell('B2').value).toBe('ENBASE');
+    expect(workbook.worksheets[0].rowCount).toBe(3);
+    await click('Limpiar');
+    expect(field<HTMLInputElement>('Todos', group).checked).toBe(true);
+    expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
+      3,
+    );
+  },
+);
 
 it('descarga el historial con monto numerico, medios separados y total, sin desdoblar autos', async () => {
   client.setQueryData(

@@ -107,7 +107,7 @@ describe('operation utils', () => {
     expect(row.historyImageUrl).toBeNull();
   });
 
-  it('filters out active entries unless include-in-lot is enabled', () => {
+  it('keeps active and exited entries for the table to filter', () => {
     const rows = attachPaymentsToEntries(
       [
         entry({ id: 'active', leftAt: undefined }),
@@ -118,14 +118,6 @@ describe('operation utils', () => {
 
     expect(
       filterEntryHistoryRows(rows, {
-        includeInLot: false,
-        onlyCurrentSession: false,
-      }).map((row) => row.id),
-    ).toEqual(['closed']);
-
-    expect(
-      filterEntryHistoryRows(rows, {
-        includeInLot: true,
         onlyCurrentSession: false,
       }).map((row) => row.id),
     ).toEqual(['closed', 'active']);
@@ -150,7 +142,6 @@ describe('operation utils', () => {
 
     expect(
       filterEntryHistoryRows(rows, {
-        includeInLot: true,
         onlyCurrentSession: true,
         activeCashSessionId: 'cash-1',
       }).map((row) => row.id),

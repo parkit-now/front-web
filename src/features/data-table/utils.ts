@@ -96,8 +96,53 @@ export const caseInsensitiveSort: SortingFn<unknown> = (
     return left === right ? 0 : left ? 1 : -1;
   }
 
-  return normalizeText(left).localeCompare(normalizeText(right), 'es');
+  // `numeric: true` para los números guardados como texto: los precios de las
+  // tarifas viajan como `string` desde Dexie y llegan acá sin convertir, así
+  // que sin esto `'900'` quedaría después de `'10000'`. De paso ordena bien
+  // los tramos numéricos de las patentes (`AA2` antes que `AA10`).
+  return normalizeText(left).localeCompare(normalizeText(right), 'es', {
+    numeric: true,
+  });
 };
+
+/**
+ * Orden alfabético estricto, sin tratar los dígitos como números.
+ *
+ * Es lo contrario de lo que hace `caseInsensitiveSort` para el texto, y está
+ * pensado para los identificadores donde los dígitos son parte del código y no
+ * una cantidad: en una patente, `AA10` va antes que `AA2` porque se lee como
+ * una cadena, igual que en el papel y en los listados del estacionamiento.
+ */
+export function textSorting<TData>(): SortingFn<TData> {
+  return (rowA, rowB, columnId) => {
+    const left = normalizeText(rowA.getValue(columnId));
+    const right = normalizeText(rowB.getValue(columnId));
+    return left.localeCompare(right, 'es');
+  };
+}
+
+/**
+ * Orden explícito de una columna de estado.
+ *
+ * La clave interna de estos campos es inglesa, así que el orden alfabético por
+ * defecto le resulta arbitrario al operador (`error, issued, issuing, manual,
+ * na, none, pending`). Con esto la columna sigue el flujo real del estado.
+ *
+ * Lo que no esté en `order` va al final, desempatado por el comparador por
+ * defecto para que el resultado sea estable.
+ */
+export function enumOrderSorting<TData>(
+  order: readonly string[],
+): SortingFn<TData> {
+  const rank = new Map<string, number>(order.map((item, i) => [item, i]));
+
+  return (rowA, rowB, columnId) => {
+    const left = rank.get(String(rowA.getValue(columnId))) ?? order.length;
+    const right = rank.get(String(rowB.getValue(columnId))) ?? order.length;
+    if (left !== right) return left < right ? -1 : 1;
+    return (caseInsensitiveSort as SortingFn<TData>)(rowA, rowB, columnId);
+  };
+}
 
 export function defaultSortOrder(keys: string[]): SortingState {
   return keys.map((id) => ({ id, desc: false }));

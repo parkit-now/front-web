@@ -17,7 +17,10 @@ import {
   SlidersHorizontal,
   X,
 } from 'lucide-react';
-import { DataTable } from '../../../../features/data-table';
+import {
+  createVehicleSearchModes,
+  DataTable,
+} from '../../../../features/data-table';
 import { VehicleCell } from '../../../../features/data-table/components/VehicleCell';
 import { PlateCell } from '../../../../features/data-table/components/PlateCell';
 import { TableDateTimeCell } from '../../../../features/data-table/components/StayDateCell';
@@ -77,6 +80,10 @@ import {
 } from './auditMetrics';
 
 const FETCH_LIMIT = 5_000;
+const SEARCH_MODES = createVehicleSearchModes<AuditRow>({
+  ticket: (row) => row.ticketNumber,
+  plate: (row) => row.plate,
+});
 const LPR_API_PAGE_SIZE = 100;
 const LPR_PAGE_SIZE_OPTIONS = [12, 24, 48];
 const LPR_DEFAULT_PAGE_SIZE = 24;
@@ -2103,6 +2110,7 @@ export function AuditoriaPage() {
             emptyMessage="No hay eventos de auditoría para mostrar."
             searchPlaceholder="Buscar por patente, actor, nro de ticket, razón o campo modificado"
             searchableKeys={['searchText']}
+            searchModes={SEARCH_MODES}
             filterableColumns={[
               'enteredAtLocalDate',
               'leftAtLocalDate',

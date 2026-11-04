@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw } from 'lucide-react';
+import { CalendarDays, RefreshCw, RotateCcw } from 'lucide-react';
+import './StatisticsFilters.css';
 import { SectionHeader } from '../../../../shared/components/SectionHeader';
 import { Tabs } from '../../../../shared/components/ui/Tabs';
 import { Skeleton } from '../../../../shared/components/ui/Skeleton';
@@ -81,37 +82,6 @@ const RANGE_ERRORS: Record<string, { title: string; description: string }> = {
     description: 'Seleccioná un turno para ver la recaudación de esa caja.',
   },
 };
-
-function Chip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        padding: '5px 14px',
-        borderRadius: 999,
-        border: '1px solid',
-        fontSize: 13,
-        fontWeight: 500,
-        cursor: 'pointer',
-        transition: 'all 150ms',
-        borderColor: active ? 'var(--brand)' : 'var(--border)',
-        background: active ? 'var(--brand-soft)' : 'transparent',
-        color: active ? 'var(--brand)' : 'var(--text-2)',
-      }}
-    >
-      {children}
-    </button>
-  );
-}
 
 function KpiCard({
   title,
@@ -272,6 +242,17 @@ export function EstadisticasPage() {
     if (next !== 'custom') setAnchor(Date.now());
   }
 
+  function resetFilters() {
+    choosePreset('7d');
+    setCustomRange(undefined);
+    setFromTime('00:00');
+    setToTime('23:59');
+    setCashSessionId('');
+    setPaymentMethod('');
+    setVehicleCategory('');
+    setWeekdayMode('total');
+  }
+
   const series = seriesQuery.data;
   const displayedBuckets = useMemo(
     () =>
@@ -368,125 +349,119 @@ export function EstadisticasPage() {
       </div>
 
       {/* Filtros */}
-      <div
-        className="pk-card pk-card-pad"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 10,
-          marginBottom: 12,
-        }}
+      <section
+        className="statistics-filters"
+        aria-label="Filtros de estadísticas"
       >
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {PRESETS.map((option) => (
-            <Chip
-              key={option}
-              active={preset === option}
-              onClick={() => choosePreset(option)}
-            >
-              {PRESET_LABELS[option]}
-            </Chip>
-          ))}
-        </div>
-
-        {preset === 'custom' && (
-          <div
-            style={{
-              display: 'flex',
-              gap: 12,
-              flexWrap: 'wrap',
-              alignItems: 'center',
-            }}
-          >
-            <DateRangeFilter
-              value={customRange}
-              onChange={setCustomRange}
-              placeholder="Elegí el rango de fechas"
-            />
-            <label style={{ fontSize: 13, color: 'var(--text-2)' }}>
-              Desde{' '}
-              <input
-                type="time"
-                className="pk-input"
-                value={fromTime}
-                onChange={(event) => setFromTime(event.target.value)}
-                style={{ width: 110, display: 'inline-block' }}
-              />
-            </label>
-            <label style={{ fontSize: 13, color: 'var(--text-2)' }}>
-              Hasta{' '}
-              <input
-                type="time"
-                className="pk-input"
-                value={toTime}
-                onChange={(event) => setToTime(event.target.value)}
-                style={{ width: 110, display: 'inline-block' }}
-              />
-            </label>
-            <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-              Hora de Argentina
-            </span>
-          </div>
-        )}
-
-        {preset === 'caja' && (
-          <div
-            style={{
-              display: 'flex',
-              gap: 12,
-              flexWrap: 'wrap',
-              alignItems: 'center',
-            }}
-          >
-            <label style={{ fontSize: 13, color: 'var(--text-2)' }}>
-              Caja{' '}
-              <select
-                className="pk-input"
-                value={cashSessionId}
-                onChange={(event) => setCashSessionId(event.target.value)}
-                disabled={cashSessionsQuery.isLoading}
-                style={{ width: 240 }}
+        <div className="statistics-filters-primary">
+          <div className="statistics-filters-toolbar">
+            <div className="statistics-filters-period">
+              <CalendarDays size={18} aria-hidden="true" />
+              <div
+                className="statistics-periods"
+                role="group"
+                aria-label="Período"
               >
-                <option value="">Elegí un turno</option>
-                {cashSessions.map((session) => (
-                  <option key={session.id} value={session.id}>
-                    {formatCashSessionLabel(session)}
-                  </option>
+                {PRESETS.map((option) => (
+                  <button
+                    type="button"
+                    key={option}
+                    className={preset === option ? 'active' : ''}
+                    aria-pressed={preset === option}
+                    onClick={() => choosePreset(option)}
+                  >
+                    {PRESET_LABELS[option]}
+                  </button>
                 ))}
-              </select>
-            </label>
-            {cashSessionsQuery.isError && (
-              <span style={{ fontSize: 12, color: 'var(--err-text)' }}>
-                {translateApiError(cashSessionsQuery.error, {
-                  endpoint: 'cashSessions.list',
-                })}
-              </span>
-            )}
-            {!cashSessionsQuery.isLoading &&
-              !cashSessionsQuery.isError &&
-              cashSessions.length === 0 && (
-                <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                  Este estacionamiento todavía no tiene cajas registradas.
+              </div>
+            </div>
+            <button
+              type="button"
+              className="statistics-filters-reset"
+              onClick={resetFilters}
+              title="Restablecer filtros"
+              aria-label="Restablecer filtros"
+            >
+              <RotateCcw size={16} aria-hidden="true" />
+              <span>Restablecer</span>
+            </button>
+          </div>
+
+          {preset === 'custom' && (
+            <div className="statistics-filters-range">
+              <DateRangeFilter
+                value={customRange}
+                onChange={setCustomRange}
+                placeholder="Elegí el rango de fechas"
+              />
+              <label>
+                Desde{' '}
+                <input
+                  type="time"
+                  className="pk-input"
+                  value={fromTime}
+                  onChange={(event) => setFromTime(event.target.value)}
+                />
+              </label>
+              <label>
+                Hasta{' '}
+                <input
+                  type="time"
+                  className="pk-input"
+                  value={toTime}
+                  onChange={(event) => setToTime(event.target.value)}
+                />
+              </label>
+              <small>Hora de Argentina</small>
+            </div>
+          )}
+
+          {preset === 'caja' && (
+            <div className="statistics-filters-range">
+              <label>
+                Caja{' '}
+                <select
+                  value={cashSessionId}
+                  onChange={(event) => setCashSessionId(event.target.value)}
+                  disabled={cashSessionsQuery.isLoading}
+                  className="pk-input statistics-cash-select"
+                >
+                  <option value="">Elegí un turno</option>
+                  {cashSessions.map((session) => (
+                    <option key={session.id} value={session.id}>
+                      {formatCashSessionLabel(session)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {cashSessionsQuery.isError && (
+                <span style={{ fontSize: 12, color: 'var(--err-text)' }}>
+                  {translateApiError(cashSessionsQuery.error, {
+                    endpoint: 'cashSessions.list',
+                  })}
                 </span>
               )}
-          </div>
-        )}
-
+              {!cashSessionsQuery.isLoading &&
+                !cashSessionsQuery.isError &&
+                cashSessions.length === 0 && (
+                  <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                    Este estacionamiento todavía no tiene cajas registradas.
+                  </span>
+                )}
+            </div>
+          )}
+        </div>
         <div
-          style={{
-            display: 'flex',
-            gap: 12,
-            flexWrap: 'wrap',
-            alignItems: 'center',
-          }}
+          className="statistics-filters-secondary"
+          role="group"
+          aria-label="Filtros secundarios"
         >
-          <label style={{ fontSize: 13, color: 'var(--text-2)' }}>
+          <label>
             Método de pago{' '}
             <select
               className="pk-input"
               value={paymentMethod}
               onChange={(event) => setPaymentMethod(event.target.value)}
-              style={{ width: 180 }}
             >
               <option value="">Todos</option>
               {(paymentMethodsQuery.data ?? []).map((method) => (
@@ -497,7 +472,7 @@ export function EstadisticasPage() {
             </select>
           </label>
 
-          <label style={{ fontSize: 13, color: 'var(--text-2)' }}>
+          <label>
             Categoría de vehículo{' '}
             <select
               className="pk-input"
@@ -508,7 +483,6 @@ export function EstadisticasPage() {
                 )
               }
               disabled={categoriesLoading}
-              style={{ width: 180 }}
             >
               <option value="">Todas</option>
               {categories.map((category) => (
@@ -519,7 +493,7 @@ export function EstadisticasPage() {
             </select>
           </label>
 
-          <label style={{ fontSize: 13, color: 'var(--text-2)' }}>
+          <label>
             Agrupar{' '}
             <select
               className="pk-input"
@@ -529,7 +503,6 @@ export function EstadisticasPage() {
                   event.target.value as Granularity | 'weekday',
                 )
               }
-              style={{ width: 150 }}
             >
               {GRANULARITIES.map((option) => {
                 const disabled = option === 'hour' && !hourAllowed;
@@ -561,7 +534,7 @@ export function EstadisticasPage() {
             real.
           </Note>
         )}
-      </div>
+      </section>
 
       {/* Estados de rango inválido */}
       {!resolved.ok && (

@@ -13,7 +13,10 @@ import type {
   ColumnFiltersState,
   SortingFn,
 } from '@tanstack/react-table';
-import { DataTable } from '../../../../features/data-table';
+import {
+  createVehicleSearchModes,
+  DataTable,
+} from '../../../../features/data-table';
 import { VehicleCell } from '../../../../features/data-table/components/VehicleCell';
 import { PlateCell } from '../../../../features/data-table/components/PlateCell';
 import {
@@ -21,7 +24,11 @@ import {
   StayDateCell,
   TableDateTimeCell,
 } from '../../../../features/data-table/components/StayDateCell';
-import { dateTimeSorting } from '../../../../features/data-table/utils';
+import {
+  dateTimeSorting,
+  enumOrderSorting,
+  textSorting,
+} from '../../../../features/data-table/utils';
 import { getDateRangeExcelFileName } from '../../../../features/data-table/excelExport';
 import { translateApiError } from '../../../../lib/api/translate';
 import { useToast } from '../../../../lib/notifications/ToastProvider';
@@ -98,6 +105,10 @@ const SEARCHABLE_KEYS = [
   'invoiceReceiver',
   'notes',
 ];
+const SEARCH_MODES = createVehicleSearchModes<EntryHistoryRow>({
+  ticket: (row) => row.ticketNumber,
+  plate: (row) => row.plate,
+});
 const FILTERABLE_COLUMNS = [
   'enteredAtLocalDate',
   'leftAtLocalDate',
@@ -127,6 +138,10 @@ const INVOICE_LETTER_OPTIONS = (['A', 'B', 'C'] as const).map((letter) => ({
 const moneySorting: SortingFn<EntryHistoryRow> = (left, right) => {
   return (left.original.paidTotal ?? -1) - (right.original.paidTotal ?? -1);
 };
+
+// A nivel de módulo: dentro del useMemo se recrearía en cada render.
+const invoiceStateSorting =
+  enumOrderSorting<EntryHistoryRow>(INVOICE_STATE_ORDER);
 
 type HistorialLocationState = {
   fromCaja?: boolean;
@@ -442,7 +457,6 @@ export function HistorialPage({
   const [onlyCurrentSession, setOnlyCurrentSession] = useState(
     () => !focusedCashSessionId,
   );
-  const [includeInLot, setIncludeInLot] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [photoRow, setPhotoRow] = useState<EntryHistoryRow | null>(null);
   const [visibleEntryIds, setVisibleEntryIds] = useState<string[]>([]);
@@ -567,11 +581,10 @@ export function HistorialPage({
   const switchedRows = useMemo(
     () =>
       filterEntryHistoryRows(baseRows, {
-        includeInLot,
         onlyCurrentSession,
         activeCashSessionId: activeCashSession?.id,
       }),
-    [activeCashSession?.id, baseRows, includeInLot, onlyCurrentSession],
+    [activeCashSession?.id, baseRows, onlyCurrentSession],
   );
   const rows = switchedRows;
   const selected = useMemo(
@@ -720,6 +733,7 @@ export function HistorialPage({
       },
       {
         accessorKey: 'plate',
+        sortingFn: textSorting(),
         header: 'Patente',
         size: 120,
         cell: ({ row }) => <PlateCell plate={row.original.plate} />,
@@ -783,6 +797,11 @@ export function HistorialPage({
         meta: {
           exportValue: (row) =>
             row.leftAt ? fmtDateTimeAr(row.leftAt) : 'En base',
+          datePresenceLabels: {
+            all: 'Todos',
+            present: 'Egresados',
+            missing: 'En base',
+          },
         },
         size: 160,
         filterFn: 'dateRange',
@@ -828,6 +847,7 @@ export function HistorialPage({
         meta: { exportValue: invoiceExportValue },
         size: 190,
         filterFn: 'includesSome',
+        sortingFn: invoiceStateSorting,
         cell: ({ row }) => <InvoiceCell row={row.original} />,
       },
       {
@@ -1145,6 +1165,7 @@ export function HistorialPage({
               emptyMessage="No hay movimientos registrados todavía."
               searchPlaceholder="Buscar por ticket, patente, vehículo o notas"
               searchableKeys={SEARCHABLE_KEYS}
+              searchModes={SEARCH_MODES}
               filterableColumns={FILTERABLE_COLUMNS}
               filterOptionsByColumn={{
                 cashSessionId: cashSessionOptions,
@@ -1202,14 +1223,6 @@ export function HistorialPage({
                       aria-label="Solo caja actual"
                     />
                     Solo caja actual
-                  </label>
-                  <label className="operation-quick-switch">
-                    <Switch
-                      checked={includeInLot}
-                      onChange={setIncludeInLot}
-                      aria-label="Incluir autos en base"
-                    />
-                    Incluir autos en base
                   </label>
                 </div>
               }

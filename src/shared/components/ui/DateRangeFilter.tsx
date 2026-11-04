@@ -28,6 +28,7 @@ interface DateRangeFilterProps {
   onChange: (value: DateRange | undefined) => void;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }
 
 const PANEL_WIDTH = 300;
@@ -58,12 +59,16 @@ export function DateRangeFilter({
   onChange,
   placeholder = 'Elegir fecha',
   className,
+  disabled = false,
 }: DateRangeFilterProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [panelStyle, setPanelStyle] = useState<CSSProperties>();
 
   const close = useCallback(() => setOpen(false), []);
+  useEffect(() => {
+    if (disabled) close();
+  }, [disabled, close]);
   useCloseOnOutsideClick(triggerRef, open, close);
 
   const updatePosition = useCallback(() => {
@@ -98,6 +103,7 @@ export function DateRangeFilter({
       <button
         ref={triggerRef}
         type="button"
+        disabled={disabled}
         className={`dr-filter-trigger${label ? ' has-value' : ''}${className ? ` ${className}` : ''}`}
         onClick={() => setOpen((current) => !current)}
         aria-expanded={open}
@@ -121,6 +127,7 @@ export function DateRangeFilter({
       </button>
 
       {open &&
+        !disabled &&
         createPortal(
           <div
             className="dr-filter-panel"
