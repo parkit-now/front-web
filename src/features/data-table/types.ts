@@ -17,7 +17,7 @@ export type DataTableServerState = {
   rowCount: number;
   isFetching?: boolean;
   onPaginationChange?: (state: { pageIndex: number; pageSize: number }) => void;
-  onGlobalFilterChange?: (value: string) => void;
+  onGlobalFilterChange?: (value: string, modeId?: string) => void;
 };
 
 export type DataTableSearchMode<TData> = {
@@ -49,6 +49,7 @@ export type DataTableProps<TData> = {
   emptyMessage?: string;
   searchPlaceholder?: string;
   searchableKeys?: string[];
+  /** Overrides the modes inferred from searchable keys and column labels. */
   searchModes?: readonly DataTableSearchMode<TData>[];
   filterableColumns?: string[];
   filterOptionsByColumn?: Record<string, DataTableFilterOption[]>;

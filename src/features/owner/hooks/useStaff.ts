@@ -15,6 +15,7 @@ import {
   type AddStaffInput,
   type StaffMembershipRole,
   type StaffRole,
+  type StaffSearchField,
 } from '../services/staff';
 
 /** Prefijo común del listado y de los conteos: invalidarlo refresca todo. */
@@ -22,6 +23,7 @@ const STAFF_KEY = ['staff'] as const;
 
 export interface StaffFilters {
   search?: string;
+  searchField?: StaffSearchField;
   role?: StaffRole;
 
   tenantId?: string;

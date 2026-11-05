@@ -358,7 +358,7 @@ export function EstadisticasPage() {
             <div className="statistics-filters-period">
               <CalendarDays size={18} aria-hidden="true" />
               <div
-                className="statistics-periods"
+                className="segmented-control statistics-periods"
                 role="group"
                 aria-label="Período"
               >
@@ -611,7 +611,7 @@ export function EstadisticasPage() {
             </div>
             {manualGranularity === 'weekday' && (
               <div
-                className="report-weekday-mode"
+                className="segmented-control report-weekday-mode"
                 role="group"
                 aria-label="Cálculo por día de semana"
               >

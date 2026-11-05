@@ -100,6 +100,10 @@ export function UsuariosPage() {
         emptyMessage="No hay usuarios para mostrar."
         searchPlaceholder="Buscar por nombre o email"
         searchableKeys={['name', 'email']}
+        searchModes={[
+          { id: 'name', label: 'Nombre', searchableKeys: ['name'] },
+          { id: 'email', label: 'Email', searchableKeys: ['email'] },
+        ]}
         filterableColumns={['role']}
         filterOptionsByColumn={{
           role: [

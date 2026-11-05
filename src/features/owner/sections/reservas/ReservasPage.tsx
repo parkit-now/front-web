@@ -77,6 +77,10 @@ const EMPTY_COPY: Record<
 const SEARCHABLE_KEYS = ['vehiclePlate', 'driverName', 'code'];
 const SEARCH_MODES = createVehicleSearchModes<OwnerReservation>({
   plate: (row) => row.vehiclePlate,
+  fields: [
+    { id: 'driverName', label: 'Conductor', searchableKeys: ['driverName'] },
+    { id: 'code', label: 'Código', searchableKeys: ['code'] },
+  ],
 });
 
 interface DialogState {

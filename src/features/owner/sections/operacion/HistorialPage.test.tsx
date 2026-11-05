@@ -14,7 +14,7 @@ import {
 } from '../../services/invoices';
 import { listEntries } from '../../services/operations';
 import { HistorialPage } from './HistorialPage';
-import { click, field } from '../../../../test/dom';
+import { change, click, field } from '../../../../test/dom';
 
 vi.mock('../../context/SucursalContext', () => ({
   useSucursal: () => ({
@@ -225,6 +225,66 @@ it.each([false, true])(
     );
   },
 );
+
+it('conserva Marca y Modelo pero deja el color solo en Filtros', async () => {
+  client.setQueryData(
+    ['owner-operations', 'tenant', 'entries'],
+    [
+      {
+        ...entries[0],
+        vehicleBrand: 'Ford',
+        vehicleModel: 'Ranger',
+        color: 'COLORFILTRO',
+      },
+      entries[1],
+    ],
+  );
+  await act(() =>
+    Promise.resolve(
+      root.render(
+        <QueryClientProvider client={client}>
+          <ToastProvider>
+            <MemoryRouter>
+              <HistorialPage />
+            </MemoryRouter>
+          </ToastProvider>
+        </QueryClientProvider>,
+      ),
+    ),
+  );
+  await click('Campo de búsqueda');
+  expect(
+    [...container.querySelectorAll('[role="menuitemradio"]')].map(
+      (item) => item.textContent,
+    ),
+  ).toEqual([
+    'Todos',
+    'Ticket',
+    'Patente',
+    'Marca',
+    'Modelo',
+    'Receptor de factura',
+    'Notas',
+  ]);
+  await click('Todos');
+  await change(field('Buscar en la tabla'), 'COLORFILTRO');
+  expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(0);
+  await change(field('Buscar en la tabla'), 'Ford');
+  expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(1);
+  await click('Campo de búsqueda');
+  await click('Modelo');
+  await change(field('Buscar en la tabla'), 'Ranger');
+  expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(1);
+  await change(field('Buscar en la tabla'), '');
+  await click('Filtros');
+  const panel = container.querySelector<HTMLElement>(
+    '[aria-label="Filtros de tabla"]',
+  )!;
+  await click('Color', panel);
+  await click(field('COLORFILTRO', panel));
+  expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(1);
+  expect(container.querySelector('tbody')?.textContent).toContain('AA123BB');
+});
 
 it('descarga el historial con monto numerico, medios separados y total, sin desdoblar autos', async () => {
   client.setQueryData(

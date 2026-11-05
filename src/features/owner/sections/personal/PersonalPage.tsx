@@ -15,7 +15,11 @@ import { dateTimeSorting } from '../../../../features/data-table/utils';
 import { useCurrentUserId } from '../../../../lib/supabase/useCurrentUserId';
 import { useSucursal } from '../../context/SucursalContext';
 import { useStaffList } from '../../hooks/useStaff';
-import type { StaffMember, StaffRole } from '../../services/staff';
+import type {
+  StaffMember,
+  StaffRole,
+  StaffSearchField,
+} from '../../services/staff';
 import { AddStaffModal } from './AddStaffModal';
 import { StaffManageModal } from './StaffManageModal';
 import './personal.css';
@@ -35,6 +39,8 @@ export function PersonalPage() {
   } = useSucursal();
 
   const [search, setSearch] = useState('');
+  const [searchField, setSearchField] =
+    useState<NonNullable<StaffSearchField>>('all');
   const [role, setRole] = useState<'' | StaffRole>('');
   const [allBranches, setAllBranches] = useState(false);
   const [page, setPage] = useState(1);
@@ -50,6 +56,7 @@ export function PersonalPage() {
   const query = useStaffList(
     {
       search: debouncedSearch || undefined,
+      searchField: searchField === 'all' ? undefined : searchField,
       role: role || undefined,
       tenantId: scopedTenantId,
       page,
@@ -76,8 +83,9 @@ export function PersonalPage() {
     [],
   );
 
-  const handleSearchChange = useCallback((value: string) => {
+  const handleSearchChange = useCallback((value: string, modeId?: string) => {
     setSearch(value);
+    setSearchField(modeId === 'name' || modeId === 'email' ? modeId : 'all');
     setPage(1);
   }, []);
 
@@ -238,6 +246,11 @@ export function PersonalPage() {
           isLoading={isLoading}
           emptyMessage="No hay personas que coincidan con la búsqueda."
           searchPlaceholder="Buscar por nombre o email"
+          searchableKeys={['name', 'email']}
+          searchModes={[
+            { id: 'name', label: 'Nombre', searchableKeys: ['name'] },
+            { id: 'email', label: 'Email', searchableKeys: ['email'] },
+          ]}
           getRowId={(member) => member.id}
           initialPageSize={pageSize}
           serverState={{

@@ -83,6 +83,12 @@ const FETCH_LIMIT = 5_000;
 const SEARCH_MODES = createVehicleSearchModes<AuditRow>({
   ticket: (row) => row.ticketNumber,
   plate: (row) => row.plate,
+  fields: [
+    { id: 'actor', label: 'Actor', searchableKeys: ['actorName'] },
+    { id: 'reason', label: 'Razón', searchableKeys: ['reason'] },
+    { id: 'brand', label: 'Marca', searchableKeys: ['vehicleBrands'] },
+    { id: 'model', label: 'Modelo', searchableKeys: ['vehicleModels'] },
+  ],
 });
 const LPR_API_PAGE_SIZE = 100;
 const LPR_PAGE_SIZE_OPTIONS = [12, 24, 48];
@@ -1930,6 +1936,12 @@ export function AuditoriaPage() {
         ),
       },
       {
+        accessorKey: 'changedFieldLabels',
+        header: 'Campo modificado',
+        enableHiding: false,
+        meta: { filterOnly: true },
+      },
+      {
         id: 'actorName',
         header: 'Actor',
         accessorKey: 'actorName',
@@ -2054,7 +2066,11 @@ export function AuditoriaPage() {
         onSelectMetric={handleSelectMetric}
       />
 
-      <div className="audit-tabs" role="tablist" aria-label="Auditoría">
+      <div
+        className="segmented-control audit-tabs"
+        role="tablist"
+        aria-label="Auditoría"
+      >
         <button
           type="button"
           className={activeTab === 'events' ? 'active' : undefined}
@@ -2108,12 +2124,20 @@ export function AuditoriaPage() {
             columns={columns}
             isLoading={auditQuery.isLoading}
             emptyMessage="No hay eventos de auditoría para mostrar."
-            searchPlaceholder="Buscar por patente, actor, nro de ticket, razón o campo modificado"
-            searchableKeys={['searchText']}
+            searchPlaceholder="Buscar por patente, ticket, actor, razón, marca o modelo"
+            searchableKeys={[
+              'plate',
+              'ticketNumber',
+              'actorName',
+              'reason',
+              'vehicleBrands',
+              'vehicleModels',
+            ]}
             searchModes={SEARCH_MODES}
             filterableColumns={[
               'enteredAtLocalDate',
               'leftAtLocalDate',
+              'changedFieldLabels',
               'cashSessionId',
               'paymentMethodNames',
               'rateNames',

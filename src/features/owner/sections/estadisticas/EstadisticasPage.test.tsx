@@ -217,6 +217,14 @@ describe('EstadisticasPage', () => {
     expect(pageText()).toContain('Recaudación del período');
     expect(pageText()).toContain('Efectivo');
     expect(pageText()).toContain('AB123CD');
+    expect(
+      document.querySelector('.segmented-control.statistics-periods'),
+    ).not.toBeNull();
+    expect(
+      document.querySelector(
+        '.segmented-control[aria-label="Ordenar patentes"]',
+      ),
+    ).not.toBeNull();
     expect(metrics.getRevenueSeries).toHaveBeenCalledWith(
       expect.objectContaining({ tenantId: 'tenant', granularity: 'day' }),
     );
@@ -284,6 +292,14 @@ describe('EstadisticasPage', () => {
     await click('30 días');
     await click('Hoy');
     await click('Ingresos de vehículos');
+    expect(button('Ingresos de vehículos').getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(
+      button('Ingresos de vehículos').parentElement?.classList.contains(
+        'segmented-control',
+      ),
+    ).toBe(true);
 
     expect(pageText()).toContain('Ingresos de vehículos');
     expect(metrics.getRevenueSeries.mock.calls.length).toBeGreaterThan(2);

@@ -12,36 +12,16 @@ interface TabsProps {
 
 export function Tabs({ tabs, active, onChange }: TabsProps) {
   return (
-    <div
-      style={{
-        display: 'flex',
-        borderBottom: '1px solid var(--border-soft)',
-        gap: 0,
-      }}
-    >
+    <div className="segmented-control">
       {tabs.map((tab) => {
         const isActive = tab.id === active;
         return (
           <button
             key={tab.id}
             type="button"
+            className={isActive ? 'active' : ''}
+            aria-pressed={isActive}
             onClick={() => onChange(tab.id)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '10px 16px',
-              border: 'none',
-              background: 'none',
-              fontSize: 14,
-              fontWeight: isActive ? 600 : 400,
-              color: isActive ? 'var(--brand)' : 'var(--text-2)',
-              borderBottom: `2px solid ${isActive ? 'var(--brand)' : 'transparent'}`,
-              marginBottom: -1,
-              cursor: 'pointer',
-              transition: 'all 160ms',
-              whiteSpace: 'nowrap',
-            }}
           >
             {tab.icon}
             {tab.label}

@@ -41,6 +41,7 @@ const emptyForm = {
 
 const SEARCH_MODES = createVehicleSearchModes<LprIgnoredPlate>({
   plate: (row) => row.plate,
+  fields: [{ id: 'notes', label: 'Nota', searchableKeys: ['notes'] }],
 });
 
 export function ListaBlancaPage() {

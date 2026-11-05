@@ -199,6 +199,70 @@ describe('AuditoriaPage', () => {
     expect(container.querySelector('tbody')?.textContent).toContain('EXACTA');
   });
 
+  it('deja las opciones fijas en Filtros y conserva Marca y Modelo en la búsqueda', async () => {
+    services.listAuditEvents.mockResolvedValue([
+      event({
+        metadata: {
+          reason: 'Error de tipeo',
+          changedFields: ['plate'],
+          after: {
+            plate: 'XYZ999',
+            vehicleBrand: 'Ford',
+            vehicleModel: 'Ranger',
+            color: 'COLORFILTRO',
+            rateSnapshotName: 'TARIFAFILTRO',
+          },
+        },
+      }),
+    ]);
+    const { container } = await mount(<AuditoriaPage />);
+    await click('Campo de búsqueda');
+    expect(
+      [...container.querySelectorAll('[role="menuitemradio"]')].map(
+        (item) => item.textContent,
+      ),
+    ).toEqual([
+      'Todos',
+      'Ticket',
+      'Patente',
+      'Actor',
+      'Razón',
+      'Marca',
+      'Modelo',
+    ]);
+    await click('Todos');
+    for (const query of [
+      'COLORFILTRO',
+      'TARIFAFILTRO',
+      'Corrección de estadía',
+    ]) {
+      await change(field('Buscar en la tabla'), query);
+      expect(
+        container.querySelectorAll('tbody .dt-plate__number'),
+      ).toHaveLength(0);
+    }
+    await change(field('Buscar en la tabla'), 'Ford');
+    expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
+      1,
+    );
+    await click('Campo de búsqueda');
+    await click('Modelo');
+    await change(field('Buscar en la tabla'), 'Ranger');
+    expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
+      1,
+    );
+    await change(field('Buscar en la tabla'), '');
+    await click(/^Filtros/, container);
+    const panel = container.querySelector<HTMLElement>(
+      '[aria-label="Filtros de tabla"]',
+    )!;
+    await click('Campo modificado', panel);
+    await click(field('Patente', panel));
+    expect(container.querySelectorAll('tbody .dt-plate__number')).toHaveLength(
+      1,
+    );
+  });
+
   it('abre el detalle de una corrección con el antes y después', async () => {
     const { container } = await mount(<AuditoriaPage />);
 
@@ -238,6 +302,9 @@ describe('AuditoriaPage', () => {
 
   it('muestra las patentes descartadas en su pestaña', async () => {
     await mount(<AuditoriaPage />, { path: '/auditoria?tab=lpr' });
+    expect(
+      document.querySelector('.segmented-control[aria-label="Auditoría"]'),
+    ).not.toBeNull();
 
     expect(pageText()).toContain('AB123CD');
     expect(pageText()).toContain('ZZ999ZZ');
